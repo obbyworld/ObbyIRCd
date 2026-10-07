@@ -387,17 +387,6 @@ void init_match(void)
 	}
 }
 
-/* Set up global match state. Called once at startup. */
-void init_match(void)
-{
-	unreal_pcre2_match_ctx = pcre2_match_context_create(NULL);
-	if (unreal_pcre2_match_ctx)
-	{
-		pcre2_set_match_limit(unreal_pcre2_match_ctx, UNREAL_PCRE2_MATCH_LIMIT);
-		pcre2_set_depth_limit(unreal_pcre2_match_ctx, UNREAL_PCRE2_DEPTH_LIMIT);
-	}
-}
-
 /** Free up all resources of an Match entry (including the struct itself).
  * NOTE: this function may (also) be called for Match structs that have only been
  *       setup half-way, so use special care when accessing members (NULL checks!)
