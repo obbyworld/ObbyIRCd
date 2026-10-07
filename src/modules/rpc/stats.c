@@ -8,49 +8,53 @@
 
 #include "unrealircd.h"
 
-ModuleHeader MOD_HEADER
-= {
-	"rpc/stats",
-	"2.0.0",
-	"stats.* RPC calls - Comprehensive Statistics",
-	"UnrealIRCd Team",
-	"unrealircd-6",
+ModuleHeader MOD_HEADER = {
+    "rpc/stats",
+    "2.0.0",
+    "stats.* RPC calls - Comprehensive Statistics",
+    "UnrealIRCd Team",
+    "unrealircd-6",
 };
 
 /* Database version for persistence */
-#define STATSDB_VERSION 1
+#define STATSDB_VERSION  1
 #define STATSDB_FILENAME "stats.db"
 
 /* Configuration: how many hourly snapshots to keep */
-#define STATS_HISTORY_SIZE 168  /* 7 days of hourly snapshots */
+#define STATS_HISTORY_SIZE      168  /* 7 days of hourly snapshots */
 #define STATS_SNAPSHOT_INTERVAL (10 * 60 * 1000)  /* 10 minutes in ms */
 
 /* Macros for database operations */
 #define WARN_WRITE_ERROR(fname) \
-	do { \
+	do \
+	{ \
 		unreal_log(ULOG_ERROR, "rpc/stats", "STATSDB_FILE_WRITE_ERROR", NULL, \
-			   "[rpc/stats] Error writing to temporary database file $filename: $system_error", \
-			   log_data_string("filename", fname), \
-			   log_data_string("system_error", unrealdb_get_error_string())); \
-	} while(0)
+		           "[rpc/stats] Error writing to temporary database file $filename: $system_error", \
+		           log_data_string("filename", fname), \
+		           log_data_string("system_error", unrealdb_get_error_string())); \
+	} while (0)
 
 #define W_SAFE(x) \
-	do { \
-		if (!(x)) { \
+	do \
+	{ \
+		if (!(x)) \
+		{ \
 			WARN_WRITE_ERROR(tmpfname); \
 			unrealdb_close(db); \
 			return 0; \
 		} \
-	} while(0)
+	} while (0)
 
 #define R_SAFE(x) \
-	do { \
-		if (!(x)) { \
+	do \
+	{ \
+		if (!(x)) \
+		{ \
 			config_warn("[rpc/stats] Error reading database '%s'", cfg.database); \
 			unrealdb_close(db); \
 			return 0; \
 		} \
-	} while(0)
+	} while (0)
 
 /* Forward declarations */
 void rpc_stats_get(Client *client, json_t *request, json_t *params);
@@ -223,10 +227,10 @@ EVENT(stats_delayed_init)
 			stats_history_count = 1;
 		stats_initialized = 1;
 		unreal_log(ULOG_DEBUG, "rpcstats", "STATS_INIT", NULL,
-			   "[rpc/stats] Initial snapshot taken (users=$users, channels=$channels, servers=$servers)",
-			   log_data_integer("users", stats_history[stats_history_index].users_total),
-			   log_data_integer("channels", stats_history[stats_history_index].channels_total),
-			   log_data_integer("servers", stats_history[stats_history_index].servers_total));
+		           "[rpc/stats] Initial snapshot taken (users=$users, channels=$channels, servers=$servers)",
+		           log_data_integer("users", stats_history[stats_history_index].users_total),
+		           log_data_integer("channels", stats_history[stats_history_index].channels_total),
+		           log_data_integer("servers", stats_history[stats_history_index].servers_total));
 	}
 }
 
@@ -329,7 +333,7 @@ static int write_statsdb(void)
 	if (rename(tmpfname, cfg.database) < 0)
 	{
 		config_error("[rpc/stats] ERROR renaming '%s' to '%s': %s",
-			tmpfname, cfg.database, strerror(ERRNO));
+		             tmpfname, cfg.database, strerror(ERRNO));
 		return 0;
 	}
 
@@ -352,7 +356,7 @@ static int read_statsdb(void)
 		if (unrealdb_get_error_code() == UNREALDB_ERROR_FILENOTFOUND)
 			return 1;
 		config_warn("[rpc/stats] Could not open database '%s': %s",
-			cfg.database, unrealdb_get_error_string());
+		            cfg.database, unrealdb_get_error_string());
 		return 0;
 	}
 
@@ -361,7 +365,7 @@ static int read_statsdb(void)
 	if (version != STATSDB_VERSION)
 	{
 		config_warn("[rpc/stats] Database version mismatch (got %u, expected %u), starting fresh",
-			version, STATSDB_VERSION);
+		            version, STATSDB_VERSION);
 		unrealdb_close(db);
 		return 1;
 	}
@@ -379,39 +383,72 @@ static int read_statsdb(void)
 		uint64_t tmp64;
 		uint32_t tmp32;
 
-		R_SAFE(unrealdb_read_int64(db, &tmp64)); snap->timestamp = tmp64;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->users_total = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->users_invisible = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->users_opers = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->users_unknown = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->users_local = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->users_local_max = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->users_global_max = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->servers_total = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->servers_ulined = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->channels_total = tmp32;
-		R_SAFE(unrealdb_read_int64(db, &tmp64)); snap->traffic_bytes_sent = tmp64;
-		R_SAFE(unrealdb_read_int64(db, &tmp64)); snap->traffic_bytes_received = tmp64;
-		R_SAFE(unrealdb_read_int64(db, &tmp64)); snap->traffic_messages_sent = tmp64;
-		R_SAFE(unrealdb_read_int64(db, &tmp64)); snap->traffic_messages_received = tmp64;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->conn_total_accepted = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->conn_total_refused = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->conn_clients = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->conn_servers = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->conn_unknown = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->auth_success = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->auth_fail = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_total = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_gline = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_gzline = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_kline = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_zline = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_shun = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_spamfilter = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_qline = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->tkl_except = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->protocol_errors = tmp32;
-		R_SAFE(unrealdb_read_int32(db, &tmp32)); snap->nick_collisions = tmp32;
+		R_SAFE(unrealdb_read_int64(db, &tmp64));
+		snap->timestamp = tmp64;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->users_total = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->users_invisible = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->users_opers = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->users_unknown = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->users_local = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->users_local_max = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->users_global_max = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->servers_total = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->servers_ulined = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->channels_total = tmp32;
+		R_SAFE(unrealdb_read_int64(db, &tmp64));
+		snap->traffic_bytes_sent = tmp64;
+		R_SAFE(unrealdb_read_int64(db, &tmp64));
+		snap->traffic_bytes_received = tmp64;
+		R_SAFE(unrealdb_read_int64(db, &tmp64));
+		snap->traffic_messages_sent = tmp64;
+		R_SAFE(unrealdb_read_int64(db, &tmp64));
+		snap->traffic_messages_received = tmp64;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->conn_total_accepted = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->conn_total_refused = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->conn_clients = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->conn_servers = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->conn_unknown = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->auth_success = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->auth_fail = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_total = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_gline = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_gzline = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_kline = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_zline = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_shun = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_spamfilter = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_qline = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->tkl_except = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->protocol_errors = tmp32;
+		R_SAFE(unrealdb_read_int32(db, &tmp32));
+		snap->nick_collisions = tmp32;
 	}
 
 	stats_history_count = count;
@@ -420,8 +457,8 @@ static int read_statsdb(void)
 	unrealdb_close(db);
 
 	unreal_log(ULOG_DEBUG, "rpcstats", "STATSDB_LOADED", NULL,
-		   "[rpc/stats] Loaded $count historical snapshots from database",
-		   log_data_integer("count", count));
+	           "[rpc/stats] Loaded $count historical snapshots from database",
+	           log_data_integer("count", count));
 
 	return 1;
 }
@@ -702,7 +739,8 @@ static void collect_user_stats(json_t *parent, int detail)
 							DelListItem(e, countries);
 							e->priority--;
 							AddListItemPrio(e, countries, e->priority);
-						} else {
+						} else
+						{
 							add_nvplist(&countries, -1, geo->country_code, NULL);
 						}
 					}
@@ -717,7 +755,8 @@ static void collect_user_stats(json_t *parent, int detail)
 							DelListItem(e, asns);
 							e->priority--;
 							AddListItemPrio(e, asns, e->priority);
-						} else {
+						} else
+						{
 							add_nvplist(&asns, -1, asn_str, geo->asname);
 						}
 					}
@@ -956,8 +995,7 @@ static void collect_tkl_stats(json_t *parent, int detail)
 					spamfilter++;
 					if (tkl->ptr.spamfilter)
 						total_spamfilter_hits += tkl->hits;
-				}
-				else if (TKLIsBanException(tkl))
+				} else if (TKLIsBanException(tkl))
 					except++;
 				else if (TKLIsNameBan(tkl))
 					qline++;
@@ -986,8 +1024,7 @@ static void collect_tkl_stats(json_t *parent, int detail)
 				spamfilter++;
 				if (tkl->ptr.spamfilter)
 					total_spamfilter_hits += tkl->hits;
-			}
-			else if (TKLIsBanException(tkl))
+			} else if (TKLIsBanException(tkl))
 				except++;
 			else if (TKLIsNameBan(tkl))
 				qline++;
@@ -1127,8 +1164,7 @@ void rpc_stats_get(Client *client, json_t *request, json_t *params)
 		collect_tkl_stats(result, detail);
 		if (detail >= 2)
 			collect_command_stats(result);
-	}
-	else
+	} else
 	{
 		/* Selective sections */
 		size_t index;
@@ -1190,8 +1226,7 @@ void rpc_stats_history(Client *client, json_t *request, json_t *params)
 			/* Simple parsing - just treat as unix timestamp for now */
 			since = (time_t)atoll(since_str);
 		}
-	}
-	else if (since_param && json_is_integer(since_param))
+	} else if (since_param && json_is_integer(since_param))
 	{
 		since = json_integer_value(since_param);
 	}

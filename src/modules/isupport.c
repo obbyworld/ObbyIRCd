@@ -40,17 +40,18 @@ static ModDataInfo *isupport_sent_md = NULL;
 	 isupport_sent_md && \
 	 moddata_local_client((c), isupport_sent_md).i)
 #define SET_ISUPPORT_SENT(c) \
-	do { if ((c) && (c)->local && isupport_sent_md) \
-	         moddata_local_client((c), isupport_sent_md).i = 1; \
+	do \
+	{ \
+		if ((c) && (c)->local && isupport_sent_md) \
+			moddata_local_client((c), isupport_sent_md).i = 1; \
 	} while (0)
 
-ModuleHeader MOD_HEADER
-={
-	"isupport", /* Name of module */
-	"5.0", /* Version */
-	"Implement ISUPPORT (numeric 005) sending", /* Short description of module */
-	"UnrealIRCd Team", /* Author */
-	"unrealircd-6", /* Version of UnrealIRCd */
+ModuleHeader MOD_HEADER = {
+    "isupport", /* Name of module */
+    "5.0", /* Version */
+    "Implement ISUPPORT (numeric 005) sending", /* Short description of module */
+    "UnrealIRCd Team", /* Author */
+    "unrealircd-6", /* Version of UnrealIRCd */
 };
 
 MOD_TEST()
@@ -162,7 +163,7 @@ static void send_isupport_v02(Client *client, MessageTag *mtags,
 
 			/* Slice the value.  First slice goes out as `KEY=chunk`. */
 			int chunk_first_max = ISUPPORT_LINE_PAYLOAD - keylen - 1; /* '=' */
-			int chunk_rest_max  = ISUPPORT_LINE_PAYLOAD - keylen - 2; /* '+=' */
+			int chunk_rest_max = ISUPPORT_LINE_PAYLOAD - keylen - 2; /* '+=' */
 			int vlen = value ? (int)strlen(value) : 0;
 			int pos = 0;
 			char chunk_line[ISUPPORT_LINE_PAYLOAD + 1];
@@ -214,7 +215,7 @@ static int client_wants_isupport_batch(Client *client)
 
 void _send_isupport(Client *client)
 {
-	char batch[BATCHLEN+1];
+	char batch[BATCHLEN + 1];
 	int i;
 	MessageTag *mtags = NULL, *m;
 
@@ -247,8 +248,7 @@ void _send_isupport(Client *client)
 	{
 		/* v0.2 path: token-level splitting with the `+=` append form. */
 		send_isupport_v02(client, mtags, batch);
-	}
-	else
+	} else
 	{
 		/* v0.1 / no-cap path: ship the pre-built lines as-is. */
 		for (i = 0; ISupportStrings[i]; i++)
@@ -289,7 +289,8 @@ void isupport_check_for_changes_send(const char *addstr, char *buf, size_t bufle
 		if (HasCapability(acptr, "draft/extended-isupport") && HasCapability(acptr, "batch"))
 		{
 			sendtaggednumericfmt(acptr, mtags, RPL_ISUPPORT, "%s :are supported by this server", buf);
-		} else {
+		} else
+		{
 			sendnumeric(acptr, RPL_ISUPPORT, buf);
 		}
 	}
@@ -325,7 +326,7 @@ void _isupport_check_for_changes(void)
 {
 	Client *acptr;
 	MessageTag *mtags = NULL;
-	char batch[BATCHLEN+1];
+	char batch[BATCHLEN + 1];
 	ISupport *n; // iterator for "new isupports"
 	ISupport *o; // iterator for "old isupports"
 	char buf[512], addstr[512];
@@ -355,7 +356,8 @@ void _isupport_check_for_changes(void)
 			{
 				snprintf(addstr, sizeof(addstr), "%s=%s",
 				         n->token, n->value);
-			} else {
+			} else
+			{
 				strlcpy(addstr, n->token, sizeof(addstr));
 			}
 			isupport_check_for_changes_one(addstr, buf, sizeof(buf), batch, mtags, &changes, &bc);

@@ -26,40 +26,37 @@ typedef struct ChannelRegistration {
 } ChannelRegistration;
 
 /* Permissions structure */
-struct MemberRolePermissions
-{
-	unsigned can_kick:1;
-	unsigned can_topic:1;
-	unsigned can_invite:1;
-	unsigned can_override_bans:1;  /* can talk even if banned */
-	unsigned is_voice:1;           /* bypass message restrictions (+m/+n/+c/+S/+N/+C/+T/+R/+M) */
-	unsigned is_unkickable:1;      /* cannot be kicked */
-	unsigned can_see_bans:1;       /* can view +b ban list */
-	unsigned can_see_invex:1;      /* can view +I invex list */
-	unsigned can_see_excepts:1;    /* can view +e except list */
+struct MemberRolePermissions {
+	unsigned can_kick : 1;
+	unsigned can_topic : 1;
+	unsigned can_invite : 1;
+	unsigned can_override_bans : 1;  /* can talk even if banned */
+	unsigned is_voice : 1;           /* bypass message restrictions (+m/+n/+c/+S/+N/+C/+T/+R/+M) */
+	unsigned is_unkickable : 1;      /* cannot be kicked */
+	unsigned can_see_bans : 1;       /* can view +b ban list */
+	unsigned can_see_invex : 1;      /* can view +I invex list */
+	unsigned can_see_excepts : 1;    /* can view +e except list */
 	char *can_set;      /* modes this role can set (all channel modes) */
 	char *can_unset;    /* modes this role can unset (all channel modes) */
 };
 
 /* Track which permissions were directly set (not inherited) */
-struct MemberRoleDirectPerms
-{
-	unsigned can_kick:1;
-	unsigned can_topic:1;
-	unsigned can_invite:1;
-	unsigned can_override_bans:1;
-	unsigned is_voice:1;
-	unsigned is_unkickable:1;
-	unsigned can_see_bans:1;
-	unsigned can_see_invex:1;
-	unsigned can_see_excepts:1;
-	unsigned can_set:1;
-	unsigned can_unset:1;
+struct MemberRoleDirectPerms {
+	unsigned can_kick : 1;
+	unsigned can_topic : 1;
+	unsigned can_invite : 1;
+	unsigned can_override_bans : 1;
+	unsigned is_voice : 1;
+	unsigned is_unkickable : 1;
+	unsigned can_see_bans : 1;
+	unsigned can_see_invex : 1;
+	unsigned can_see_excepts : 1;
+	unsigned can_set : 1;
+	unsigned can_unset : 1;
 };
 
 /* Member role definition */
-struct MemberRole
-{
+struct MemberRole {
 	struct MemberRole *prev, *next;
 	char *name;
 	char prefix;
@@ -78,7 +75,7 @@ static int have_default_permissions = 0;
 static ModDataInfo *channel_registration_md = NULL; /* owned by channeldb */
 static Module *member_roles_modhandle = NULL; /* captured in MOD_INIT for late CmodeAdd */
 
-#define OURCONF "member-roles"
+#define OURCONF              "member-roles"
 #define CHANREG_MODDATA_NAME "obsidianirc/channel-registration"
 
 /* Forward declarations */
@@ -111,12 +108,12 @@ int member_roles_reparsemode(Client *client, char **msg, int *length);
 static struct MemberRolePermissions *get_effective_permissions(Client *client, Channel *channel);
 
 ModuleHeader MOD_HEADER =
-{
-	"member-roles",
-	"1.0",
-	"Custom channel member roles and permissions",
-	"Valware & ObbyIRCd Team",
-	"unrealircd-6",
+    {
+        "member-roles",
+        "1.0",
+        "Custom channel member roles and permissions",
+        "Valware & ObbyIRCd Team",
+        "unrealircd-6",
 };
 
 MOD_INIT()
@@ -125,7 +122,7 @@ MOD_INIT()
 
 	MARK_AS_OFFICIAL_MODULE(modinfo);
 	member_roles_modhandle = modinfo->handle;
-	
+
 	/* Register extban */
 	memset(&extban_req, 0, sizeof(extban_req));
 	extban_req.letter = 'M';
@@ -139,7 +136,7 @@ MOD_INIT()
 		config_error("[member-roles] Failed to register ~automode extban");
 		return MOD_FAILED;
 	}
-	
+
 	/* Add hooks for permission checking */
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, member_roles_configrun);
 	HookAdd(modinfo->handle, HOOKTYPE_CAN_KICK, 0, member_role_can_kick);
@@ -151,7 +148,7 @@ MOD_INIT()
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_JOIN, 0, automode_join);
 	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_JOIN, 0, automode_join);
 	HookAdd(modinfo->handle, HOOKTYPE_PACKET, 0, member_roles_packet);
-	
+
 	/* Add command for listing roles */
 	CommandAdd(modinfo->handle, "MEMBERROLES", cmd_memberroles, 0, CMD_USER);
 
@@ -199,7 +196,7 @@ static int register_role_cmode(struct MemberRole *role)
 	if (!role->cmode)
 	{
 		config_error("[member-roles] Failed to register mode +%c (prefix %c, name '%s') for role '%s' - mode may already exist",
-		            role->mode, role->prefix, role->name, role->name);
+		             role->mode, role->prefix, role->name, role->name);
 		return 0;
 	}
 	return 1;
@@ -227,21 +224,21 @@ static struct MemberRole *find_role_by_name(const char *name)
 static int check_inheritance_loop(ConfigFile *cf, const char *role_name, const char *inherit_name, int depth)
 {
 	ConfigEntry *ce, *cep, *cepp, *ceppp;
-	
+
 	/* Check depth limit */
 	if (depth > 8)
 		return 1;
-	
+
 	/* If we've reached the starting role, we have a loop */
 	if (!strcmp(role_name, inherit_name))
 		return 1;
-	
+
 	/* Find the role being inherited from */
 	for (ce = cf->items; ce; ce = ce->next)
 	{
 		if (!ce->name || strcmp(ce->name, OURCONF))
 			continue;
-			
+
 		for (cep = ce->items; cep; cep = cep->next)
 		{
 			if (!strcmp(cep->name, inherit_name))
@@ -266,7 +263,7 @@ static int check_inheritance_loop(ConfigFile *cf, const char *role_name, const c
 			}
 		}
 	}
-	
+
 	/* Role not found - will be caught by validation elsewhere */
 	return 0;
 }
@@ -276,23 +273,23 @@ static void resolve_role_inheritance(struct MemberRole *role, int depth)
 {
 	struct MemberRole *parent;
 	char *merged_can_set, *merged_can_unset;
-	
+
 	/* Prevent infinite recursion */
 	if (depth > 8)
 		return;
-	
+
 	/* If no inheritance, nothing to do */
 	if (!role->inherit)
 		return;
-	
+
 	/* Find parent role */
 	parent = find_role_by_name(role->inherit);
 	if (!parent)
 		return; /* Will be caught by configtest */
-	
+
 	/* Recursively resolve parent's inheritance first */
 	resolve_role_inheritance(parent, depth + 1);
-	
+
 	/* Merge boolean permissions (OR logic) */
 	role->permissions.can_kick |= parent->permissions.can_kick;
 	role->permissions.can_topic |= parent->permissions.can_topic;
@@ -303,7 +300,7 @@ static void resolve_role_inheritance(struct MemberRole *role, int depth)
 	role->permissions.can_see_bans |= parent->permissions.can_see_bans;
 	role->permissions.can_see_invex |= parent->permissions.can_see_invex;
 	role->permissions.can_see_excepts |= parent->permissions.can_see_excepts;
-	
+
 	/* Merge can_set modes */
 	if (parent->permissions.can_set)
 	{
@@ -314,13 +311,12 @@ static void resolve_role_inheritance(struct MemberRole *role, int depth)
 			{
 				safe_free(role->permissions.can_set);
 				safe_strdup(role->permissions.can_set, "*");
-			}
-			else
+			} else
 			{
 				/* Merge unique characters */
 				merged_can_set = safe_alloc(strlen(role->permissions.can_set) + strlen(parent->permissions.can_set) + 1);
 				strcpy(merged_can_set, role->permissions.can_set);
-				
+
 				/* Add parent modes that aren't already present */
 				const char *p;
 				for (p = parent->permissions.can_set; *p; p++)
@@ -332,18 +328,17 @@ static void resolve_role_inheritance(struct MemberRole *role, int depth)
 						merged_can_set[len + 1] = '\0';
 					}
 				}
-				
+
 				safe_free(role->permissions.can_set);
 				role->permissions.can_set = merged_can_set;
 			}
-		}
-		else
+		} else
 		{
 			/* Just copy parent's can_set */
 			safe_strdup(role->permissions.can_set, parent->permissions.can_set);
 		}
 	}
-	
+
 	/* Merge can_unset modes */
 	if (parent->permissions.can_unset)
 	{
@@ -354,13 +349,12 @@ static void resolve_role_inheritance(struct MemberRole *role, int depth)
 			{
 				safe_free(role->permissions.can_unset);
 				safe_strdup(role->permissions.can_unset, "*");
-			}
-			else
+			} else
 			{
 				/* Merge unique characters */
 				merged_can_unset = safe_alloc(strlen(role->permissions.can_unset) + strlen(parent->permissions.can_unset) + 1);
 				strcpy(merged_can_unset, role->permissions.can_unset);
-				
+
 				/* Add parent modes that aren't already present */
 				const char *p;
 				for (p = parent->permissions.can_unset; *p; p++)
@@ -372,12 +366,11 @@ static void resolve_role_inheritance(struct MemberRole *role, int depth)
 						merged_can_unset[len + 1] = '\0';
 					}
 				}
-				
+
 				safe_free(role->permissions.can_unset);
 				role->permissions.can_unset = merged_can_unset;
 			}
-		}
-		else
+		} else
 		{
 			/* Just copy parent's can_unset */
 			safe_strdup(role->permissions.can_unset, parent->permissions.can_unset);
@@ -411,7 +404,7 @@ int member_roles_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs
 	{
 		char *role_name = cep->name;
 		int has_prefix = 0, has_rank = 0, has_mode = 0;
-		
+
 		if (!role_name)
 		{
 			config_error("%s:%i: %s block without name", cep->file->filename, cep->line_number, OURCONF);
@@ -442,36 +435,32 @@ int member_roles_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs
 							if (!ceppp->value || (strcmp(ceppp->value, "yes") && strcmp(ceppp->value, "no")))
 							{
 								config_error("%s:%i: %s::default::permissions::%s must be 'yes' or 'no'",
-								            ceppp->file->filename, ceppp->line_number, OURCONF, ceppp->name);
+								             ceppp->file->filename, ceppp->line_number, OURCONF, ceppp->name);
 								errors++;
 							}
-						}
-						else if (!strcmp(ceppp->name, "can_set") || !strcmp(ceppp->name, "can_unset"))
+						} else if (!strcmp(ceppp->name, "can_set") || !strcmp(ceppp->name, "can_unset"))
 						{
 							if (!ceppp->value)
 							{
 								config_error("%s:%i: %s::default::permissions::%s requires a value",
-								            ceppp->file->filename, ceppp->line_number, OURCONF, ceppp->name);
+								             ceppp->file->filename, ceppp->line_number, OURCONF, ceppp->name);
 								errors++;
 							}
-						}
-						else if (!strcmp(ceppp->name, "inherit"))
+						} else if (!strcmp(ceppp->name, "inherit"))
 						{
 							config_error("%s:%i: %s::default::permissions::inherit is not allowed in the default block",
-							            ceppp->file->filename, ceppp->line_number, OURCONF);
+							             ceppp->file->filename, ceppp->line_number, OURCONF);
 							errors++;
-						}
-						else
+						} else
 						{
 							config_warn("%s:%i: unknown %s::default::permissions item '%s'",
-							           ceppp->file->filename, ceppp->line_number, OURCONF, ceppp->name);
+							            ceppp->file->filename, ceppp->line_number, OURCONF, ceppp->name);
 						}
 					}
-				}
-				else
+				} else
 				{
 					config_warn("%s:%i: %s::default only supports 'permissions', not '%s'",
-					           cepp->file->filename, cepp->line_number, OURCONF, cepp->name);
+					            cepp->file->filename, cepp->line_number, OURCONF, cepp->name);
 				}
 			}
 			continue; /* Skip the normal prefix/rank/mode checks */
@@ -484,59 +473,56 @@ int member_roles_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs
 			{
 				if (has_prefix)
 				{
-					config_error("%s:%i: duplicate %s::%s::prefix directive", 
-					            cepp->file->filename, cepp->line_number, OURCONF, role_name);
+					config_error("%s:%i: duplicate %s::%s::prefix directive",
+					             cepp->file->filename, cepp->line_number, OURCONF, role_name);
 					errors++;
 					continue;
 				}
 				has_prefix = 1;
-				
+
 				if (!cepp->value || strlen(cepp->value) != 1)
 				{
-					config_error("%s:%i: %s::%s::prefix must be exactly one character", 
-					            cepp->file->filename, cepp->line_number, OURCONF, role_name);
+					config_error("%s:%i: %s::%s::prefix must be exactly one character",
+					             cepp->file->filename, cepp->line_number, OURCONF, role_name);
 					errors++;
 				}
-			}
-			else if (!strcmp(cepp->name, "rank"))
+			} else if (!strcmp(cepp->name, "rank"))
 			{
 				if (has_rank)
 				{
-					config_error("%s:%i: duplicate %s::%s::rank directive", 
-					            cepp->file->filename, cepp->line_number, OURCONF, role_name);
+					config_error("%s:%i: duplicate %s::%s::rank directive",
+					             cepp->file->filename, cepp->line_number, OURCONF, role_name);
 					errors++;
 					continue;
 				}
 				has_rank = 1;
-				
+
 				/* obbyircd: allow negative ranks so configs can faithfully
 				 * mirror UnrealIRCd's voice (RANK_VOICE = -1). */
 				if (!cepp->value)
 				{
 					config_error("%s:%i: %s::%s::rank requires a value",
-					            cepp->file->filename, cepp->line_number, OURCONF, role_name);
+					             cepp->file->filename, cepp->line_number, OURCONF, role_name);
 					errors++;
 				}
-			}
-			else if (!strcmp(cepp->name, "mode"))
+			} else if (!strcmp(cepp->name, "mode"))
 			{
 				if (has_mode)
 				{
-					config_error("%s:%i: duplicate %s::%s::mode directive", 
-					            cepp->file->filename, cepp->line_number, OURCONF, role_name);
+					config_error("%s:%i: duplicate %s::%s::mode directive",
+					             cepp->file->filename, cepp->line_number, OURCONF, role_name);
 					errors++;
 					continue;
 				}
 				has_mode = 1;
-				
+
 				if (!cepp->value || strlen(cepp->value) != 1)
 				{
-					config_error("%s:%i: %s::%s::mode must be exactly one character", 
-					            cepp->file->filename, cepp->line_number, OURCONF, role_name);
+					config_error("%s:%i: %s::%s::mode must be exactly one character",
+					             cepp->file->filename, cepp->line_number, OURCONF, role_name);
 					errors++;
 				}
-			}
-			else if (!strcmp(cepp->name, "permissions"))
+			} else if (!strcmp(cepp->name, "permissions"))
 			{
 				ConfigEntry *ceppp;
 				/* Parse permissions block */
@@ -555,70 +541,64 @@ int member_roles_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs
 						if (!ceppp->value || (strcmp(ceppp->value, "yes") && strcmp(ceppp->value, "no")))
 						{
 							config_error("%s:%i: %s::%s::permissions::%s must be 'yes' or 'no'",
-							            ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->name);
+							             ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->name);
 							errors++;
 						}
-					}
-					else if (!strcmp(ceppp->name, "can_set") || !strcmp(ceppp->name, "can_unset"))
+					} else if (!strcmp(ceppp->name, "can_set") || !strcmp(ceppp->name, "can_unset"))
 					{
 						if (!ceppp->value)
 						{
 							config_error("%s:%i: %s::%s::permissions::%s requires a value",
-							            ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->name);
+							             ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->name);
 							errors++;
 						}
-					}
-					else if (!strcmp(ceppp->name, "inherit"))
+					} else if (!strcmp(ceppp->name, "inherit"))
 					{
 						if (!ceppp->value)
 						{
 							config_error("%s:%i: %s::%s::permissions::inherit requires a role name",
-							            ceppp->file->filename, ceppp->line_number, OURCONF, role_name);
+							             ceppp->file->filename, ceppp->line_number, OURCONF, role_name);
 							errors++;
-						}
-						else if (!strcmp(ceppp->value, role_name))
+						} else if (!strcmp(ceppp->value, role_name))
 						{
 							config_error("%s:%i: %s::%s::permissions::inherit cannot inherit from itself",
-							            ceppp->file->filename, ceppp->line_number, OURCONF, role_name);
+							             ceppp->file->filename, ceppp->line_number, OURCONF, role_name);
 							errors++;
-						}
-						else if (check_inheritance_loop(cf, role_name, ceppp->value, 0))
+						} else if (check_inheritance_loop(cf, role_name, ceppp->value, 0))
 						{
 							config_error("%s:%i: %s::%s::permissions::inherit creates a circular dependency with '%s'",
-							            ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->value);
+							             ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->value);
 							errors++;
 						}
-					}
-					else
+					} else
 					{
 						config_warn("%s:%i: unknown %s::%s::permissions item '%s'",
-						           ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->name);
+						            ceppp->file->filename, ceppp->line_number, OURCONF, role_name, ceppp->name);
 					}
 				}
-			}
-			else
+			} else
 			{
 				config_warn("%s:%i: unknown %s::%s item '%s'",
-				           cepp->file->filename, cepp->line_number, OURCONF, role_name, cepp->name);
+				            cepp->file->filename, cepp->line_number, OURCONF, role_name, cepp->name);
 			}
 		}
 
 		if (!has_prefix)
 		{
 			config_error("%s:%i: %s::%s is missing required 'prefix' directive",
-			            cep->file->filename, cep->line_number, OURCONF, role_name);
+			             cep->file->filename, cep->line_number, OURCONF, role_name);
 			errors++;
 		}
 		if (!has_rank)
 		{
 			config_error("%s:%i: %s::%s is missing required 'rank' directive",
-			            cep->file->filename, cep->line_number, OURCONF, role_name);
+			             cep->file->filename, cep->line_number, OURCONF, role_name);
 			errors++;
 		}
 		if (!has_mode)
 		{
 			config_error("%s:%i: %s::%s is missing required 'mode' directive",
-			            cep->file->filename, cep->line_number, OURCONF, role_name);
+			             cep->file->filename, cep->line_number, OURCONF, role_name);
 			errors++;
 		}
 	}
@@ -684,112 +664,98 @@ int member_roles_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 		}
 
 		{
-		struct MemberRole *role = safe_alloc(sizeof(struct MemberRole));
-		
-		safe_strdup(role->name, cep->name);
-		
-		/* Set defaults */
-		role->sjoin_prefix = '!';
-		role->permissions.can_kick = 0;
-		role->permissions.can_topic = 0;
-		role->permissions.can_invite = 0;
-		role->permissions.can_override_bans = 0;
-		role->permissions.is_voice = 0;
-		role->permissions.is_unkickable = 0;
-		role->permissions.can_see_bans = 0;
-		role->permissions.can_see_invex = 0;
-		role->permissions.can_see_excepts = 0;
-		role->permissions.can_set = NULL;
-		role->permissions.can_unset = NULL;
-		
-		/* Parse role properties */
-		for (cepp = cep->items; cepp; cepp = cepp->next)
-		{
-			if (!strcmp(cepp->name, "prefix"))
+			struct MemberRole *role = safe_alloc(sizeof(struct MemberRole));
+
+			safe_strdup(role->name, cep->name);
+
+                /* Set defaults */
+			role->sjoin_prefix = '!';
+			role->permissions.can_kick = 0;
+			role->permissions.can_topic = 0;
+			role->permissions.can_invite = 0;
+			role->permissions.can_override_bans = 0;
+			role->permissions.is_voice = 0;
+			role->permissions.is_unkickable = 0;
+			role->permissions.can_see_bans = 0;
+			role->permissions.can_see_invex = 0;
+			role->permissions.can_see_excepts = 0;
+			role->permissions.can_set = NULL;
+			role->permissions.can_unset = NULL;
+
+                /* Parse role properties */
+			for (cepp = cep->items; cepp; cepp = cepp->next)
 			{
-				role->prefix = cepp->value[0];
-				role->sjoin_prefix = cepp->value[0];
-			}
-			else if (!strcmp(cepp->name, "rank"))
-			{
-				role->rank = atoi(cepp->value);
-			}
-			else if (!strcmp(cepp->name, "mode"))
-			{
-				role->mode = cepp->value[0];
-			}
-			else if (!strcmp(cepp->name, "permissions"))
-			{
-				for (ceppp = cepp->items; ceppp; ceppp = ceppp->next)
+				if (!strcmp(cepp->name, "prefix"))
 				{
-					if (!strcmp(ceppp->name, "can_kick"))
+					role->prefix = cepp->value[0];
+					role->sjoin_prefix = cepp->value[0];
+				} else if (!strcmp(cepp->name, "rank"))
+				{
+					role->rank = atoi(cepp->value);
+				} else if (!strcmp(cepp->name, "mode"))
+				{
+					role->mode = cepp->value[0];
+				} else if (!strcmp(cepp->name, "permissions"))
+				{
+					for (ceppp = cepp->items; ceppp; ceppp = ceppp->next)
 					{
-						role->permissions.can_kick = !strcmp(ceppp->value, "yes");
-						role->direct.can_kick = 1;
+						if (!strcmp(ceppp->name, "can_kick"))
+						{
+							role->permissions.can_kick = !strcmp(ceppp->value, "yes");
+							role->direct.can_kick = 1;
+						} else if (!strcmp(ceppp->name, "can_topic"))
+						{
+							role->permissions.can_topic = !strcmp(ceppp->value, "yes");
+							role->direct.can_topic = 1;
+						} else if (!strcmp(ceppp->name, "can_invite"))
+						{
+							role->permissions.can_invite = !strcmp(ceppp->value, "yes");
+							role->direct.can_invite = 1;
+						} else if (!strcmp(ceppp->name, "can_override_bans"))
+						{
+							role->permissions.can_override_bans = !strcmp(ceppp->value, "yes");
+							role->direct.can_override_bans = 1;
+						} else if (!strcmp(ceppp->name, "is_voice"))
+						{
+							role->permissions.is_voice = !strcmp(ceppp->value, "yes");
+							role->direct.is_voice = 1;
+						} else if (!strcmp(ceppp->name, "is_unkickable"))
+						{
+							role->permissions.is_unkickable = !strcmp(ceppp->value, "yes");
+							role->direct.is_unkickable = 1;
+						} else if (!strcmp(ceppp->name, "can_see_bans"))
+						{
+							role->permissions.can_see_bans = !strcmp(ceppp->value, "yes");
+							role->direct.can_see_bans = 1;
+						} else if (!strcmp(ceppp->name, "can_see_invex"))
+						{
+							role->permissions.can_see_invex = !strcmp(ceppp->value, "yes");
+							role->direct.can_see_invex = 1;
+						} else if (!strcmp(ceppp->name, "can_see_excepts"))
+						{
+							role->permissions.can_see_excepts = !strcmp(ceppp->value, "yes");
+							role->direct.can_see_excepts = 1;
+						} else if (!strcmp(ceppp->name, "can_set"))
+						{
+							safe_strdup(role->permissions.can_set, ceppp->value);
+							role->direct.can_set = 1;
+						} else if (!strcmp(ceppp->name, "can_unset"))
+						{
+							safe_strdup(role->permissions.can_unset, ceppp->value);
+							role->direct.can_unset = 1;
+						} else if (!strcmp(ceppp->name, "inherit"))
+							safe_strdup(role->inherit, ceppp->value);
 					}
-					else if (!strcmp(ceppp->name, "can_topic"))
-					{
-						role->permissions.can_topic = !strcmp(ceppp->value, "yes");
-						role->direct.can_topic = 1;
-					}
-					else if (!strcmp(ceppp->name, "can_invite"))
-					{
-						role->permissions.can_invite = !strcmp(ceppp->value, "yes");
-						role->direct.can_invite = 1;
-					}
-					else if (!strcmp(ceppp->name, "can_override_bans"))
-					{
-						role->permissions.can_override_bans = !strcmp(ceppp->value, "yes");
-						role->direct.can_override_bans = 1;
-					}
-					else if (!strcmp(ceppp->name, "is_voice"))
-					{
-						role->permissions.is_voice = !strcmp(ceppp->value, "yes");
-						role->direct.is_voice = 1;
-					}
-					else if (!strcmp(ceppp->name, "is_unkickable"))
-					{
-						role->permissions.is_unkickable = !strcmp(ceppp->value, "yes");
-						role->direct.is_unkickable = 1;
-					}
-					else if (!strcmp(ceppp->name, "can_see_bans"))
-					{
-						role->permissions.can_see_bans = !strcmp(ceppp->value, "yes");
-						role->direct.can_see_bans = 1;
-					}
-					else if (!strcmp(ceppp->name, "can_see_invex"))
-					{
-						role->permissions.can_see_invex = !strcmp(ceppp->value, "yes");
-						role->direct.can_see_invex = 1;
-					}
-					else if (!strcmp(ceppp->name, "can_see_excepts"))
-					{
-						role->permissions.can_see_excepts = !strcmp(ceppp->value, "yes");
-						role->direct.can_see_excepts = 1;
-					}
-					else if (!strcmp(ceppp->name, "can_set"))
-					{
-						safe_strdup(role->permissions.can_set, ceppp->value);
-						role->direct.can_set = 1;
-					}
-					else if (!strcmp(ceppp->name, "can_unset"))
-					{
-						safe_strdup(role->permissions.can_unset, ceppp->value);
-						role->direct.can_unset = 1;
-					}
-					else if (!strcmp(ceppp->name, "inherit"))
-						safe_strdup(role->inherit, ceppp->value);
 				}
 			}
-		}
-		
-		/* Add to linked list */
-		AddListItem(role, member_roles);
-		/* obbyircd: register the cmode now so PREFIX/STATUSMSG in
+
+                /* Add to linked list */
+			AddListItem(role, member_roles);
+                /* obbyircd: register the cmode now so PREFIX/STATUSMSG in
 		 * ISUPPORT and CHANMODES name-table reflect it before the
 		 * server starts accepting connections. (MOD_LOAD is too
 		 * early -- runs before configrun.) */
-		register_role_cmode(role);
+			register_role_cmode(role);
 		} /* end of non-default role block */
 	}
 
@@ -821,21 +787,21 @@ struct MemberRole *find_highest_role(Client *client, Channel *channel)
 	struct MemberRole *role, *highest = NULL;
 	const char *modes;
 	const char *p;
-	
+
 	if (!IsMember(client, channel))
 		return NULL;
-	
+
 	modes = get_channel_access(client, channel);
 	if (!modes || !*modes)
 		return NULL;
-	
+
 	for (p = modes; *p; p++)
 	{
 		role = find_role_by_mode(*p);
 		if (role && (!highest || role->rank > highest->rank))
 			highest = role;
 	}
-	
+
 	return highest;
 }
 
@@ -883,7 +849,7 @@ int member_role_is_ok(Client *client, Channel *channel, char mode, const char *p
 {
 	Client *target;
 	struct MemberRole *client_role, *mode_role;
-	
+
 	if ((type == EXCHK_ACCESS) || (type == EXCHK_ACCESS_ERR))
 	{
 		target = find_user(param, NULL);
@@ -893,15 +859,15 @@ int member_role_is_ok(Client *client, Channel *channel, char mode, const char *p
 			/* User may always remove their own modes */
 			return EX_ALLOW;
 		}
-		
+
 		/* Find the role being set/unset */
 		mode_role = find_role_by_mode(mode);
 		if (!mode_role)
 			return EX_DENY;
-		
+
 		/* Find client's highest role */
 		client_role = find_highest_role(client, channel);
-		
+
 		/* Check if client has permission to set/unset this mode */
 		if (client_role)
 		{
@@ -913,7 +879,7 @@ int member_role_is_ok(Client *client, Channel *channel, char mode, const char *p
 					return EX_ALLOW;
 			}
 		}
-		
+
 		/* Custom member roles require explicit permission - no fallback to chanop */
 		if (type == EXCHK_ACCESS_ERR)
 			sendnumeric(client, ERR_CHANOPRIVSNEEDED, channel->name);
@@ -928,8 +894,8 @@ int member_role_can_kick(Client *client, Client *victim, Channel *channel, const
                          const char *client_member_modes, const char *victim_member_modes, const char **reject_reason)
 {
 	struct MemberRolePermissions *client_perms, *victim_perms;
-	static char errmsg[NICKLEN+256];
-	
+	static char errmsg[NICKLEN + 256];
+
 	/* Check if victim has is_unkickable permission */
 	victim_perms = get_effective_permissions(victim, channel);
 	if (victim_perms && victim_perms->is_unkickable && !IsULine(client))
@@ -938,41 +904,41 @@ int member_role_can_kick(Client *client, Client *victim, Channel *channel, const
 		            me.name, ERR_CANNOTDOCOMMAND, client->name, "KICK",
 		            "user has a role that makes them unkickable");
 		*reject_reason = errmsg;
-		
+
 		sendnotice(victim,
-		    "*** %s tried to kick you from channel %s (%s)",
-		    client->name, channel->name, comment);
-		
+		           "*** %s tried to kick you from channel %s (%s)",
+		           client->name, channel->name, comment);
+
 		return EX_ALWAYS_DENY;
 	}
-	
+
 	/* Check if client has can_kick permission */
 	client_perms = get_effective_permissions(client, channel);
 	if (client_perms && client_perms->can_kick)
 		return EX_ALLOW;
-	
+
 	return EX_ALLOW; /* Let other modules/default logic handle it */
 }
 
 int member_role_can_set_topic(Client *client, Channel *channel, const char *topic, const char **errmsg)
 {
 	struct MemberRolePermissions *perms;
-	
+
 	perms = get_effective_permissions(client, channel);
 	if (perms && perms->can_topic)
 		return EX_ALLOW;
-	
+
 	return EX_ALLOW; /* Let other modules/default logic handle it */
 }
 
 int member_role_pre_invite(Client *client, Client *target, Channel *channel, int *override)
 {
 	struct MemberRolePermissions *perms;
-	
+
 	perms = get_effective_permissions(client, channel);
 	if (perms && perms->can_invite)
 		return HOOK_ALLOW;
-	
+
 	return HOOK_CONTINUE; /* Let other modules/default logic handle it */
 }
 
@@ -980,17 +946,17 @@ int member_role_can_send_to_channel(Client *client, Channel *channel, Membership
 {
 	struct MemberRolePermissions *perms;
 	const char *ban_msg = NULL;
-	
+
 	if (!MyUser(client))
 		return HOOK_CONTINUE;
-	
+
 	if (!lp) /* not in channel */
 		return HOOK_CONTINUE;
-	
+
 	perms = get_effective_permissions(client, channel);
 	if (!perms)
 		return HOOK_CONTINUE;
-	
+
 	/* can_override_bans: Allow speaking even if banned
 	 * The ban check in message.c only checks "vhoaq" for exemption.
 	 * If our role has can_override_bans, we check if they're banned
@@ -1007,22 +973,22 @@ int member_role_can_send_to_channel(Client *client, Channel *channel, Membership
 			return HOOK_CONTINUE;
 		}
 	}
-	
+
 	return HOOK_CONTINUE;
 }
 
 int member_role_can_bypass_channel_message_restriction(Client *client, Channel *channel, BypassChannelMessageRestrictionType bypass_type)
 {
 	struct MemberRolePermissions *perms;
-	
+
 	perms = get_effective_permissions(client, channel);
 	if (!perms)
 		return HOOK_CONTINUE;
-	
+
 	/* Check is_voice permission - it bypasses ALL message restrictions */
 	if (perms->is_voice)
 		return HOOK_ALLOW;
-	
+
 	return HOOK_CONTINUE;
 }
 
@@ -1033,20 +999,20 @@ int member_role_check_mode_access(Client *client, Channel *channel, MessageTag *
 	const char *m;
 	char what = '+';
 	Cmode *cm;
-	
+
 	/* Only check for local users */
 	if (!MyUser(client))
 		return 0;
-	
+
 	/* Don't interfere with SAMODE, U-Lines, or servers */
 	if (samode || IsULine(client) || IsServer(client))
 		return 0;
-	
+
 	/* Get effective permissions (custom role or default) */
 	perms = get_effective_permissions(client, channel);
 	if (!perms)
 		return 0; /* No permissions defined, let default permission system handle it */
-	
+
 	/* Parse the mode string */
 	for (m = modebuf; *m; m++)
 	{
@@ -1060,19 +1026,19 @@ int member_role_check_mode_access(Client *client, Channel *channel, MessageTag *
 			what = '-';
 			continue;
 		}
-		
+
 		/* Find the mode handler */
 		cm = find_channel_mode_handler(*m);
 		if (!cm)
 			continue; /* Unknown mode, will be rejected elsewhere */
-		
+
 		/* Check permissions for this mode */
 		const char *allowed_modes = (what == '+') ? perms->can_set : perms->can_unset;
-		
+
 		/* If no permission string set, continue (let default system handle it) */
 		if (!allowed_modes)
 			continue;
-		
+
 		/* Check if this mode is in the allowed list or wildcard */
 		if (!strchr(allowed_modes, *m) && !strchr(allowed_modes, '*'))
 		{
@@ -1083,7 +1049,7 @@ int member_role_check_mode_access(Client *client, Channel *channel, MessageTag *
 				sendnumeric(client, ERR_CHANOPRIVSNEEDED, channel->name);
 			return HOOK_DENY;
 		}
-		
+
 		/* If wildcard "*", need to check rank for member modes */
 		if (strchr(allowed_modes, '*') && cm->type == CMODE_MEMBER)
 		{
@@ -1097,7 +1063,7 @@ int member_role_check_mode_access(Client *client, Channel *channel, MessageTag *
 			}
 		}
 	}
-	
+
 	return 0; /* Allow */
 }
 
@@ -1105,15 +1071,15 @@ CMD_FUNC(cmd_memberroles)
 {
 	struct MemberRole *role;
 	struct MemberRole *parent;
-	
+
 	if (!IsOper(client))
 	{
 		sendnumeric(client, ERR_NOPRIVILEGES);
 		return;
 	}
-	
+
 	sendnotice(client, "*** Member Roles:");
-	
+
 	/* Show default permissions if configured */
 	if (have_default_permissions)
 	{
@@ -1131,37 +1097,42 @@ CMD_FUNC(cmd_memberroles)
 		sendnotice(client, "    can_set: %s", default_permissions.can_set ? default_permissions.can_set : "(none)");
 		sendnotice(client, "    can_unset: %s", default_permissions.can_unset ? default_permissions.can_unset : "(none)");
 	}
-	
+
 	if (!member_roles && !have_default_permissions)
 	{
 		sendnotice(client, "No member roles configured.");
 		return;
 	}
-	
+
 	for (role = member_roles; role; role = role->next)
 	{
 		sendnotice(client, "Role: %s", role->name);
 		sendnotice(client, "  Mode: +%c  Prefix: %c  Rank: %d", role->mode, role->prefix, role->rank);
-		
+
 		if (role->inherit)
 			sendnotice(client, "  Inherits from: %s", role->inherit);
-		
+
 		sendnotice(client, "  Permissions:");
-		
+
 		/* Helper macro for boolean permissions */
-		#define SHOW_BOOL_PERM(perm, name, direct_flag) \
-			do { \
-				if (role->permissions.perm) { \
-					if (role->inherit && !role->direct.direct_flag) { \
-						sendnotice(client, "    %s: yes (inherited from %s)", name, role->inherit); \
-					} else { \
-						sendnotice(client, "    %s: yes", name); \
-					} \
-				} else { \
-					sendnotice(client, "    %s: no", name); \
-				} \
-			} while(0)
-		
+#define SHOW_BOOL_PERM(perm, name, direct_flag) \
+	do \
+	{ \
+		if (role->permissions.perm) \
+		{ \
+			if (role->inherit && !role->direct.direct_flag) \
+			{ \
+				sendnotice(client, "    %s: yes (inherited from %s)", name, role->inherit); \
+			} else \
+			{ \
+				sendnotice(client, "    %s: yes", name); \
+			} \
+		} else \
+		{ \
+			sendnotice(client, "    %s: no", name); \
+		} \
+	} while (0)
+
 		SHOW_BOOL_PERM(can_kick, "can_kick", can_kick);
 		SHOW_BOOL_PERM(can_topic, "can_topic", can_topic);
 		SHOW_BOOL_PERM(can_invite, "can_invite", can_invite);
@@ -1171,63 +1142,57 @@ CMD_FUNC(cmd_memberroles)
 		SHOW_BOOL_PERM(can_see_bans, "can_see_bans", can_see_bans);
 		SHOW_BOOL_PERM(can_see_invex, "can_see_invex", can_see_invex);
 		SHOW_BOOL_PERM(can_see_excepts, "can_see_excepts", can_see_excepts);
-		
-		#undef SHOW_BOOL_PERM
-		
+
+#undef SHOW_BOOL_PERM
+
 		/* Handle can_set and can_unset */
 		if (role->permissions.can_set)
 		{
 			if (role->inherit && !role->direct.can_set)
 			{
-				sendnotice(client, "    can_set: %s (inherited from %s)", 
-				          role->permissions.can_set, role->inherit);
-			}
-			else if (role->inherit)
+				sendnotice(client, "    can_set: %s (inherited from %s)",
+				           role->permissions.can_set, role->inherit);
+			} else if (role->inherit)
 			{
 				parent = find_role_by_name(role->inherit);
 				if (parent && parent->permissions.can_set)
-					sendnotice(client, "    can_set: %s (merged with %s)", 
-					          role->permissions.can_set, role->inherit);
+					sendnotice(client, "    can_set: %s (merged with %s)",
+					           role->permissions.can_set, role->inherit);
 				else
 					sendnotice(client, "    can_set: %s", role->permissions.can_set);
-			}
-			else
+			} else
 			{
 				sendnotice(client, "    can_set: %s", role->permissions.can_set);
 			}
-		}
-		else
+		} else
 		{
 			sendnotice(client, "    can_set: (none)");
 		}
-		
+
 		if (role->permissions.can_unset)
 		{
 			if (role->inherit && !role->direct.can_unset)
 			{
-				sendnotice(client, "    can_unset: %s (inherited from %s)", 
-				          role->permissions.can_unset, role->inherit);
-			}
-			else if (role->inherit)
+				sendnotice(client, "    can_unset: %s (inherited from %s)",
+				           role->permissions.can_unset, role->inherit);
+			} else if (role->inherit)
 			{
 				parent = find_role_by_name(role->inherit);
 				if (parent && parent->permissions.can_unset)
-					sendnotice(client, "    can_unset: %s (merged with %s)", 
-					          role->permissions.can_unset, role->inherit);
+					sendnotice(client, "    can_unset: %s (merged with %s)",
+					           role->permissions.can_unset, role->inherit);
 				else
 					sendnotice(client, "    can_unset: %s", role->permissions.can_unset);
-			}
-			else
+			} else
 			{
 				sendnotice(client, "    can_unset: %s", role->permissions.can_unset);
 			}
-		}
-		else
+		} else
 		{
 			sendnotice(client, "    can_unset: (none)");
 		}
 	}
-	
+
 	sendnotice(client, "*** End of member roles list");
 }
 
@@ -1246,23 +1211,23 @@ const char *extban_automode_conv_param(BanContext *b, Extban *extban)
 	char buf[512];
 	Cmode *cm;
 	char *p;
-	
+
 	strlcpy(buf, b->banstr, sizeof(buf));
-	
+
 	/* Split into modes:matcher */
 	mode_part = buf;
 	matcher_part = strchr(buf, ':');
-	
+
 	if (!matcher_part || matcher_part == buf)
 		return NULL; /* Invalid: no matcher part or empty mode */
-	
+
 	*matcher_part = '\0';
 	matcher_part++;
-	
+
 	/* Mode part should have at least one character */
 	if (!*mode_part)
 		return NULL;
-	
+
 	/* Validate each mode character exists and is a prefix mode */
 	for (p = mode_part; *p; p++)
 	{
@@ -1270,11 +1235,11 @@ const char *extban_automode_conv_param(BanContext *b, Extban *extban)
 		if (!cm || cm->type != CMODE_MEMBER)
 			return NULL;
 	}
-	
+
 	/* Matcher must not be empty */
 	if (!*matcher_part)
 		return NULL;
-	
+
 	/* Return the formatted extban */
 	snprintf(retbuf, sizeof(retbuf), "%s:%s", mode_part, matcher_part);
 	return retbuf;
@@ -1287,7 +1252,7 @@ int extban_automode_is_ok(BanContext *b)
 	BanContext b2;
 	Cmode *cm;
 	char *p;
-	
+
 	/* Only allow in +I (invex) and +e (except), not in bans */
 	if (b->ban_type == EXBTYPE_BAN)
 	{
@@ -1295,23 +1260,23 @@ int extban_automode_is_ok(BanContext *b)
 			sendnotice(b->client, "ERROR: ~automode extban can only be used with +I or +e, not with bans");
 		return 0;
 	}
-	
+
 	strlcpy(buf, b->banstr, sizeof(buf));
-	
+
 	/* Split into modes:matcher */
 	mode_part = buf;
 	matcher_part = strchr(buf, ':');
-	
+
 	if (!matcher_part || matcher_part == buf)
 	{
 		if (b->is_ok_check == EXBCHK_PARAM)
 			sendnotice(b->client, "ERROR: ~automode syntax is ~automode:modes:matcher (e.g., ~automode:ov:*!*@host)");
 		return 0;
 	}
-	
+
 	*matcher_part = '\0';
 	matcher_part++;
-	
+
 	/* Mode part should have at least one character */
 	if (!*mode_part)
 	{
@@ -1319,7 +1284,7 @@ int extban_automode_is_ok(BanContext *b)
 			sendnotice(b->client, "ERROR: ~automode modes cannot be empty");
 		return 0;
 	}
-	
+
 	/* Validate each mode character and check permissions */
 	for (p = mode_part; *p; p++)
 	{
@@ -1331,7 +1296,7 @@ int extban_automode_is_ok(BanContext *b)
 				sendnotice(b->client, "ERROR: ~automode mode '%c' is not a valid prefixmode", *p);
 			return 0;
 		}
-		
+
 		/* Check if the client has permission to set this mode on others */
 		if (cm->is_ok && b->is_ok_check == EXBCHK_PARAM)
 		{
@@ -1343,7 +1308,7 @@ int extban_automode_is_ok(BanContext *b)
 			}
 		}
 	}
-	
+
 	/* Matcher must not be empty */
 	if (!*matcher_part)
 	{
@@ -1351,7 +1316,7 @@ int extban_automode_is_ok(BanContext *b)
 			sendnotice(b->client, "ERROR: ~automode matcher cannot be empty");
 		return 0;
 	}
-	
+
 	/* Validate the matcher part using extban_is_ok_nuh_extban */
 	memcpy(&b2, b, sizeof(BanContext));
 	b2.banstr = matcher_part;
@@ -1361,7 +1326,7 @@ int extban_automode_is_ok(BanContext *b)
 			sendnotice(b->client, "ERROR: ~automode has invalid matcher '%s'", matcher_part);
 		return 0;
 	}
-	
+
 	return 1;
 }
 
@@ -1375,19 +1340,19 @@ int automode_join(Client *client, Channel *channel, MessageTag *mtags)
 	char nick_buf[NICKLEN + 1];
 	int modes_len;
 	int list_type;
-	
+
 	if (!MyUser(client))
 		return 0; /* Only process for local users */
-	
+
 	/* Build combined mode string from all matching automodes */
 	modes_buf[0] = '\0';
 	modes_len = 0;
-	
+
 	b = safe_alloc(sizeof(BanContext));
 	b->client = client;
 	b->channel = channel;
 	b->ban_check_types = BANCHK_JOIN;
-	
+
 	/* Check both invex (+I) and except (+e) lists */
 	for (list_type = 0; list_type < 2; list_type++)
 	{
@@ -1395,13 +1360,12 @@ int automode_join(Client *client, Channel *channel, MessageTag *mtags)
 		{
 			b->ban_type = EXBTYPE_INVEX;
 			ban = channel->invexlist;
-		}
-		else
+		} else
 		{
 			b->ban_type = EXBTYPE_EXCEPT;
 			ban = channel->exlist;
 		}
-		
+
 		for (; ban; ban = ban->next)
 		{
 			/* Check if this is an automode extban */
@@ -1412,25 +1376,25 @@ int automode_join(Client *client, Channel *channel, MessageTag *mtags)
 				char *mode_part, *matcher_part;
 				char extban_buf[512];
 				char *p;
-				
+
 				/* Skip the extban prefix */
 				if (strncmp(params, "~automode:", 10) == 0)
 					params += 10;
 				else if (strncmp(params, "~M:", 3) == 0)
 					params += 3;
-				
+
 				strlcpy(extban_buf, params, sizeof(extban_buf));
-				
+
 				/* Parse modes:matcher */
 				mode_part = extban_buf;
 				matcher_part = strchr(extban_buf, ':');
-				
+
 				if (!matcher_part || !*mode_part)
 					continue;
-				
+
 				*matcher_part = '\0';
 				matcher_part++;
-				
+
 				/* Check if the user matches */
 				b->banstr = matcher_part;
 				if (ban_check_mask(b))
@@ -1449,16 +1413,16 @@ int automode_join(Client *client, Channel *channel, MessageTag *mtags)
 			}
 		}
 	}
-	
+
 	safe_free(b);
-	
+
 	/* Now set all modes at once if any were collected */
 	if (modes_len > 0)
 	{
 		int i;
 		strlcpy(nick_buf, client->name, sizeof(nick_buf));
 		params_buf[0] = '\0';
-		
+
 		/* Build parameter string: "nick nick nick..." for each mode */
 		for (i = 0; i < modes_len; i++)
 		{
@@ -1466,11 +1430,11 @@ int automode_join(Client *client, Channel *channel, MessageTag *mtags)
 				strlcat(params_buf, " ", sizeof(params_buf));
 			strlcat(params_buf, nick_buf, sizeof(params_buf));
 		}
-		
+
 		/* Set all modes at once */
 		set_channel_mode(channel, NULL, modes_buf, params_buf);
 	}
-	
+
 	return 0;
 }
 
@@ -1489,10 +1453,14 @@ static int member_roles_can_see_list(Client *client, Channel *channel, char list
 
 	switch (list_type)
 	{
-		case 'b': return perms->can_see_bans;
-		case 'e': return perms->can_see_excepts;
-		case 'I': return perms->can_see_invex;
-		default:  return 0;
+		case 'b':
+			return perms->can_see_bans;
+		case 'e':
+			return perms->can_see_excepts;
+		case 'I':
+			return perms->can_see_invex;
+		default:
+			return 0;
 	}
 }
 
@@ -1518,7 +1486,8 @@ int member_roles_packet(Client *from, Client *to, Client *intended_to, char **ms
 		if (!p)
 			return 0;
 		p = strchr(p + 1, ' ');
-	} else {
+	} else
+	{
 		p = strchr(buf, ' ');
 	}
 	if (!p)
@@ -1530,7 +1499,7 @@ int member_roles_packet(Client *from, Client *to, Client *intended_to, char **ms
 	/* Numerics 367 (+b list), 348 (+e list), 346 (+I list) */
 	if (!strncmp(p, "367 ", 4) || !strncmp(p, "348 ", 4) || !strncmp(p, "346 ", 4))
 	{
-		char channelname[CHANNELLEN+1];
+		char channelname[CHANNELLEN + 1];
 		char *chan_start;
 		Channel *channel;
 		char list_type;
@@ -1568,8 +1537,7 @@ int member_roles_packet(Client *from, Client *to, Client *intended_to, char **ms
 		*msg = NULL;
 		*length = 0;
 		return 0;
-	}
-	else if (!strncmp(p, "MODE ", 5))
+	} else if (!strncmp(p, "MODE ", 5))
 	{
 		/* MODE line */
 		if (p[5] != '#')
@@ -1577,7 +1545,7 @@ int member_roles_packet(Client *from, Client *to, Client *intended_to, char **ms
 
 		/* If user has no effective permissions, don't interfere with MODE display */
 		{
-			char channelname[CHANNELLEN+1];
+			char channelname[CHANNELLEN + 1];
 			char *sp;
 			Channel *channel;
 
@@ -1610,7 +1578,7 @@ int member_roles_reparsemode(Client *client, char **msg, int *length)
 	char omodebuf[1024], oparabuf[1024];
 	static char obuf[1024];
 	char *p, *o, *header_end = NULL;
-	char channelname[CHANNELLEN+1];
+	char channelname[CHANNELLEN + 1];
 	Channel *channel;
 	ParseMode pm;
 	int n;
@@ -1630,7 +1598,8 @@ int member_roles_reparsemode(Client *client, char **msg, int *length)
 		if (!p)
 			return 0;
 		p = strchr(p + 1, ' ');
-	} else {
+	} else
+	{
 		p = strchr(*msg, ' ');
 	}
 	if (!p)
@@ -1702,8 +1671,7 @@ int member_roles_reparsemode(Client *client, char **msg, int *length)
 		{
 			add = 1;
 			strlcat(omodebuf, "+", sizeof(omodebuf));
-		}
-		else if ((pm.what == MODE_DEL) && (add != 0))
+		} else if ((pm.what == MODE_DEL) && (add != 0))
 		{
 			add = 0;
 			strlcat(omodebuf, "-", sizeof(omodebuf));

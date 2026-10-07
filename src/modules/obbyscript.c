@@ -89,15 +89,15 @@ module
 /* Embed Duktape directly */
 #include "duktape.c"
 
-#define SCRIPTS_DIR "scripts"
+#define SCRIPTS_DIR   "scripts"
 #define JS_MAX_OUTPUT 4096
 
 ModuleHeader MOD_HEADER = {
-	"obbyscript",
-	"2.3",
-	"JavaScript scripting support using Duktape (Extended API + RPC + Extbans + UnrealDB)",
-	"Valware",
-	"unrealircd-6",
+    "obbyscript",
+    "2.3",
+    "JavaScript scripting support using Duktape (Extended API + RPC + Extbans + UnrealDB)",
+    "Valware",
+    "unrealircd-6",
 };
 
 /* Structure to hold JavaScript command handlers */
@@ -133,7 +133,7 @@ struct JSHttpRequest {
 typedef struct JSTimer JSTimer;
 struct JSTimer {
 	JSTimer *prev, *next;
-	int id;                 /* Timer ID for clearInterval/clearTimeout */
+	int id;          /* Timer ID for clearInterval/clearTimeout */
 	char *handler_code;     /* Stash key for handler function */
 	duk_context *ctx;
 	Event *event;           /* UnrealIRCd event handle */
@@ -456,10 +456,10 @@ static JSMessageTag *js_mtag_handlers = NULL;
 typedef struct JSDatabase JSDatabase;
 struct JSDatabase {
 	JSDatabase *prev, *next;
-	int id;                     /* Database handle ID for JavaScript */
+	int id;              /* Database handle ID for JavaScript */
 	char *filename;             /* Database filename */
 	UnrealDB *db;               /* UnrealIRCd database handle */
-	int mode;                   /* UNREALDB_MODE_READ or UNREALDB_MODE_WRITE */
+	int mode;            /* UNREALDB_MODE_READ or UNREALDB_MODE_WRITE */
 };
 
 static JSDatabase *js_databases = NULL;
@@ -757,179 +757,294 @@ static void js_init_engine(void)
 
 	/* Define hook type constants - ALL HOOKS */
 	duk_push_global_object(global_ctx);
-	
+
 	/* Connection hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_CONNECT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_CONNECT");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_CONNECT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_CONNECT");
-	duk_push_int(global_ctx, HOOKTYPE_REMOTE_CONNECT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_CONNECT");
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_QUIT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_QUIT");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_QUIT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_QUIT");
-	duk_push_int(global_ctx, HOOKTYPE_REMOTE_QUIT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_QUIT");
-	duk_push_int(global_ctx, HOOKTYPE_UNKUSER_QUIT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_UNKUSER_QUIT");
-	duk_push_int(global_ctx, HOOKTYPE_SECURE_CONNECT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SECURE_CONNECT");
-	duk_push_int(global_ctx, HOOKTYPE_WELCOME); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_WELCOME");
-	duk_push_int(global_ctx, HOOKTYPE_ACCOUNT_LOGIN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_ACCOUNT_LOGIN");
-	duk_push_int(global_ctx, HOOKTYPE_CLOSE_CONNECTION); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CLOSE_CONNECTION");
-	duk_push_int(global_ctx, HOOKTYPE_IDENT_LOOKUP); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IDENT_LOOKUP");
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_HANDSHAKE_TIMEOUT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_HANDSHAKE_TIMEOUT");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_CONNECT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_CONNECT");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_CONNECT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_CONNECT");
+	duk_push_int(global_ctx, HOOKTYPE_REMOTE_CONNECT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_CONNECT");
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_QUIT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_QUIT");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_QUIT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_QUIT");
+	duk_push_int(global_ctx, HOOKTYPE_REMOTE_QUIT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_QUIT");
+	duk_push_int(global_ctx, HOOKTYPE_UNKUSER_QUIT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_UNKUSER_QUIT");
+	duk_push_int(global_ctx, HOOKTYPE_SECURE_CONNECT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SECURE_CONNECT");
+	duk_push_int(global_ctx, HOOKTYPE_WELCOME);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_WELCOME");
+	duk_push_int(global_ctx, HOOKTYPE_ACCOUNT_LOGIN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_ACCOUNT_LOGIN");
+	duk_push_int(global_ctx, HOOKTYPE_CLOSE_CONNECTION);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CLOSE_CONNECTION");
+	duk_push_int(global_ctx, HOOKTYPE_IDENT_LOOKUP);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IDENT_LOOKUP");
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_HANDSHAKE_TIMEOUT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_HANDSHAKE_TIMEOUT");
+
 	/* Server hooks */
-	duk_push_int(global_ctx, HOOKTYPE_SERVER_CONNECT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_CONNECT");
-	duk_push_int(global_ctx, HOOKTYPE_SERVER_HANDSHAKE_OUT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_HANDSHAKE_OUT");
-	duk_push_int(global_ctx, HOOKTYPE_SERVER_SYNC); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_SYNC");
-	duk_push_int(global_ctx, HOOKTYPE_POST_SERVER_CONNECT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_SERVER_CONNECT");
-	duk_push_int(global_ctx, HOOKTYPE_SERVER_SYNCED); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_SYNCED");
-	duk_push_int(global_ctx, HOOKTYPE_SERVER_QUIT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_QUIT");
-	
+	duk_push_int(global_ctx, HOOKTYPE_SERVER_CONNECT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_CONNECT");
+	duk_push_int(global_ctx, HOOKTYPE_SERVER_HANDSHAKE_OUT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_HANDSHAKE_OUT");
+	duk_push_int(global_ctx, HOOKTYPE_SERVER_SYNC);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_SYNC");
+	duk_push_int(global_ctx, HOOKTYPE_POST_SERVER_CONNECT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_SERVER_CONNECT");
+	duk_push_int(global_ctx, HOOKTYPE_SERVER_SYNCED);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_SYNCED");
+	duk_push_int(global_ctx, HOOKTYPE_SERVER_QUIT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SERVER_QUIT");
+
 	/* Nick change hooks */
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_NICKCHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_NICKCHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_REMOTE_NICKCHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_NICKCHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_POST_LOCAL_NICKCHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_LOCAL_NICKCHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_POST_REMOTE_NICKCHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_REMOTE_NICKCHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_USE_NICK); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_USE_NICK");
-	
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_NICKCHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_NICKCHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_REMOTE_NICKCHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_NICKCHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_POST_LOCAL_NICKCHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_LOCAL_NICKCHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_POST_REMOTE_NICKCHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_REMOTE_NICKCHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_USE_NICK);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_USE_NICK");
+
 	/* Join hooks */
-	duk_push_int(global_ctx, HOOKTYPE_CAN_JOIN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_JOIN");
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_JOIN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_JOIN");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_JOIN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_JOIN");
-	duk_push_int(global_ctx, HOOKTYPE_REMOTE_JOIN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_JOIN");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_JOIN_LIMITEXCEEDED); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_JOIN_LIMITEXCEEDED");
-	duk_push_int(global_ctx, HOOKTYPE_JOIN_DATA); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JOIN_DATA");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_SAJOIN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SAJOIN");
-	
+	duk_push_int(global_ctx, HOOKTYPE_CAN_JOIN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_JOIN");
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_JOIN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_JOIN");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_JOIN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_JOIN");
+	duk_push_int(global_ctx, HOOKTYPE_REMOTE_JOIN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_JOIN");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_JOIN_LIMITEXCEEDED);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_JOIN_LIMITEXCEEDED");
+	duk_push_int(global_ctx, HOOKTYPE_JOIN_DATA);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JOIN_DATA");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_SAJOIN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SAJOIN");
+
 	/* Part hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_PART); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_PART");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_PART); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_PART");
-	duk_push_int(global_ctx, HOOKTYPE_REMOTE_PART); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_PART");
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_QUIT_CHAN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_QUIT_CHAN");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_PART);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_PART");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_PART);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_PART");
+	duk_push_int(global_ctx, HOOKTYPE_REMOTE_PART);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_PART");
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_QUIT_CHAN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_QUIT_CHAN");
+
 	/* Kick hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_KICK); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_KICK");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_KICK); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_KICK");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_KICK); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_KICK");
-	duk_push_int(global_ctx, HOOKTYPE_REMOTE_KICK); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_KICK");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_KICK);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_KICK");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_KICK);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_KICK");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_KICK);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_KICK");
+	duk_push_int(global_ctx, HOOKTYPE_REMOTE_KICK);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_KICK");
+
 	/* Message hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_CHANMSG); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_CHANMSG");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_SEND_TO_USER); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SEND_TO_USER");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_SEND_TO_CHANNEL); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SEND_TO_CHANNEL");
-	duk_push_int(global_ctx, HOOKTYPE_USERMSG); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_USERMSG");
-	duk_push_int(global_ctx, HOOKTYPE_CHANMSG); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANMSG");
-	duk_push_int(global_ctx, HOOKTYPE_NEW_MESSAGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_NEW_MESSAGE");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_BYPASS_CHANNEL_MESSAGE_RESTRICTION); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_BYPASS_CHANNEL_MESSAGE_RESTRICTION");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_CHANMSG);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_CHANMSG");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_SEND_TO_USER);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SEND_TO_USER");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_SEND_TO_CHANNEL);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SEND_TO_CHANNEL");
+	duk_push_int(global_ctx, HOOKTYPE_USERMSG);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_USERMSG");
+	duk_push_int(global_ctx, HOOKTYPE_CHANMSG);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANMSG");
+	duk_push_int(global_ctx, HOOKTYPE_NEW_MESSAGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_NEW_MESSAGE");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_BYPASS_CHANNEL_MESSAGE_RESTRICTION);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_BYPASS_CHANNEL_MESSAGE_RESTRICTION");
+
 	/* Topic hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_TOPIC); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_TOPIC");
-	duk_push_int(global_ctx, HOOKTYPE_TOPIC); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TOPIC");
-	duk_push_int(global_ctx, HOOKTYPE_CAN_SET_TOPIC); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SET_TOPIC");
-	duk_push_int(global_ctx, HOOKTYPE_VIEW_TOPIC_OUTSIDE_CHANNEL); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_VIEW_TOPIC_OUTSIDE_CHANNEL");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_TOPIC);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_TOPIC");
+	duk_push_int(global_ctx, HOOKTYPE_TOPIC);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TOPIC");
+	duk_push_int(global_ctx, HOOKTYPE_CAN_SET_TOPIC);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CAN_SET_TOPIC");
+	duk_push_int(global_ctx, HOOKTYPE_VIEW_TOPIC_OUTSIDE_CHANNEL);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_VIEW_TOPIC_OUTSIDE_CHANNEL");
+
 	/* Mode hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_CHANMODE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_CHANMODE");
-	duk_push_int(global_ctx, HOOKTYPE_PRE_REMOTE_CHANMODE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_REMOTE_CHANMODE");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_CHANMODE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_CHANMODE");
-	duk_push_int(global_ctx, HOOKTYPE_REMOTE_CHANMODE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_CHANMODE");
-	duk_push_int(global_ctx, HOOKTYPE_MODECHAR_DEL); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_MODECHAR_DEL");
-	duk_push_int(global_ctx, HOOKTYPE_MODECHAR_ADD); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_MODECHAR_ADD");
-	duk_push_int(global_ctx, HOOKTYPE_UMODE_CHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_UMODE_CHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_MODE_DEOP); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_MODE_DEOP");
-	duk_push_int(global_ctx, HOOKTYPE_CHAN_PERMIT_NICK_CHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHAN_PERMIT_NICK_CHANGE");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_LOCAL_CHANMODE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_LOCAL_CHANMODE");
+	duk_push_int(global_ctx, HOOKTYPE_PRE_REMOTE_CHANMODE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_REMOTE_CHANMODE");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_CHANMODE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_CHANMODE");
+	duk_push_int(global_ctx, HOOKTYPE_REMOTE_CHANMODE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REMOTE_CHANMODE");
+	duk_push_int(global_ctx, HOOKTYPE_MODECHAR_DEL);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_MODECHAR_DEL");
+	duk_push_int(global_ctx, HOOKTYPE_MODECHAR_ADD);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_MODECHAR_ADD");
+	duk_push_int(global_ctx, HOOKTYPE_UMODE_CHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_UMODE_CHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_MODE_DEOP);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_MODE_DEOP");
+	duk_push_int(global_ctx, HOOKTYPE_CHAN_PERMIT_NICK_CHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHAN_PERMIT_NICK_CHANGE");
+
 	/* Invite hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_INVITE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_INVITE");
-	duk_push_int(global_ctx, HOOKTYPE_INVITE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_INVITE");
-	duk_push_int(global_ctx, HOOKTYPE_INVITE_BYPASS); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_INVITE_BYPASS");
-	duk_push_int(global_ctx, HOOKTYPE_IS_INVITED); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IS_INVITED");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_INVITE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_INVITE");
+	duk_push_int(global_ctx, HOOKTYPE_INVITE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_INVITE");
+	duk_push_int(global_ctx, HOOKTYPE_INVITE_BYPASS);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_INVITE_BYPASS");
+	duk_push_int(global_ctx, HOOKTYPE_IS_INVITED);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IS_INVITED");
+
 	/* Knock hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_KNOCK); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_KNOCK");
-	duk_push_int(global_ctx, HOOKTYPE_KNOCK); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_KNOCK");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_KNOCK);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_KNOCK");
+	duk_push_int(global_ctx, HOOKTYPE_KNOCK);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_KNOCK");
+
 	/* Away hooks */
-	duk_push_int(global_ctx, HOOKTYPE_AWAY); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_AWAY");
-	
+	duk_push_int(global_ctx, HOOKTYPE_AWAY);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_AWAY");
+
 	/* WHOIS/WHO hooks */
-	duk_push_int(global_ctx, HOOKTYPE_WHOIS); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_WHOIS");
-	duk_push_int(global_ctx, HOOKTYPE_WHO_STATUS); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_WHO_STATUS");
-	duk_push_int(global_ctx, HOOKTYPE_SEE_CHANNEL_IN_WHOIS); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SEE_CHANNEL_IN_WHOIS");
-	
+	duk_push_int(global_ctx, HOOKTYPE_WHOIS);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_WHOIS");
+	duk_push_int(global_ctx, HOOKTYPE_WHO_STATUS);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_WHO_STATUS");
+	duk_push_int(global_ctx, HOOKTYPE_SEE_CHANNEL_IN_WHOIS);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SEE_CHANNEL_IN_WHOIS");
+
 	/* Kill hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_KILL); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_KILL");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_KILL); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_KILL");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_KILL);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_KILL");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_KILL);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_KILL");
+
 	/* Rehash/config hooks */
-	duk_push_int(global_ctx, HOOKTYPE_REHASHFLAG); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REHASHFLAG");
-	duk_push_int(global_ctx, HOOKTYPE_CONFIGPOSTTEST); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGPOSTTEST");
-	duk_push_int(global_ctx, HOOKTYPE_REHASH); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REHASH");
-	duk_push_int(global_ctx, HOOKTYPE_REHASH_COMPLETE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REHASH_COMPLETE");
-	duk_push_int(global_ctx, HOOKTYPE_CONFIGTEST); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGTEST");
-	duk_push_int(global_ctx, HOOKTYPE_CONFIGRUN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGRUN");
-	duk_push_int(global_ctx, HOOKTYPE_CONFIGRUN_EX); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGRUN_EX");
-	
+	duk_push_int(global_ctx, HOOKTYPE_REHASHFLAG);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REHASHFLAG");
+	duk_push_int(global_ctx, HOOKTYPE_CONFIGPOSTTEST);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGPOSTTEST");
+	duk_push_int(global_ctx, HOOKTYPE_REHASH);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REHASH");
+	duk_push_int(global_ctx, HOOKTYPE_REHASH_COMPLETE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REHASH_COMPLETE");
+	duk_push_int(global_ctx, HOOKTYPE_CONFIGTEST);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGTEST");
+	duk_push_int(global_ctx, HOOKTYPE_CONFIGRUN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGRUN");
+	duk_push_int(global_ctx, HOOKTYPE_CONFIGRUN_EX);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONFIGRUN_EX");
+
 	/* Stats hooks */
-	duk_push_int(global_ctx, HOOKTYPE_STATS); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_STATS");
-	
+	duk_push_int(global_ctx, HOOKTYPE_STATS);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_STATS");
+
 	/* Oper hooks */
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_OPER); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_OPER");
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_PASS); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_PASS");
-	
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_OPER);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_OPER");
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_PASS);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_PASS");
+
 	/* Channel hooks */
-	duk_push_int(global_ctx, HOOKTYPE_CHANNEL_CREATE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANNEL_CREATE");
-	duk_push_int(global_ctx, HOOKTYPE_CHANNEL_DESTROY); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANNEL_DESTROY");
-	duk_push_int(global_ctx, HOOKTYPE_CHANNEL_SYNCED); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANNEL_SYNCED");
-	duk_push_int(global_ctx, HOOKTYPE_IS_CHANNEL_SECURE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IS_CHANNEL_SECURE");
-	
+	duk_push_int(global_ctx, HOOKTYPE_CHANNEL_CREATE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANNEL_CREATE");
+	duk_push_int(global_ctx, HOOKTYPE_CHANNEL_DESTROY);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANNEL_DESTROY");
+	duk_push_int(global_ctx, HOOKTYPE_CHANNEL_SYNCED);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CHANNEL_SYNCED");
+	duk_push_int(global_ctx, HOOKTYPE_IS_CHANNEL_SECURE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IS_CHANNEL_SECURE");
+
 	/* TKL (server bans) hooks */
-	duk_push_int(global_ctx, HOOKTYPE_TKL_EXCEPT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TKL_EXCEPT");
-	duk_push_int(global_ctx, HOOKTYPE_TKL_ADD); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TKL_ADD");
-	duk_push_int(global_ctx, HOOKTYPE_TKL_DEL); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TKL_DEL");
-	duk_push_int(global_ctx, HOOKTYPE_FIND_TKLINE_MATCH); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_FIND_TKLINE_MATCH");
-	
+	duk_push_int(global_ctx, HOOKTYPE_TKL_EXCEPT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TKL_EXCEPT");
+	duk_push_int(global_ctx, HOOKTYPE_TKL_ADD);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TKL_ADD");
+	duk_push_int(global_ctx, HOOKTYPE_TKL_DEL);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TKL_DEL");
+	duk_push_int(global_ctx, HOOKTYPE_FIND_TKLINE_MATCH);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_FIND_TKLINE_MATCH");
+
 	/* Log hooks */
-	duk_push_int(global_ctx, HOOKTYPE_LOG); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOG");
-	
+	duk_push_int(global_ctx, HOOKTYPE_LOG);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOG");
+
 	/* Spamfilter hooks */
-	duk_push_int(global_ctx, HOOKTYPE_LOCAL_SPAMFILTER); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_SPAMFILTER");
-	duk_push_int(global_ctx, HOOKTYPE_TAKE_ACTION); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TAKE_ACTION");
-	
+	duk_push_int(global_ctx, HOOKTYPE_LOCAL_SPAMFILTER);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_LOCAL_SPAMFILTER");
+	duk_push_int(global_ctx, HOOKTYPE_TAKE_ACTION);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_TAKE_ACTION");
+
 	/* Silence hooks */
-	duk_push_int(global_ctx, HOOKTYPE_SILENCED); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SILENCED");
-	
+	duk_push_int(global_ctx, HOOKTYPE_SILENCED);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SILENCED");
+
 	/* Packet hooks */
-	duk_push_int(global_ctx, HOOKTYPE_RAWPACKET_IN); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_RAWPACKET_IN");
-	duk_push_int(global_ctx, HOOKTYPE_PACKET); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PACKET");
-	duk_push_int(global_ctx, HOOKTYPE_HANDSHAKE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_HANDSHAKE");
-	duk_push_int(global_ctx, HOOKTYPE_IS_HANDSHAKE_FINISHED); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IS_HANDSHAKE_FINISHED");
-	
+	duk_push_int(global_ctx, HOOKTYPE_RAWPACKET_IN);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_RAWPACKET_IN");
+	duk_push_int(global_ctx, HOOKTYPE_PACKET);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PACKET");
+	duk_push_int(global_ctx, HOOKTYPE_HANDSHAKE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_HANDSHAKE");
+	duk_push_int(global_ctx, HOOKTYPE_IS_HANDSHAKE_FINISHED);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IS_HANDSHAKE_FINISHED");
+
 	/* Client/user hooks */
-	duk_push_int(global_ctx, HOOKTYPE_FREE_CLIENT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_FREE_CLIENT");
-	duk_push_int(global_ctx, HOOKTYPE_FREE_USER); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_FREE_USER");
-	duk_push_int(global_ctx, HOOKTYPE_USERHOST_CHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_USERHOST_CHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_REALNAME_CHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REALNAME_CHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_IP_CHANGE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IP_CHANGE");
-	duk_push_int(global_ctx, HOOKTYPE_CONNECT_EXTINFO); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONNECT_EXTINFO");
-	
+	duk_push_int(global_ctx, HOOKTYPE_FREE_CLIENT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_FREE_CLIENT");
+	duk_push_int(global_ctx, HOOKTYPE_FREE_USER);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_FREE_USER");
+	duk_push_int(global_ctx, HOOKTYPE_USERHOST_CHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_USERHOST_CHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_REALNAME_CHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_REALNAME_CHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_IP_CHANGE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_IP_CHANGE");
+	duk_push_int(global_ctx, HOOKTYPE_CONNECT_EXTINFO);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_CONNECT_EXTINFO");
+
 	/* DCC hooks */
-	duk_push_int(global_ctx, HOOKTYPE_DCC_DENIED); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_DCC_DENIED");
-	
+	duk_push_int(global_ctx, HOOKTYPE_DCC_DENIED);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_DCC_DENIED");
+
 	/* SASL hooks */
-	duk_push_int(global_ctx, HOOKTYPE_SASL_CONTINUATION); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_CONTINUATION");
-	duk_push_int(global_ctx, HOOKTYPE_SASL_RESULT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_RESULT");
-	duk_push_int(global_ctx, HOOKTYPE_SASL_AUTHENTICATE); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_AUTHENTICATE");
-	duk_push_int(global_ctx, HOOKTYPE_SASL_MECHS); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_MECHS");
-	
+	duk_push_int(global_ctx, HOOKTYPE_SASL_CONTINUATION);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_CONTINUATION");
+	duk_push_int(global_ctx, HOOKTYPE_SASL_RESULT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_RESULT");
+	duk_push_int(global_ctx, HOOKTYPE_SASL_AUTHENTICATE);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_AUTHENTICATE");
+	duk_push_int(global_ctx, HOOKTYPE_SASL_MECHS);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_SASL_MECHS");
+
 	/* Command hooks */
-	duk_push_int(global_ctx, HOOKTYPE_PRE_COMMAND); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_COMMAND");
-	duk_push_int(global_ctx, HOOKTYPE_POST_COMMAND); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_COMMAND");
-	
+	duk_push_int(global_ctx, HOOKTYPE_PRE_COMMAND);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_PRE_COMMAND");
+	duk_push_int(global_ctx, HOOKTYPE_POST_COMMAND);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_POST_COMMAND");
+
 	/* JSON-RPC hooks */
-	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CLIENT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CLIENT");
-	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CLIENT_USER); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CLIENT_USER");
-	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CLIENT_SERVER); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CLIENT_SERVER");
-	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CHANNEL); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CHANNEL");
-	
+	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CLIENT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CLIENT");
+	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CLIENT_USER);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CLIENT_USER");
+	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CLIENT_SERVER);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CLIENT_SERVER");
+	duk_push_int(global_ctx, HOOKTYPE_JSON_EXPAND_CHANNEL);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_JSON_EXPAND_CHANNEL");
+
 	/* Accept hook */
-	duk_push_int(global_ctx, HOOKTYPE_ACCEPT); duk_put_prop_string(global_ctx, -2, "HOOKTYPE_ACCEPT");
+	duk_push_int(global_ctx, HOOKTYPE_ACCEPT);
+	duk_put_prop_string(global_ctx, -2, "HOOKTYPE_ACCEPT");
 
 	/* ModData type constants */
 	duk_push_int(global_ctx, MODDATATYPE_CLIENT);
@@ -1130,7 +1245,8 @@ void js_push_client_object(duk_context *ctx, Client *client)
 
 	/* Store the client pointer for methods to use */
 	duk_push_pointer(ctx, client);
-	duk_put_prop_string(ctx, obj_idx, "\xff" "_ptr");
+	duk_put_prop_string(ctx, obj_idx, "\xff"
+	                                  "_ptr");
 
 	/* Add accountLogin method */
 	duk_push_c_function(ctx, js_client_accountLogin, 1);
@@ -1156,7 +1272,8 @@ duk_ret_t js_client_accountLogin(duk_context *ctx)
 
 	/* Get 'this' object and retrieve the client pointer */
 	duk_push_this(ctx);
-	if (!duk_get_prop_string(ctx, -1, "\xff" "_ptr"))
+	if (!duk_get_prop_string(ctx, -1, "\xff"
+	                                  "_ptr"))
 	{
 		duk_pop_2(ctx);
 		duk_push_boolean(ctx, 0);
@@ -1193,7 +1310,8 @@ duk_ret_t js_client_accountLogout(duk_context *ctx)
 
 	/* Get 'this' object and retrieve the client pointer */
 	duk_push_this(ctx);
-	if (!duk_get_prop_string(ctx, -1, "\xff" "_ptr"))
+	if (!duk_get_prop_string(ctx, -1, "\xff"
+	                                  "_ptr"))
 	{
 		duk_pop_2(ctx);
 		duk_push_boolean(ctx, 0);
@@ -1277,8 +1395,7 @@ void js_push_mtags_object(duk_context *ctx, MessageTag *mtags)
 		{
 			duk_push_string(ctx, m->value);
 			duk_put_prop_string(ctx, obj_idx, "value");
-		}
-		else
+		} else
 		{
 			duk_push_null(ctx);
 			duk_put_prop_string(ctx, obj_idx, "value");
@@ -1455,10 +1572,10 @@ duk_ret_t js_api_sendRaw(duk_context *ctx)
 duk_ret_t js_api_log(duk_context *ctx)
 {
 	const char *message = duk_require_string(ctx, 0);
-	
+
 	unreal_log(ULOG_INFO, "obbyscript", "JS_SCRIPT_LOG", NULL,
 	           "[JS] $message", log_data_string("message", message));
-	
+
 	return 0;
 }
 
@@ -1470,7 +1587,7 @@ duk_ret_t js_api_findClient(duk_context *ctx)
 {
 	const char *name = duk_require_string(ctx, 0);
 	Client *client = find_client(name, NULL);
-	
+
 	js_push_client_object(ctx, client);
 	return 1;
 }
@@ -1528,7 +1645,7 @@ duk_ret_t js_api_hasMode(duk_context *ctx)
 
 	int mode = mode_str[0];
 	long mode_flag = find_user_mode(mode);
-	
+
 	duk_push_boolean(ctx, (client->umodes & mode_flag) ? 1 : 0);
 	return 1;
 }
@@ -1763,7 +1880,7 @@ duk_ret_t js_api_registerCommand(duk_context *ctx)
 		return 0;
 	}
 	cmd_name = duk_get_string(ctx, -1);
-	
+
 	/* Create JSCommand structure - copy name immediately since Duktape string is temporary */
 	jscmd = safe_alloc(sizeof(JSCommand));
 	safe_strdup(jscmd->name, cmd_name);
@@ -1776,7 +1893,7 @@ duk_ret_t js_api_registerCommand(duk_context *ctx)
 		{
 			const char *flags_str = duk_get_string(ctx, -1);
 			cmd_flags = 0; /* Reset to 0 when explicitly specified */
-			
+
 			/* Parse flags string (e.g., "USER|OPER|SERVER") */
 			if (strstr(flags_str, "USER"))
 				cmd_flags |= CMD_USER;
@@ -1788,12 +1905,11 @@ duk_ret_t js_api_registerCommand(duk_context *ctx)
 				cmd_flags |= CMD_UNREGISTERED;
 			if (strstr(flags_str, "SHUN"))
 				cmd_flags |= CMD_SHUN;
-			
+
 			/* If no flags matched, default to CMD_USER */
 			if (cmd_flags == 0)
 				cmd_flags = CMD_USER;
-		}
-		else if (duk_is_number(ctx, -1))
+		} else if (duk_is_number(ctx, -1))
 		{
 			/* Allow direct numeric flags */
 			cmd_flags = duk_get_int(ctx, -1);
@@ -1816,12 +1932,12 @@ duk_ret_t js_api_registerCommand(duk_context *ctx)
 	/* Store the handler function in a stash with a unique key */
 	char stash_key[128];
 	snprintf(stash_key, sizeof(stash_key), "cmd_handler_%s", jscmd->name);
-	
+
 	/* Stack: [config_obj, handler_func] */
 	duk_push_heap_stash(ctx);          /* Stack: [config_obj, handler_func, stash] */
 	duk_dup(ctx, -2);                  /* Stack: [config_obj, handler_func, stash, handler_func_copy] */
 	duk_put_prop_string(ctx, -2, stash_key); /* Stack: [config_obj, handler_func, stash] */
-	duk_pop(ctx);                      /* Stack: [config_obj, handler_func] */
+	duk_pop(ctx);               /* Stack: [config_obj, handler_func] */
 
 	safe_strdup(jscmd->handler_code, stash_key); /* Store stash key */
 
@@ -1883,8 +1999,7 @@ int js_hook_local_connect(Client *client)
 			unreal_log(ULOG_ERROR, "obbyscript", "JS_HOOK_ERROR", client,
 			           "Error executing JavaScript hook handler: $error",
 			           log_data_string("error", error));
-		}
-		else if (duk_is_number(jshook->ctx, -1))
+		} else if (duk_is_number(jshook->ctx, -1))
 		{
 			retval = duk_get_int(jshook->ctx, -1);
 		}
@@ -4775,8 +4890,7 @@ const char *js_hook_sasl_mechs(Client *client)
 						strlcat(mechs, " ", sizeof(mechs));
 					strlcat(mechs, new_mechs, sizeof(mechs));
 				}
-			}
-			else
+			} else
 			{
 				unreal_log(ULOG_DEBUG, "obbyscript", "JS_SASL_MECHS_ERROR", NULL,
 				           "SASL_MECHS hook failed or returned non-string");
@@ -4798,7 +4912,7 @@ const char *js_hook_sasl_mechs(Client *client)
 EVENT(js_timer_event)
 {
 	JSTimer *timer = (JSTimer *)data;
-	
+
 	if (!timer || !timer->ctx || !timer->handler_code)
 		return;
 
@@ -5068,13 +5182,13 @@ duk_ret_t js_api_registerHook(duk_context *ctx)
 
 	/* Store the handler function in stash with unique key */
 	char stash_key[128];
-	snprintf(stash_key, sizeof(stash_key), "hook_handler_%d_%p", hooktype, (void*)jshook);
-	
+	snprintf(stash_key, sizeof(stash_key), "hook_handler_%d_%p", hooktype, (void *)jshook);
+
 	/* Stack: [config_obj, handler_func] */
 	duk_push_heap_stash(ctx);          /* Stack: [config_obj, handler_func, stash] */
 	duk_dup(ctx, -2);                  /* Stack: [config_obj, handler_func, stash, handler_func_copy] */
 	duk_put_prop_string(ctx, -2, stash_key); /* Stack: [config_obj, handler_func, stash] */
-	duk_pop(ctx);                      /* Stack: [config_obj, handler_func] */
+	duk_pop(ctx);               /* Stack: [config_obj, handler_func] */
 
 	safe_strdup(jshook->handler_code, stash_key); /* Store stash key */
 
@@ -5082,7 +5196,7 @@ duk_ret_t js_api_registerHook(duk_context *ctx)
 	if (!js_registered_hooks[hooktype])
 	{
 		js_registered_hooks[hooktype] = 1;
-		
+
 		switch (hooktype)
 		{
 			case HOOKTYPE_LOCAL_CONNECT:
@@ -5345,7 +5459,7 @@ void js_load_scripts(void)
 	long file_size;
 
 	snprintf(filepath, sizeof(filepath), "%s/%s", CONFDIR, SCRIPTS_DIR);
-	
+
 	dir = opendir(filepath);
 	if (!dir)
 	{
@@ -5381,7 +5495,7 @@ void js_load_scripts(void)
 		file_size = ftell(fp);
 		fseek(fp, 0, SEEK_SET);
 
-		if (file_size <= 0 || file_size > 1024*1024) /* Max 1MB per script */
+		if (file_size <= 0 || file_size > 1024 * 1024) /* Max 1MB per script */
 		{
 			fclose(fp);
 			unreal_log(ULOG_WARNING, "obbyscript", "JS_SCRIPT_INVALID_SIZE", NULL,
@@ -5411,8 +5525,7 @@ void js_load_scripts(void)
 			           "Error loading script $file: $error",
 			           log_data_string("file", entry->d_name),
 			           log_data_string("error", error));
-		}
-		else
+		} else
 		{
 			unreal_log(ULOG_INFO, "obbyscript", "JS_SCRIPT_LOADED", NULL,
 			           "Loaded JavaScript script: $file",
@@ -5881,8 +5994,7 @@ duk_ret_t js_api_setModData(duk_context *ctx)
 				return 1;
 			}
 			moddata_client_set(client, name, value);
-		}
-		else if (jsmd->type == MODDATATYPE_CHANNEL)
+		} else if (jsmd->type == MODDATATYPE_CHANNEL)
 		{
 			Channel *channel = find_channel(target_name);
 			if (!channel)
@@ -5898,8 +6010,7 @@ duk_ret_t js_api_setModData(duk_context *ctx)
 			else
 				md->ptr = NULL;
 		}
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		const char *target_name = duk_get_string(ctx, 0);
 		if (jsmd->type == MODDATATYPE_CLIENT || jsmd->type == MODDATATYPE_LOCAL_CLIENT)
@@ -5911,8 +6022,7 @@ duk_ret_t js_api_setModData(duk_context *ctx)
 				return 1;
 			}
 			moddata_client_set(client, name, value);
-		}
-		else if (jsmd->type == MODDATATYPE_CHANNEL)
+		} else if (jsmd->type == MODDATATYPE_CHANNEL)
 		{
 			Channel *channel = find_channel(target_name);
 			if (!channel)
@@ -5965,8 +6075,7 @@ duk_ret_t js_api_getModData(duk_context *ctx)
 		duk_get_prop_string(ctx, 0, "name");
 		target_name = duk_get_string(ctx, -1);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		target_name = duk_get_string(ctx, 0);
 	}
@@ -5990,8 +6099,7 @@ duk_ret_t js_api_getModData(duk_context *ctx)
 			duk_push_string(ctx, value);
 		else
 			duk_push_null(ctx);
-	}
-	else if (jsmd->type == MODDATATYPE_CHANNEL)
+	} else if (jsmd->type == MODDATATYPE_CHANNEL)
 	{
 		Channel *channel = find_channel(target_name);
 		if (!channel)
@@ -6004,8 +6112,7 @@ duk_ret_t js_api_getModData(duk_context *ctx)
 			duk_push_string(ctx, (const char *)md->ptr);
 		else
 			duk_push_null(ctx);
-	}
-	else
+	} else
 	{
 		duk_push_null(ctx);
 	}
@@ -6053,8 +6160,7 @@ duk_ret_t js_api_isUser(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6077,8 +6183,7 @@ duk_ret_t js_api_isServer(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6101,8 +6206,7 @@ duk_ret_t js_api_isLoggedIn(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6125,8 +6229,7 @@ duk_ret_t js_api_isSecure(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6149,8 +6252,7 @@ duk_ret_t js_api_isULine(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6188,8 +6290,7 @@ duk_ret_t js_api_doCmd(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6202,10 +6303,10 @@ duk_ret_t js_api_doCmd(duk_context *ctx)
 
 	/* Get command - if it's a full string like "JOIN #channel", parse it */
 	const char *fullcmd = duk_require_string(ctx, 1);
-	
+
 	/* parv[0] is always NULL */
 	parc = 1;
-	
+
 	/* Check if we have additional args or if we need to parse the command string */
 	if (nargs == 2)
 	{
@@ -6213,13 +6314,13 @@ duk_ret_t js_api_doCmd(duk_context *ctx)
 		char *cmdcopy = strdup(fullcmd);
 		char *token;
 		char *saveptr = NULL;
-		
+
 		/* First token is the command */
 		token = strtok_r(cmdcopy, " ", &saveptr);
 		if (token)
 		{
 			cmd = strdup(token);
-			
+
 			/* Remaining tokens are arguments */
 			while ((token = strtok_r(NULL, " ", &saveptr)) && parc < MAXPARA - 1)
 			{
@@ -6227,19 +6328,17 @@ duk_ret_t js_api_doCmd(duk_context *ctx)
 				parv[parc] = parv_buf[parc];
 				parc++;
 			}
-		}
-		else
+		} else
 		{
 			cmd = strdup(fullcmd);
 		}
-		
+
 		free(cmdcopy);
-	}
-	else
+	} else
 	{
 		/* Command and args provided separately: doCmd($client, 'JOIN', '#channel') */
 		cmd = strdup(fullcmd);
-		
+
 		/* Collect remaining arguments */
 		for (i = 2; i < nargs && parc < MAXPARA - 1; i++)
 		{
@@ -6284,8 +6383,7 @@ duk_ret_t js_api_exitClient(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6326,8 +6424,7 @@ duk_ret_t js_api_sendToChannel(duk_context *ctx)
 		channel_name = duk_get_string(ctx, -1);
 		channel = find_channel(channel_name);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		channel = find_channel(duk_get_string(ctx, 0));
 	}
@@ -6347,8 +6444,7 @@ duk_ret_t js_api_sendToChannel(duk_context *ctx)
 			const char *name = duk_get_string(ctx, -1);
 			from = find_client(name, NULL);
 			duk_pop(ctx);
-		}
-		else if (duk_is_string(ctx, 1))
+		} else if (duk_is_string(ctx, 1))
 		{
 			from = find_client(duk_get_string(ctx, 1), NULL);
 		}
@@ -6368,8 +6464,8 @@ duk_ret_t js_api_sendToChannel(duk_context *ctx)
 	}
 
 	/* Send PRIVMSG to channel */
-	sendto_channel(channel, from, NULL, NULL, 0, 
-	               SEND_LOCAL|SEND_REMOTE,
+	sendto_channel(channel, from, NULL, NULL, 0,
+	               SEND_LOCAL | SEND_REMOTE,
 	               mtags, "%s", message);
 
 	/* Free mtags if we created them */
@@ -6397,8 +6493,7 @@ duk_ret_t js_api_sendToServer(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		server = find_server(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		server = find_server(duk_get_string(ctx, 0), NULL);
 	}
@@ -6475,8 +6570,7 @@ duk_ret_t js_api_setUserMode(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6495,8 +6589,7 @@ duk_ret_t js_api_setUserMode(duk_context *ctx)
 	{
 		adding = 0;
 		mode_str++;
-	}
-	else if (mode_str[0] == '+')
+	} else if (mode_str[0] == '+')
 	{
 		mode_str++;
 	}
@@ -6532,8 +6625,7 @@ duk_ret_t js_api_setChannelMode(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		channel = find_channel(name);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		channel = find_channel(duk_get_string(ctx, 0));
 	}
@@ -6551,8 +6643,7 @@ duk_ret_t js_api_setChannelMode(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		from = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 1))
+	} else if (duk_is_string(ctx, 1))
 	{
 		from = find_client(duk_get_string(ctx, 1), NULL);
 	}
@@ -6591,8 +6682,7 @@ duk_ret_t js_api_checkChannelAccess(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6604,8 +6694,7 @@ duk_ret_t js_api_checkChannelAccess(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		channel = find_channel(name);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 1))
+	} else if (duk_is_string(ctx, 1))
 	{
 		channel = find_channel(duk_get_string(ctx, 1));
 	}
@@ -6641,8 +6730,7 @@ duk_ret_t js_api_getChannelMembers(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		channel = find_channel(name);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		channel = find_channel(duk_get_string(ctx, 0));
 	}
@@ -6660,10 +6748,10 @@ duk_ret_t js_api_getChannelMembers(duk_context *ctx)
 		if (m->client)
 		{
 			duk_idx_t obj = duk_push_object(ctx);
-			
+
 			js_push_client_object(ctx, m->client);
 			duk_put_prop_string(ctx, obj, "client");
-			
+
 			/* Get member modes/prefix */
 			const char *access = get_channel_access(m->client, channel);
 			if (access)
@@ -6696,8 +6784,7 @@ duk_ret_t js_api_getUserChannels(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6715,10 +6802,10 @@ duk_ret_t js_api_getUserChannels(duk_context *ctx)
 		if (mb->channel)
 		{
 			duk_idx_t obj = duk_push_object(ctx);
-			
+
 			js_push_channel_object(ctx, mb->channel);
 			duk_put_prop_string(ctx, obj, "channel");
-			
+
 			/* Get member modes */
 			const char *access = get_channel_access(client, mb->channel);
 			if (access)
@@ -6750,8 +6837,7 @@ duk_ret_t js_api_joinChannel(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6768,8 +6854,7 @@ duk_ret_t js_api_joinChannel(duk_context *ctx)
 		duk_get_prop_string(ctx, 1, "name");
 		channel_name = duk_get_string(ctx, -1);
 		duk_pop(ctx);
-	}
-	else
+	} else
 	{
 		channel_name = duk_require_string(ctx, 1);
 	}
@@ -6802,8 +6887,7 @@ duk_ret_t js_api_partChannel(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -6820,8 +6904,7 @@ duk_ret_t js_api_partChannel(duk_context *ctx)
 		duk_get_prop_string(ctx, 1, "name");
 		channel_name = duk_get_string(ctx, -1);
 		duk_pop(ctx);
-	}
-	else
+	} else
 	{
 		channel_name = duk_require_string(ctx, 1);
 	}
@@ -6859,8 +6942,7 @@ duk_ret_t js_api_kickUser(duk_context *ctx)
 		duk_get_prop_string(ctx, 0, "name");
 		channel_name = duk_get_string(ctx, -1);
 		duk_pop(ctx);
-	}
-	else
+	} else
 	{
 		channel_name = duk_require_string(ctx, 0);
 	}
@@ -6872,8 +6954,7 @@ duk_ret_t js_api_kickUser(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 1))
+	} else if (duk_is_string(ctx, 1))
 	{
 		client = find_client(duk_get_string(ctx, 1), NULL);
 	}
@@ -6888,8 +6969,7 @@ duk_ret_t js_api_kickUser(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		victim = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 2))
+	} else if (duk_is_string(ctx, 2))
 	{
 		victim = find_client(duk_get_string(ctx, 2), NULL);
 	}
@@ -6932,8 +7012,7 @@ duk_ret_t js_api_setTopic(duk_context *ctx)
 		duk_get_prop_string(ctx, 0, "name");
 		channel_name = duk_get_string(ctx, -1);
 		duk_pop(ctx);
-	}
-	else
+	} else
 	{
 		channel_name = duk_require_string(ctx, 0);
 	}
@@ -6945,8 +7024,7 @@ duk_ret_t js_api_setTopic(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 1))
+	} else if (duk_is_string(ctx, 1))
 	{
 		client = find_client(duk_get_string(ctx, 1), NULL);
 	}
@@ -6985,8 +7063,7 @@ duk_ret_t js_api_changeNick(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -7027,8 +7104,7 @@ duk_ret_t js_api_setHost(duk_context *ctx)
 		const char *name = duk_get_string(ctx, -1);
 		client = find_client(name, NULL);
 		duk_pop(ctx);
-	}
-	else if (duk_is_string(ctx, 0))
+	} else if (duk_is_string(ctx, 0))
 	{
 		client = find_client(duk_get_string(ctx, 0), NULL);
 	}
@@ -7098,8 +7174,7 @@ duk_ret_t js_api_createMtag(duk_context *ctx)
 	{
 		duk_push_string(ctx, value);
 		duk_put_prop_string(ctx, obj_idx, "value");
-	}
-	else
+	} else
 	{
 		duk_push_null(ctx);
 		duk_put_prop_string(ctx, obj_idx, "value");
@@ -7125,8 +7200,7 @@ duk_ret_t js_api_addMtag(duk_context *ctx)
 		/* Create new array */
 		duk_push_array(ctx);
 		duk_replace(ctx, 0);
-	}
-	else if (!duk_is_array(ctx, 0))
+	} else if (!duk_is_array(ctx, 0))
 	{
 		duk_error(ctx, DUK_ERR_TYPE_ERROR, "First argument must be an array or null");
 		return 0;
@@ -7150,8 +7224,7 @@ duk_ret_t js_api_addMtag(duk_context *ctx)
 	{
 		duk_push_string(ctx, value);
 		duk_put_prop_string(ctx, obj_idx, "value");
-	}
-	else
+	} else
 	{
 		duk_push_null(ctx);
 		duk_put_prop_string(ctx, obj_idx, "value");
@@ -7522,8 +7595,7 @@ RPC_CALL_FUNC(js_rpc_handler)
 		duk_json_decode(handler->ctx, -1);
 		duk_put_prop_string(handler->ctx, -2, "$params");
 		free(json_str);
-	}
-	else
+	} else
 	{
 		duk_push_object(handler->ctx);
 		duk_put_prop_string(handler->ctx, -2, "$params");
@@ -7555,8 +7627,7 @@ RPC_CALL_FUNC(js_rpc_handler)
 			rpc_error(client, request, JSON_RPC_ERROR_INTERNAL_ERROR, error);
 		}
 		duk_pop(handler->ctx);
-	}
-	else
+	} else
 	{
 		rpc_error(client, request, JSON_RPC_ERROR_INTERNAL_ERROR, "Handler function not found");
 	}
@@ -7825,8 +7896,7 @@ int js_extban_is_ok(BanContext *b)
 		           "Extban is_ok error: $error",
 		           log_data_string("error", error));
 		duk_pop_2(eb->ctx);
-	}
-	else
+	} else
 	{
 		duk_pop(eb->ctx);
 	}
@@ -7903,8 +7973,7 @@ const char *js_extban_conv_param(BanContext *b, Extban *extban)
 		           "Extban conv_param error: $error",
 		           log_data_string("error", error));
 		duk_pop_2(eb->ctx);
-	}
-	else
+	} else
 	{
 		duk_pop(eb->ctx);
 	}
@@ -7963,8 +8032,7 @@ int js_extban_is_banned(BanContext *b)
 		           "Extban is_banned error: $error",
 		           log_data_string("error", error));
 		duk_pop_2(eb->ctx);
-	}
-	else
+	} else
 	{
 		duk_pop(eb->ctx);
 	}
@@ -8147,7 +8215,7 @@ int js_mtag_is_ok(Client *client, const char *name, const char *value)
 	/* Set $tagName and $tagValue */
 	duk_push_string(mt->ctx, name ? name : "");
 	duk_put_prop_string(mt->ctx, -2, "$tagName");
-	
+
 	if (value)
 		duk_push_string(mt->ctx, value);
 	else
@@ -8171,8 +8239,7 @@ int js_mtag_is_ok(Client *client, const char *name, const char *value)
 		           "Message tag is_ok error: $error",
 		           log_data_string("error", error));
 		duk_pop_2(mt->ctx);
-	}
-	else
+	} else
 	{
 		duk_pop(mt->ctx);
 	}
@@ -8215,8 +8282,7 @@ int js_mtag_should_send_to_client(Client *target)
 		           "Message tag should_send_to_client error: $error",
 		           log_data_string("error", error));
 		duk_pop_2(mt->ctx);
-	}
-	else
+	} else
 	{
 		duk_pop(mt->ctx);
 	}
@@ -8337,17 +8403,17 @@ duk_ret_t js_api_config_error(duk_context *ctx)
 	}
 
 	format = duk_to_string(ctx, 0);
-	
+
 	/* Try to get $file and $line from global scope */
 	duk_push_global_object(ctx);
 	duk_get_prop_string(ctx, -1, "$configFile");
 	file = duk_get_string(ctx, -1);
 	duk_pop(ctx);
-	
+
 	duk_get_prop_string(ctx, -1, "$configLine");
 	line = duk_get_int(ctx, -1);
 	duk_pop_2(ctx);
-	
+
 	if (file && line > 0)
 		config_error("%s:%d: %s", file, line, format);
 	else
@@ -8369,17 +8435,17 @@ duk_ret_t js_api_config_warn(duk_context *ctx)
 	}
 
 	format = duk_to_string(ctx, 0);
-	
+
 	/* Try to get $file and $line from global scope */
 	duk_push_global_object(ctx);
 	duk_get_prop_string(ctx, -1, "$configFile");
 	file = duk_get_string(ctx, -1);
 	duk_pop(ctx);
-	
+
 	duk_get_prop_string(ctx, -1, "$configLine");
 	line = duk_get_int(ctx, -1);
 	duk_pop_2(ctx);
-	
+
 	if (file && line > 0)
 		config_warn("%s:%d: %s", file, line, format);
 	else
@@ -8404,31 +8470,31 @@ static void js_push_config_entry(duk_context *ctx, ConfigEntry *ce)
 	}
 
 	duk_push_object(ctx);
-	
+
 	/* Set name */
 	if (ce->name)
 	{
 		duk_push_string(ctx, ce->name);
 		duk_put_prop_string(ctx, -2, "name");
 	}
-	
+
 	/* Set value */
 	if (ce->value)
 	{
 		duk_push_string(ctx, ce->value);
 		duk_put_prop_string(ctx, -2, "value");
 	}
-	
+
 	/* Set file and line */
 	if (ce->file && ce->file->filename)
 	{
 		duk_push_string(ctx, ce->file->filename);
 		duk_put_prop_string(ctx, -2, "file");
 	}
-	
+
 	duk_push_int(ctx, ce->line_number);
 	duk_put_prop_string(ctx, -2, "line");
-	
+
 	/* Set items array (children) */
 	if (ce->items)
 	{
@@ -8693,11 +8759,11 @@ int js_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 		{
 			/* Set up global variables */
 			duk_push_global_object(cb->ctx);
-			
+
 			/* $config - the config entry */
 			js_push_config_entry(cb->ctx, ce);
 			duk_put_prop_string(cb->ctx, -2, "$config");
-			
+
 			/* $configFile and $configLine for error reporting */
 			if (ce->file && ce->file->filename)
 			{
@@ -8706,13 +8772,13 @@ int js_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 			}
 			duk_push_int(cb->ctx, ce->line_number);
 			duk_put_prop_string(cb->ctx, -2, "$configLine");
-			
+
 			duk_pop(cb->ctx);
 
 			/* Get and call test handler */
 			duk_push_global_stash(cb->ctx);
 			duk_get_prop_string(cb->ctx, -1, cb->test_handler);
-			
+
 			if (duk_pcall(cb->ctx, 0) != 0)
 			{
 				unreal_log(ULOG_ERROR, "obbyscript", "JS_CONFIG_TEST_ERROR", NULL,
@@ -8724,14 +8790,14 @@ int js_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 				*errs = errors;
 				return -1;
 			}
-			
+
 			/* Check return value */
 			result = duk_get_boolean(cb->ctx, -1);
 			duk_pop_2(cb->ctx);
-			
+
 			if (!result)
 				errors++;
-			
+
 			*errs = errors;
 			return errors ? -1 : 1;
 		}
@@ -8755,11 +8821,11 @@ int js_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 		{
 			/* Set up global variables */
 			duk_push_global_object(cb->ctx);
-			
+
 			/* $config - the config entry */
 			js_push_config_entry(cb->ctx, ce);
 			duk_put_prop_string(cb->ctx, -2, "$config");
-			
+
 			/* $configFile and $configLine for error reporting */
 			if (ce->file && ce->file->filename)
 			{
@@ -8768,13 +8834,13 @@ int js_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 			}
 			duk_push_int(cb->ctx, ce->line_number);
 			duk_put_prop_string(cb->ctx, -2, "$configLine");
-			
+
 			duk_pop(cb->ctx);
 
 			/* Get and call run handler */
 			duk_push_global_stash(cb->ctx);
 			duk_get_prop_string(cb->ctx, -1, cb->run_handler);
-			
+
 			if (duk_pcall(cb->ctx, 0) != 0)
 			{
 				unreal_log(ULOG_ERROR, "obbyscript", "JS_CONFIG_RUN_ERROR", NULL,
@@ -8784,7 +8850,7 @@ int js_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 				duk_pop_2(cb->ctx);
 				return 0;
 			}
-			
+
 			duk_pop_2(cb->ctx);
 			return 1;
 		}
@@ -8900,7 +8966,7 @@ duk_ret_t js_api_dbClose(duk_context *ctx)
 	int result;
 
 	id = duk_require_int(ctx, 0);
-	
+
 	jsdb = js_find_database(id);
 	if (!jsdb)
 	{
@@ -9025,7 +9091,7 @@ duk_ret_t js_api_dbWriteStr(duk_context *ctx)
 	int result;
 
 	id = duk_require_int(ctx, 0);
-	
+
 	if (!duk_is_null_or_undefined(ctx, 1))
 		value = duk_require_string(ctx, 1);
 
@@ -9057,13 +9123,12 @@ duk_ret_t js_api_dbWriteChar(duk_context *ctx)
 	int result;
 
 	id = duk_require_int(ctx, 0);
-	
+
 	if (duk_is_string(ctx, 1))
 	{
 		const char *str = duk_get_string(ctx, 1);
 		value = str[0];
-	}
-	else
+	} else
 	{
 		value = (char)duk_require_int(ctx, 1);
 	}
@@ -9212,8 +9277,7 @@ duk_ret_t js_api_dbReadStr(duk_context *ctx)
 	{
 		duk_push_string(ctx, value);
 		safe_free(value);
-	}
-	else
+	} else
 	{
 		duk_push_null(ctx);
 	}
@@ -9298,12 +9362,12 @@ MOD_INIT()
 	MARK_AS_OFFICIAL_MODULE(modinfo);
 	js_modinfo = modinfo;
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, js_configrun);
-	
+
 	/* Register HTTP callback for async requests */
 	RegisterApiCallbackWebResponse(modinfo->handle, "js_http_callback", js_http_callback);
-	
+
 	js_init_engine();
-	
+
 	return MOD_SUCCESS;
 }
 

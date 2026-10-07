@@ -18,18 +18,18 @@
 
 #include "unrealircd.h"
 
-#define EIST_NUM_TAGS 80
+#define EIST_NUM_TAGS   80
 #define EIST_TAG_PREFIX "+draft/eist-"
 
 static MessageTagHandler *eist_handlers[EIST_NUM_TAGS];
 static char *eist_names[EIST_NUM_TAGS];
 
 ModuleHeader MOD_HEADER = {
-	"extended-isupport-test",
-	"0.1",
-	"Test module: register many client tag handlers to exercise CLIENTTAGDENY overflow",
-	"Valerie Pond",
-	"unrealircd-6",
+    "extended-isupport-test",
+    "0.1",
+    "Test module: register many client tag handlers to exercise CLIENTTAGDENY overflow",
+    "Valerie Pond",
+    "unrealircd-6",
 };
 
 /* Always-accept validator: this is a test, the value side of these

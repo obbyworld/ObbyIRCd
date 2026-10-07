@@ -17,12 +17,11 @@
 
 
 ModuleHeader MOD_HEADER = {
-	"redact",
-	"6.1",
-	"Implements the draft IRCv3 message-redaction specification",
-	"val",
-	"unrealircd-6"
-};
+    "redact",
+    "6.1",
+    "Implements the draft IRCv3 message-redaction specification",
+    "val",
+    "unrealircd-6"};
 
 /* Forward declarations */
 CMD_FUNC(cmd_redact);
@@ -33,7 +32,8 @@ bool sender_can_redact = 0;
 char *chan_access_pattern = "";
 
 
-int redact_config_run(ConfigFile *cf, ConfigEntry *ce, int type) {
+int redact_config_run(ConfigFile *cf, ConfigEntry *ce, int type)
+{
 	int errors = 0;
 	ConfigEntry *cep, *cep2;
 
@@ -58,11 +58,10 @@ int redact_config_run(ConfigFile *cf, ConfigEntry *ce, int type) {
 		if (!cep->name)
 		{
 			config_error("%s:%i: blank set::redacters item",
-				cep->file->filename, cep->line_number);
+			             cep->file->filename, cep->line_number);
 			errors++;
 			continue;
-		}
-		else if (!strcmp(cep->name, "owner"))
+		} else if (!strcmp(cep->name, "owner"))
 			owners_can_redact = 1;
 		else if (!strcmp(cep->name, "admin"))
 			admins_can_redact = 1;
@@ -72,7 +71,8 @@ int redact_config_run(ConfigFile *cf, ConfigEntry *ce, int type) {
 			halfops_can_redact = 1;
 		else if (!strcmp(cep->name, "sender"))
 			sender_can_redact = 1;
-		else {
+		else
+		{
 			/* Should have been caught in redact_config_test */
 			continue;
 		}
@@ -92,7 +92,8 @@ int redact_config_run(ConfigFile *cf, ConfigEntry *ce, int type) {
 	return 1;
 }
 
-int redact_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *errs) {
+int redact_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
+{
 	int errors = 0;
 	ConfigEntry *cep, *cep2;
 
@@ -107,13 +108,13 @@ int redact_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *errs) {
 		if (!cep->name)
 		{
 			config_error("%s:%i: blank set::redacters item",
-				cep->file->filename, cep->line_number);
+			             cep->file->filename, cep->line_number);
 			errors++;
 			continue;
-		}
-		else if (!strcmp(cep->name, "owner") && !strcmp(cep->name, "admin") && !strcmp(cep->name, "op") && !strcmp(cep->name, "halfop") && !strcmp(cep->name, "sender")) {
+		} else if (!strcmp(cep->name, "owner") && !strcmp(cep->name, "admin") && !strcmp(cep->name, "op") && !strcmp(cep->name, "halfop") && !strcmp(cep->name, "sender"))
+		{
 			config_error("%s:%i: invalid set::redacters item: %s",
-				cep->file->filename, cep->line_number, cep->name);
+			             cep->file->filename, cep->line_number, cep->name);
 			errors++;
 			continue;
 		}
@@ -136,7 +137,7 @@ MOD_INIT()
 	 * `set { redacters { op; ... } }` (which resets sender_can_redact). */
 	sender_can_redact = 1;
 
-	CommandAdd(modinfo->handle, "REDACT", cmd_redact, 3, CMD_USER|CMD_SERVER);
+	CommandAdd(modinfo->handle, "REDACT", cmd_redact, 3, CMD_USER | CMD_SERVER);
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, redact_config_run);
 
 	memset(&c, 0, sizeof(c));
@@ -182,11 +183,11 @@ CMD_FUNC(cmd_redact)
 	if (!channel)
 	{
 		sendto_one(client, NULL, ":%s FAIL REDACT INVALID_TARGET %s :Chat history is not enabled in PM",
-			me.name, parv[1]);
+		           me.name, parv[1]);
 		return;
 	}
 
-	int is_oper = ValidatePermissionsForPath("chat:redact",client,NULL,NULL,NULL);
+	int is_oper = ValidatePermissionsForPath("chat:redact", client, NULL, NULL, NULL);
 	bool check_sender = 0;
 
 	if (MyUser(client) && !is_oper && (BadPtr(chan_access_pattern) || !check_channel_access(client, channel, chan_access_pattern)))
@@ -196,7 +197,8 @@ CMD_FUNC(cmd_redact)
 			 * they are trying to delete (because we need to check they are its
 			 * sender */
 			check_sender = 1;
-		else {
+		else
+		{
 			error = "sender can't redact, and neither oper nor chanop";
 			goto unauthorized;
 		}
@@ -208,10 +210,13 @@ CMD_FUNC(cmd_redact)
 	filter->msgid_a = strdup(parv[2]);
 	filter->limit = 1;
 
-	if (check_sender) {
-		if (IsLoggedIn(client)) {
+	if (check_sender)
+	{
+		if (IsLoggedIn(client))
+		{
 			filter->account = strdup(client->user->account);
-		} else {
+		} else
+		{
 			/* Not logged in: prove sender by matching the stored
 			 * line's source nick against the current nick. Less
 			 * authoritative than an account mtag (nicks are mutable),
@@ -223,20 +228,22 @@ CMD_FUNC(cmd_redact)
 			r = history_request(channel->name, lookup);
 			int sender_matched = 0;
 			int found = 0;
-			if (r) {
+			if (r)
+			{
 				HistoryLogLine *l;
-				for (l = r->log; l; l = l->next) {
+				for (l = r->log; l; l = l->next)
+				{
 					if (!l->msgid || strcmp(l->msgid, parv[2]))
 						continue;
 					found = 1;
 					/* Line shape: ":nick!user@host PRIVMSG #chan :text" */
-					if (l->line[0] && l->line[0] == ':') {
+					if (l->line[0] && l->line[0] == ':')
+					{
 						const char *bang = strchr(l->line + 1, '!');
-						if (bang) {
+						if (bang)
+						{
 							size_t nlen = (size_t)(bang - (l->line + 1));
-							if (nlen <= NICKLEN
-							    && !strncasecmp(l->line + 1, client->name, nlen)
-							    && strlen(client->name) == nlen)
+							if (nlen <= NICKLEN && !strncasecmp(l->line + 1, client->name, nlen) && strlen(client->name) == nlen)
 								sender_matched = 1;
 						}
 					}
@@ -246,13 +253,15 @@ CMD_FUNC(cmd_redact)
 				r = NULL;
 			}
 			free_history_filter(lookup);
-			if (!found) {
+			if (!found)
+			{
 				sendto_one(client, NULL,
-					":%s FAIL REDACT UNKNOWN_MSGID %s %s :This message does not exist or is too old",
-					me.name, parv[1], parv[2]);
+				           ":%s FAIL REDACT UNKNOWN_MSGID %s %s :This message does not exist or is too old",
+				           me.name, parv[1], parv[2]);
 				goto end;
 			}
-			if (!sender_matched) {
+			if (!sender_matched)
+			{
 				error = "not sender (nick does not match the stored line; log in via SASL to redact by account)";
 				goto unauthorized;
 			}
@@ -263,50 +272,52 @@ CMD_FUNC(cmd_redact)
 
 	deleted = history_delete(channel->name, filter, &rejected_deletes);
 
-	if (deleted > 1) {
+	if (deleted > 1)
+	{
 		sendto_one(client, NULL, ":%s FAIL REDACT UNKNOWN_ERROR %s :history_delete found more than one result",
-			me.name, parv[1]);
+		           me.name, parv[1]);
 		goto end;
-	}
-	else if (rejected_deletes > 1) {
+	} else if (rejected_deletes > 1)
+	{
 		sendto_one(client, NULL, ":%s FAIL REDACT UNKNOWN_ERROR %s :history_delete rejected more than one result",
-			me.name, parv[1]);
+		           me.name, parv[1]);
 		goto end;
-	}
-	else if (deleted && rejected_deletes) {
+	} else if (deleted && rejected_deletes)
+	{
 		sendto_one(client, NULL, ":%s FAIL REDACT UNKNOWN_ERROR %s %s :history_delete both deleted and rejected",
-			me.name, parv[1], parv[2]);
+		           me.name, parv[1], parv[2]);
 		goto end;
-	}
-	else if (rejected_deletes) {
+	} else if (rejected_deletes)
+	{
 		error = "not sender";
 		goto unauthorized;
-	}
-	else if (!deleted) {
+	} else if (!deleted)
+	{
 		sendto_one(client, NULL, ":%s FAIL REDACT UNKNOWN_MSGID %s %s :This message does not exist or is too old",
-			me.name, parv[1], parv[2]);
+		           me.name, parv[1], parv[2]);
 		goto end;
 	}
 
-	if (!BadPtr(parv[3])) {
+	if (!BadPtr(parv[3]))
+	{
 		/* Has a reason */
 		sendto_channel(channel, client, /* skip */ NULL, /* member_modes */ NULL,
-				   CAP_MESSAGE_REDACTION, SEND_ALL, /* mtags */ NULL,
-				   ":%s REDACT %s %s :%s",
-				   client->name, parv[1], parv[2], parv[3]);
-	}
-	else {
+		               CAP_MESSAGE_REDACTION, SEND_ALL, /* mtags */ NULL,
+		               ":%s REDACT %s %s :%s",
+		               client->name, parv[1], parv[2], parv[3]);
+	} else
+	{
 		sendto_channel(channel, client, /* skip */ NULL, /* member_modes */ NULL,
-				   CAP_MESSAGE_REDACTION, SEND_ALL, /* mtags */ NULL,
-				   ":%s REDACT %s %s",
-				   client->name, parv[1], parv[2]);
+		               CAP_MESSAGE_REDACTION, SEND_ALL, /* mtags */ NULL,
+		               ":%s REDACT %s %s",
+		               client->name, parv[1], parv[2]);
 	}
 
 	goto end;
 
 unauthorized:
 	sendto_one(client, NULL, ":%s FAIL REDACT REDACT_FORBIDDEN %s %s :Your are not authorized to redact messages in %s: %s",
-		me.name, parv[1], parv[2], parv[1], error);
+	           me.name, parv[1], parv[2], parv[1], error);
 end:
 	if (filter)
 		free_history_filter(filter);

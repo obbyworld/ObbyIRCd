@@ -43,16 +43,16 @@ ModuleHeader MOD_HEADER = {
 /* ===================================================================
  * Constants
  * =================================================================== */
-#define PERSIST_MAX_CHANNELS 100
-#define PERSIST_MAX_SESSIONS 8
-#define PERSIST_DEFAULT_TIMEOUT (7L * 86400L)
-#define PERSIST_DB_VERSION 1
+#define PERSIST_MAX_CHANNELS        100
+#define PERSIST_MAX_SESSIONS        8
+#define PERSIST_DEFAULT_TIMEOUT     (7L * 86400L)
+#define PERSIST_DB_VERSION          1
 #define PERSIST_CLEANUP_INTERVAL_MS 60000
-#define PERSIST_SAVE_INTERVAL_MS 30000
+#define PERSIST_SAVE_INTERVAL_MS    30000
 
 #define PREF_DEFAULT (-1)
-#define PREF_OFF 0
-#define PREF_ON 1
+#define PREF_OFF     0
+#define PREF_ON      1
 #define PREF_INVALID (-99)
 
 /* ===================================================================
@@ -66,14 +66,12 @@ typedef struct
 } PersistChannel;
 
 /* An extra session client attached to a canonical IRC presence. */
-typedef struct PersistSession_
-{
+typedef struct PersistSession_ {
 	Client *client;
 	struct PersistSession_ *next;
 } PersistSession;
 
-typedef struct PersistEntry_
-{
+typedef struct PersistEntry_ {
 	char account[ACCOUNTLEN + 1];
 	char nick[NICKLEN + 1];
 	char ident[USERLEN + 1];
@@ -388,8 +386,7 @@ static int persist_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *er
 				             cep->file->filename, cep->line_number);
 				(*errs)++;
 			}
-		}
-		else if (!strcmp(cep->name, "default"))
+		} else if (!strcmp(cep->name, "default"))
 		{
 			if (!cep->value)
 			{
@@ -397,8 +394,7 @@ static int persist_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *er
 				             cep->file->filename, cep->line_number);
 				(*errs)++;
 			}
-		}
-		else
+		} else
 		{
 			config_error("%s:%d: Unknown directive persistence::%s",
 			             cep->file->filename, cep->line_number, cep->name);
@@ -424,8 +420,7 @@ static int persist_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 			persist_timeout = config_checkval(cep->value, CFG_TIME);
 			if (persist_timeout <= 0)
 				persist_timeout = PERSIST_DEFAULT_TIMEOUT;
-		}
-		else if (!strcmp(cep->name, "default") && cep->value)
+		} else if (!strcmp(cep->name, "default") && cep->value)
 		{
 			if (!strcmp(cep->value, "on"))
 				persist_default_on = 1;
@@ -681,8 +676,7 @@ static void restore_channels(Client *client, PersistEntry *e)
 				parv[2] = NULL;
 				do_cmd(client, NULL, "NAMES", 2, parv);
 			}
-		}
-		else
+		} else
 		{
 			MessageTag *jmtags = NULL;
 			new_message(client, NULL, &jmtags);
@@ -1035,15 +1029,14 @@ static void setup_session(Client *client, PersistEntry *e)
 
 			for (nm = channel->members; nm; nm = nm->next)
 			{
-				char one_prefix[2] = { 0, 0 };
+				char one_prefix[2] = {0, 0};
 				const char *prefix;
 				int needed;
 
 				if (multiprefix)
 				{
 					prefix = modes_to_prefix(nm->member_modes);
-				}
-				else
+				} else
 				{
 					one_prefix[0] = mode_to_prefix(*nm->member_modes);
 					prefix = one_prefix;
@@ -1206,8 +1199,7 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 	{
 		/* Promote first session to canonical — seamless hand-off */
 		promote_session(e);
-	}
-	else
+	} else
 	{
 		/* No sessions — create ghost */
 		do_create_ghost(e);
@@ -1380,8 +1372,7 @@ static int persist_welcome(Client *client, int after_numeric)
 			return 0;
 		e = find_entry(client->user->account);
 		send_status(client, e);
-	}
-	else if (after_numeric == 376)
+	} else if (after_numeric == 376)
 	{
 		e = (PersistEntry *)moddata_client(client, restore_md).ptr;
 		if (!e)
@@ -1391,8 +1382,7 @@ static int persist_welcome(Client *client, int after_numeric)
 		{
 			/* Session: rename to internal nick, relay channel state */
 			setup_session(client, e);
-		}
-		else
+		} else
 		{
 			/* Normal restore: join channels, register as canonical */
 			restore_channels(client, e);
@@ -1818,8 +1808,7 @@ CMD_FUNC(cmd_persistence)
 	if (!strcasecmp(subcmd, "GET"))
 	{
 		send_status(client, e);
-	}
-	else if (!strcasecmp(subcmd, "SET"))
+	} else if (!strcasecmp(subcmd, "SET"))
 	{
 		if (parc < 3 || BadPtr(parv[2]))
 		{
@@ -1851,8 +1840,7 @@ CMD_FUNC(cmd_persistence)
 
 		send_status(client, e);
 		persist_db_mark_dirty();
-	}
-	else if (!strcasecmp(subcmd, "ERASE"))
+	} else if (!strcasecmp(subcmd, "ERASE"))
 	{
 		/* Mirrors Ergo's `NickServ ERASE <account> [code]`:
 		 * first call returns a confirmation code; second call with that
@@ -2049,14 +2037,12 @@ static void persist_save_db(void)
 			chan_count = 0;
 			for (mb = e->ghost->user->channel; mb; mb = mb->next)
 				chan_count++;
-		}
-		else if (e->canonical && !IsDead(e->canonical) && IsUser(e->canonical))
+		} else if (e->canonical && !IsDead(e->canonical) && IsUser(e->canonical))
 		{
 			chan_count = 0;
 			for (mb = e->canonical->user->channel; mb; mb = mb->next)
 				chan_count++;
-		}
-		else
+		} else
 		{
 			chan_count = e->num_channels;
 		}
@@ -2085,8 +2071,7 @@ static void persist_save_db(void)
 				unrealdb_write_str(db, mb->channel->name);
 				unrealdb_write_str(db, mb->member_modes);
 			}
-		}
-		else if (e->canonical && !IsDead(e->canonical) && IsUser(e->canonical))
+		} else if (e->canonical && !IsDead(e->canonical) && IsUser(e->canonical))
 		{
 			unrealdb_write_int64(db, (int64_t)chan_count);
 			for (mb = e->canonical->user->channel; mb; mb = mb->next)
@@ -2094,8 +2079,7 @@ static void persist_save_db(void)
 				unrealdb_write_str(db, mb->channel->name);
 				unrealdb_write_str(db, mb->member_modes);
 			}
-		}
-		else
+		} else
 		{
 			unrealdb_write_int64(db, (int64_t)e->num_channels);
 			for (i = 0; i < e->num_channels; i++)

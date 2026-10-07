@@ -24,11 +24,11 @@
 #include "unrealircd.h"
 
 ModuleHeader MOD_HEADER = {
-	"emoji",
-	"1.0",
-	"draft/custom-emoji - server-wide emoji pack URL via ISUPPORT",
-	"ObbyIRCd Team",
-	"unrealircd-6",
+    "emoji",
+    "1.0",
+    "draft/custom-emoji - server-wide emoji pack URL via ISUPPORT",
+    "ObbyIRCd Team",
+    "unrealircd-6",
 };
 
 #define CONF_EMOJI_BLOCK "emoji"
@@ -37,7 +37,7 @@ ModuleHeader MOD_HEADER = {
 static struct
 {
 	char *pack_url;
-	int   configured;
+	int configured;
 } cfg;
 
 static Module *emoji_modhandle = NULL;
@@ -47,8 +47,8 @@ static Module *emoji_modhandle = NULL;
  * =================================================================== */
 static void setconf(void);
 static void freeconf(void);
-static int  emoji_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
-static int  emoji_configrun(ConfigFile *cf, ConfigEntry *ce, int type);
+static int emoji_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
+static int emoji_configrun(ConfigFile *cf, ConfigEntry *ce, int type);
 static void emoji_publish_isupport(void);
 
 /* ===================================================================
@@ -159,8 +159,7 @@ static int emoji_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs
 				continue;
 			}
 			seen_url = 1;
-		}
-		else
+		} else
 		{
 			config_warn("%s:%i: unknown directive %s::%s (ignored)",
 			            cep->file->filename, cep->line_number,
