@@ -55,9 +55,9 @@ MOD_UNLOAD()
  * cmd_connect() - Added by Jto 11 Feb 1989
  ***********************************************************************/
                                                                          /*
-   ** cmd_connect
-   **  parv[1] = servername
- */
+                                                                          ** cmd_connect
+                                                                          **  parv[1] = servername
+                                                                          */
 CMD_FUNC(cmd_connect)
 {
 	int retval;
@@ -66,7 +66,8 @@ CMD_FUNC(cmd_connect)
 	const char *str;
 
 	if (!IsServer(client) && MyConnect(client) && !ValidatePermissionsForPath("route:global", client, NULL, NULL, NULL) && parc > 3)
-	{   /* Only allow LocOps to make */
+	{
+		/* Only allow LocOps to make */
 		/* local CONNECTS --SRB      */
 		sendnumeric(client, ERR_NOPRIVILEGES);
 		return;

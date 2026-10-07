@@ -556,6 +556,7 @@ extern int Auth_Check(Client *cptr, AuthConfig *as, const char *para);
 extern const char *Auth_Hash(AuthenticationType type, const char *text);
 extern int Auth_CheckError(ConfigEntry *ce, int warn_on_plaintext);
 extern int Auth_AutoDetectHashType(const char *hash);
+extern void check_argon2(void);
 
 extern void make_cloakedhost(Client *client, const char *curr, char *buf, size_t buflen);
 extern int channel_canjoin(Client *client, const char *name);
@@ -1548,13 +1549,13 @@ extern LogType log_type_stringtoval(const char *str);
 extern const char *log_type_valtostring(LogType v);
 #ifdef DEBUGMODE
  /* In debug mode we include file/linenumber. We put this arg at the end, however
- * there is an issue if unreal_log() is used with a parameter like xyz ? log_data_string("zzz") : NULL,
- * since then our log_data_source() would be beyond NULL and thus would never be freed,
- * so we allocate and handle that differently. File/line would still be lost but at
- * least there is no memory leak. Alternative solution is to specify first couple of
- * parameters explicitly, put log_data_source() at the beginning of the argument list
- * and then use non-portable ## __VA_ARGS__ for the remainder.
- */
+  * there is an issue if unreal_log() is used with a parameter like xyz ? log_data_string("zzz") : NULL,
+  * since then our log_data_source() would be beyond NULL and thus would never be freed,
+  * so we allocate and handle that differently. File/line would still be lost but at
+  * least there is no memory leak. Alternative solution is to specify first couple of
+  * parameters explicitly, put log_data_source() at the beginning of the argument list
+  * and then use non-portable ## __VA_ARGS__ for the remainder.
+  */
  #define unreal_log(level, sys, id, ...) \
 	 do \
 	 { \

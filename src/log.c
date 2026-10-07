@@ -1566,8 +1566,10 @@ void do_unreal_log_control(LogLevel loglevel, const char *subsystem, const char 
 	if (!strcmp(subsystem, "rawtraffic"))
 		return;
 
-	list_for_each_entry(client, &control_list, lclient_node) if (IsMonitorRehash(client) && IsControl(client)) for (m = msg; m; m = m->next)
-	    sendto_one(client, NULL, "REPLY [%s] %s", log_level_valtostring(loglevel), m->line);
+	list_for_each_entry(client, &control_list, lclient_node)
+		if (IsMonitorRehash(client) && IsControl(client))
+			for (m = msg; m; m = m->next)
+				sendto_one(client, NULL, "REPLY [%s] %s", log_level_valtostring(loglevel), m->line);
 
 	if (json_rehash_log)
 	{
@@ -2269,15 +2271,9 @@ EVENT(memory_log_cleaner)
 	if (l->max_lines)
 	{
 		int to_delete = memory_log_entries - l->max_lines;
-		if (to_delete > 0)
-		{
-			/* Delete the oldest ### entries */
-			for (e = memory_log; e; e = e_next)
-			{
-				e_next = e->next;
-				free_memory_log_item(e);
-			}
-		}
+		/* Delete the oldest 'to_delete' entries (memory_log points to the oldest) */
+		while ((to_delete-- > 0) && memory_log)
+			free_memory_log_item(memory_log);
 	}
 
 	/* Now, erase by date/time */

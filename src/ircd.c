@@ -171,11 +171,11 @@ void check_ping(Client *client)
 		return; /* some recent command was executed */
 
 	if (
-	        /* If we have sent a ping */
+	    /* If we have sent a ping */
 	    (IsPingSent(client)
 	        /* And they had 2x ping frequency to respond */
 	     && ((TStime() - client->local->last_msg_received) >= (2 * ping))) ||
-	        /* Or isn't registered and time spent is larger than ping (CONNECTTIMEOUT).. */
+	    /* Or isn't registered and time spent is larger than ping (CONNECTTIMEOUT).. */
 	    (!IsRegistered(client) && (TStime() - client->local->fake_lag >= ping)))
 	{
 		if (IsServer(client) || IsConnecting(client) ||
@@ -542,6 +542,7 @@ int InitUnrealIRCd(int argc, char *argv[])
 		fprintf(stderr, "Failed to initialize sodium library -- error accessing random device?\n");
 		exit(-1);
 	}
+	check_argon2();
 
 	memset(&botmotd, '\0', sizeof(MOTDFile));
 	memset(&rules, '\0', sizeof(MOTDFile));
@@ -1031,7 +1032,8 @@ static void open_debugfile(void)
 		/*(void)printf("isatty = %d ttyname = %#x\n",
 		    isatty(2), (u_int)ttyname(2)); */
 		if (!(bootopt & BOOT_TTY))
-		{ /* leave debugging output on fd 2 */
+		{
+			/* leave debugging output on fd 2 */
 			if (truncate(LOGFILE, 0) < 0)
 				fprintf(stderr, "WARNING: could not truncate log file '%s'\n", LOGFILE);
 			if ((fd = open(LOGFILE, O_WRONLY | O_CREAT, 0600)) < 0)

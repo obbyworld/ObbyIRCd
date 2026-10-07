@@ -2649,7 +2649,8 @@ void s_die()
 		loop.terminating = 1;
 		unload_all_modules();
 
-		list_for_each_entry(client, &lclient_list, lclient_node)(void) send_queued(client);
+		list_for_each_entry(client, &lclient_list, lclient_node)
+			(void)send_queued(client);
 
 		exit(-1);
 	} else
@@ -2732,7 +2733,8 @@ void server_reboot(const char *mesg)
 	           "Restarting server: $reason",
 	           log_data_string("reason", mesg));
 
-	list_for_each_entry(client, &lclient_list, lclient_node)(void) send_queued(client);
+	list_for_each_entry(client, &lclient_list, lclient_node)
+		(void)send_queued(client);
 
 	/*
 	 * ** fd 0 must be 'preserved' if either the -d or -i options have
@@ -2875,42 +2877,42 @@ const char *StripControlCodesEx(const char *text, char *output, size_t outputlen
 			switch (*text)
 			{
 				case 3:
-                                /* color */
+					/* color */
 					col = 1;
 					nc = 0;
 					break;
 				case 4:
-                                /* RGB */
+					/* RGB */
 					save_text = text;
 					save_len = len;
 					rgb = 1;
 					nc = 0;
 					break;
 				case 2:
-                                /* bold */
+					/* bold */
 					break;
 				case 31:
-                                /* underline */
+					/* underline */
 					break;
 				case 22:
-                                /* reverse */
+					/* reverse */
 					break;
 				case 15:
-                                /* plain */
+					/* plain */
 					break;
 				case 29:
-                                /* italic */
+					/* italic */
 					break;
 				case 30:
-                                /* strikethrough */
+					/* strikethrough */
 					break;
 				case 17:
-                                /* monospace */
+					/* monospace */
 					break;
 				case 0xe2:
 					if (!strncmp(text + 1, "\x80\x8b", 2))
 					{
-                                        /* +2 means we skip 3 */
+						/* +2 means we skip 3 */
 						text += 2;
 						len -= 2;
 						break;

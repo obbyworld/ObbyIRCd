@@ -422,18 +422,19 @@ int stats_links(Client *client, const char *para)
 			               link_p->leaf, link_p->servername, link_p->leaf_depth);
 	}
 #ifdef DEBUGMODE
-	list_for_each_entry(acptr, &client_list, client_node) if (MyConnect(acptr) && acptr->server && !IsMe(acptr))
-	{
-		if (!acptr->server->conf)
-			sendnotice(client, "client '%s' (%p) has NO CONF attached (? :P)",
-			           acptr->name, acptr);
-		else
-			sendnotice(client, "client '%s' (%p) has conf %p attached, refcount: %d, temporary: %s",
-			           acptr->name, acptr,
-			           acptr->server->conf,
-			           acptr->server->conf->refcount,
-			           acptr->server->conf->flag.temporary ? "YES" : "NO");
-	}
+	list_for_each_entry(acptr, &client_list, client_node)
+		if (MyConnect(acptr) && acptr->server && !IsMe(acptr))
+		{
+			if (!acptr->server->conf)
+				sendnotice(client, "client '%s' (%p) has NO CONF attached (? :P)",
+				           acptr->name, acptr);
+			else
+				sendnotice(client, "client '%s' (%p) has conf %p attached, refcount: %d, temporary: %s",
+				           acptr->name, acptr,
+				           acptr->server->conf,
+				           acptr->server->conf->refcount,
+				           acptr->server->conf->flag.temporary ? "YES" : "NO");
+		}
 #endif
 	return 0;
 }
@@ -750,6 +751,17 @@ static void stats_set_anti_flood(Client *client, FloodSettings *f)
 			               f->name, (int)f->limit[i]);
 			sendtxtnumeric(client, "anti-flood::%s::multiline::max-bytes: %d",
 			               f->name, (int)f->period[i]);
+		} else if (i == FLD_MAX_PROCESSING_TIME)
+		{
+			if (f->limit[i] < 0)
+			{
+				sendtxtnumeric(client, "anti-flood::%s::max-processing-time: unlimited",
+				               f->name);
+			} else
+			{
+				sendtxtnumeric(client, "anti-flood::%s::max-processing-time: %d msec",
+				               f->name, (int)f->limit[i]);
+			}
 		} else
 		{
 			sendtxtnumeric(client, "anti-flood::%s::%s: %d per %s",

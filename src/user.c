@@ -1027,6 +1027,7 @@ MODVAR const char *floodoption_names[] = {
     "lag-penalty",
     "vhost-flood",
     "multiline",
+    "max-processing-time",
     NULL,
 };
 
@@ -1037,15 +1038,16 @@ MODVAR const char *floodoption_names[] = {
  * soft penalty rather than a block, and multiline is not counted.
  */
 MODVAR const char *floodoption_shortnames[] = {
-    "nick",   /* FLD_NICK */
-    "join",   /* FLD_JOIN */
-    "away",   /* FLD_AWAY */
-    "invite",  /* FLD_INVITE */
-    "knock",  /* FLD_KNOCK */
+    "nick",          /* FLD_NICK */
+    "join",          /* FLD_JOIN */
+    "away",          /* FLD_AWAY */
+    "invite",        /* FLD_INVITE */
+    "knock",         /* FLD_KNOCK */
     "conversations", /* FLD_CONVERSATIONS */
-    NULL,   /* FLD_LAG_PENALTY: not counted (soft penalty, not a block) */
-    "vhost",  /* FLD_VHOST */
-    NULL,   /* FLD_MULTILINE: not counted */
+    NULL,            /* FLD_LAG_PENALTY: not counted (soft penalty, not a block) */
+    "vhost",         /* FLD_VHOST */
+    NULL,            /* FLD_MULTILINE: not counted */
+    NULL,            /* FLD_MAX_PROCESSING_TIME: not counted (soft yield) */
     NULL,
 };
 

@@ -24,6 +24,11 @@ ModuleHeader MOD_HEADER = {
 /* The "Server: xyz" in the response */
 #define WEB_SOFTWARE "UnrealIRCd"
 
+/* Limits on incoming HTTP request headers */
+#define WEBSERVER_MAX_HEADERS             64    /* max number of headers */
+#define WEBSERVER_MAX_HEADER_LINE_LENGTH  8192  /* max length of one header line */
+#define WEBSERVER_MAX_HEADER_TOTAL_LENGTH 32768 /* max length of the entire request header */
+
 /* Macros */
 #define WEB(client)       ((WebRequest *)moddata_local_client(client, webserver_md).ptr)
 #define WEBSERVER(client) ((client->local && client->local->listener) ? client->local->listener->webserver : NULL)
@@ -370,6 +375,14 @@ int webserver_handle_request_header(Client *client, const char *readbuf, int *le
 	int lastloc_len = 0;
 	int totalsize;
 
+	/* Very early: check maximum request header size */
+	if (WEB(client)->header_bytes > WEBSERVER_MAX_HEADER_TOTAL_LENGTH - *length)
+	{
+		webserver_send_response(client, 431, "Request header too large");
+		return -1; /* dead */
+	}
+	WEB(client)->header_bytes += *length;
+
 	totalsize = WEB(client)->lefttoparselen + *length;
 	netbuf = safe_alloc(totalsize + 1);
 	if (WEB(client)->lefttoparse)
@@ -398,6 +411,14 @@ int webserver_handle_request_header(Client *client, const char *readbuf, int *le
 			safe_strdup(WEB(client)->uri, value);
 		} else
 		{
+			/* A header line is too long or there are too many headers */
+			if ((WEB(client)->num_headers >= WEBSERVER_MAX_HEADERS) ||
+			    (strlen(key) + strlen(value) > WEBSERVER_MAX_HEADER_LINE_LENGTH))
+			{
+				webserver_send_response(client, 431, "Request header too large");
+				safe_free(netbuf);
+				return -1; /* dead */
+			}
 			if (!strcasecmp(key, "Content-Length"))
 			{
 				WEB(client)->content_length = atoll(value);
@@ -407,6 +428,7 @@ int webserver_handle_request_header(Client *client, const char *readbuf, int *le
 					WEB(client)->transfer_encoding = TRANSFER_ENCODING_CHUNKED;
 			}
 			add_nvplist(&WEB(client)->headers, WEB(client)->num_headers, key, value);
+			WEB(client)->num_headers++;
 		}
 	}
 
@@ -454,6 +476,13 @@ int webserver_handle_request_header(Client *client, const char *readbuf, int *le
 
 	if (lastloc && lastloc_len)
 	{
+		/* An unterminated header line that exceeds size */
+		if (lastloc_len > WEBSERVER_MAX_HEADER_LINE_LENGTH)
+		{
+			webserver_send_response(client, 431, "Request header too large");
+			safe_free(netbuf);
+			return -1; /* dead */
+		}
 		/* Last line was cut somewhere, save it for next round. */
 		WEB(client)->lefttoparselen = lastloc_len;
 		WEB(client)->lefttoparse = safe_alloc(lastloc_len);
@@ -490,6 +519,8 @@ void _webserver_send_response(Client *client, int status, char *msg)
 		statusmsg = "Not Found";
 	else if (status == 416)
 		statusmsg = "Range Not Satisfiable";
+	else if (status == 431)
+		statusmsg = "Request Header Fields Too Large";
 
 	snprintf(buf, sizeof(buf),
 	         "HTTP/1.1 %d %s\r\nServer: %s\r\nConnection: close\r\n\r\n",

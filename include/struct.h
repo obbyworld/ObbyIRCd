@@ -409,7 +409,7 @@ typedef enum ClientStatus {
 #define IsTLSAcceptHandshake(x)  ((x)->status == CLIENT_STATUS_TLS_ACCEPT_HANDSHAKE)   /**< Currently doing a TLS handshake - incoming */
 #define IsTLSConnectHandshake(x) ((x)->status == CLIENT_STATUS_TLS_CONNECT_HANDSHAKE)  /**< Currently doing a TLS handshake - outgoing */
 /** Currently doing a TLS handshake (incoming/outgoing/STARTTLS) */
-#define IsTLSHandshake(x) (IsTLSAcceptHandshake(x) || IsTLSConnectHandshake(x) | IsStartTLSHandshake(x))
+#define IsTLSHandshake(x) (IsTLSAcceptHandshake(x) || IsTLSConnectHandshake(x) || IsStartTLSHandshake(x))
 
 #define SetStartTLSHandshake(x)   ((x)->status = CLIENT_STATUS_TLS_STARTTLS_HANDSHAKE)
 #define SetTLSAcceptHandshake(x)  ((x)->status = CLIENT_STATUS_TLS_ACCEPT_HANDSHAKE)
@@ -978,7 +978,7 @@ struct SWhois {
 	char *setby;
 };
 
-#define UNICODE_BLOCK_COUNT 339
+#define UNICODE_BLOCK_COUNT 338
 /** Text analysis by utf8_text_analysis() and other modules */
 typedef struct TextAnalysis {
 	int antimixedutf8_points;                   /**< Points given by AntiMixedUTF8 */
@@ -1195,9 +1195,9 @@ struct CRuleNode {
 	crule_funcptr funcptr; /**< Evaluation function for this node. */
 	int numargs;           /**< Number of arguments. */
 	/** Array of arguments.  For operators, each arg
-   * is a tree element; for functions, each arg is
-   * a string.
-   */
+	 * is a tree element; for functions, each arg is
+	 * a string.
+	 */
 	void *arg[CR_MAXARGS];
 	int func_test_type;  /* for >, < and == */
 	int func_test_value; /* integer value to compare against */
@@ -1516,15 +1516,16 @@ typedef struct FloodCounter {
 /** This is the list of different flood counters that we keep for local clients. */
 /* IMPORTANT: If you change this, update floodoption_names[] in src/user.c too !!!!!!!!!!!! */
 typedef enum FloodOption {
-	FLD_NICK = 0,          /**< nick-flood */
-	FLD_JOIN = 1,          /**< join-flood */
-	FLD_AWAY = 2,          /**< away-flood */
-	FLD_INVITE = 3,        /**< invite-flood */
-	FLD_KNOCK = 4,         /**< knock-flood */
-	FLD_CONVERSATIONS = 5, /**< max-concurrent-conversations */
-	FLD_LAG_PENALTY = 6,   /**< lag-penalty / lag-penalty-bytes */
-	FLD_VHOST = 7,         /**< vhost-flood */
-	FLD_MULTILINE = 8,     /**< multiline max-lines / max-bytes */
+	FLD_NICK = 0,                /**< nick-flood */
+	FLD_JOIN = 1,                /**< join-flood */
+	FLD_AWAY = 2,                /**< away-flood */
+	FLD_INVITE = 3,              /**< invite-flood */
+	FLD_KNOCK = 4,               /**< knock-flood */
+	FLD_CONVERSATIONS = 5,       /**< max-concurrent-conversations */
+	FLD_LAG_PENALTY = 6,         /**< lag-penalty / lag-penalty-bytes */
+	FLD_VHOST = 7,               /**< vhost-flood */
+	FLD_MULTILINE = 8,           /**< multiline max-lines / max-bytes */
+	FLD_MAX_PROCESSING_TIME = 9, /**< max-processing-time */
 } FloodOption;
 #define MULTILINE_MAX_CONFIGURABLE_LINES 200    /**< Maximum configurable max-lines for multiline */
 #define MULTILINE_MAX_CONFIGURABLE_BYTES 131072 /**< Maximum configurable max-bytes for multiline (128KB) */
@@ -2081,7 +2082,7 @@ struct WebRequest {
 	char request_header_parsed; /**< Done parsing? */
 	char *lefttoparse;          /**< Leftover buffer to parse */
 	int lefttoparselen;         /**< Length of lefttoparse buffer */
-	int pending_close;          /**< Set to 1 when connection should be closed as soon as all data is sent (sendq==0) */
+	int header_bytes;           /**< Number of bytes of the request header */
 	char *request_buffer;       /**< Buffer for POST data */
 	int request_buffer_size;    /**< Size of buffer for POST data */
 	int request_body_complete;  /**< POST data has all been read */
@@ -2347,6 +2348,7 @@ struct SecurityGroup {
 	SecurityGroup *prev, *next;
 	int priority;
 	char name[SECURITYGROUPLEN + 1];
+	int builtin;
 	int public;
 	NameValuePrioList *printable_list;
 	int printable_list_counter;

@@ -5,3 +5,6 @@ https://www.unrealircd.org/docs/Contributing
 
 For ObbyIRCd-specific contributions, please open issues or pull requests
 in this repository.
+
+For AI usage, see `AI_POLICY.md`. And see `SECURITY.md` for our security
+policy.

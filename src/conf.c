@@ -1890,6 +1890,7 @@ void config_setdefaultsettings(Configuration *i)
 	config_parse_flood_generic("10:15", i, "known-users", FLD_CONVERSATIONS); /* 10 users, new user every 15s */
 	config_parse_flood_generic("180:750", i, "known-users", FLD_LAG_PENALTY); /* 180 bytes / 750 msec */
 	config_parse_flood_generic("15:5250", i, "known-users", FLD_MULTILINE); /* max-lines=15, max-bytes=5250 */
+	config_parse_flood_generic("50:0", i, "known-users", FLD_MAX_PROCESSING_TIME); /* 50 msec */
 	/* - unknown-users */
 	config_parse_flood_generic("2:60", i, "unknown-users", FLD_NICK); /* NICK flood protection: max 2 per 60s */
 	config_parse_flood_generic("2:90", i, "unknown-users", FLD_JOIN); /* JOIN flood protection: max 2 per 90s */
@@ -1900,6 +1901,7 @@ void config_setdefaultsettings(Configuration *i)
 	config_parse_flood_generic("4:15", i, "unknown-users", FLD_CONVERSATIONS); /* 4 users, new user every 15s */
 	config_parse_flood_generic("90:1000", i, "unknown-users", FLD_LAG_PENALTY); /* 90 bytes / 1000 msec */
 	config_parse_flood_generic("7:1500", i, "unknown-users", FLD_MULTILINE); /* max-lines=7, max-bytes=1500 */
+	config_parse_flood_generic("25:0", i, "unknown-users", FLD_MAX_PROCESSING_TIME); /* 25 msec */
 
 	add_log_throttle_config(&i->log_throttle, "CONNTHROTTLE_IPV6_LIMIT", 100, 60, 0);
 	add_log_throttle_config(&i->log_throttle, "MAXPERIP_LIMIT", 100, 60, 0);
@@ -5567,7 +5569,10 @@ void conf_listen_configure(const char *ip, int port, SocketType socket_type, int
 	{
 		listen->tls_options = safe_alloc(sizeof(TLSOptions));
 		conf_tlsblock(conf, tlsconfig, listen->tls_options,
-		              ((options & LISTENER_SERVERSONLY) && tempiConf.server_linking_tls_options) ? tempiConf.server_linking_tls_options : tempiConf.tls_options);
+		              ((options & LISTENER_SERVERSONLY) &&
+		               tempiConf.server_linking_tls_options)
+		                  ? tempiConf.server_linking_tls_options
+		                  : tempiConf.tls_options);
 		listen->ssl_ctx = init_ctx(listen->tls_options, 1);
 	}
 	/* A serversonly listener with no tls-options of its own uses the shared
@@ -5779,7 +5784,9 @@ int _test_listen(ConfigFile *conf, ConfigEntry *ce)
 					for (h = Hooks[HOOKTYPE_CONFIGTEST]; h; h = h->next)
 					{
 						int value, errs = 0;
-						if (h->owner && !(h->owner->flags & MODFLAG_TESTING) && !(h->owner->options & MOD_OPT_PERM))
+						if (h->owner &&
+						    !(h->owner->flags & MODFLAG_TESTING) &&
+						    !(h->owner->options & MOD_OPT_PERM))
 						{
 							continue;
 						}
@@ -6632,7 +6639,9 @@ int _conf_link(ConfigFile *conf, ConfigEntry *ce)
 				{
 					link->tls_options = safe_alloc(sizeof(TLSOptions));
 					conf_tlsblock(conf, cepp, link->tls_options,
-					              tempiConf.server_linking_tls_options ? tempiConf.server_linking_tls_options : tempiConf.tls_options);
+					              tempiConf.server_linking_tls_options
+					                  ? tempiConf.server_linking_tls_options
+					                  : tempiConf.tls_options);
 					link->ssl_ctx = init_ctx(link->tls_options, 0);
 				}
 			}
@@ -7976,6 +7985,15 @@ int _conf_set(ConfigFile *conf, ConfigEntry *ce)
 					} else if (!strcmp(ceppp->name, "knock-flood"))
 					{
 						config_parse_flood_generic(ceppp->value, &tempiConf, cepp->name, FLD_KNOCK);
+					} else if (!strcmp(ceppp->name, "max-processing-time"))
+					{
+						/* We use a hack here to make it fit our storage format */
+						char buf[32];
+						if (!strcmp(ceppp->value, "unlimited") || !strcmp(ceppp->value, "max"))
+							strlcpy(buf, ceppp->value, sizeof(buf));
+						else
+							snprintf(buf, sizeof(buf), "%s:0", ceppp->value);
+						config_parse_flood_generic(buf, &tempiConf, cepp->name, FLD_MAX_PROCESSING_TIME);
 					} else if (!strcmp(ceppp->name, "lag-penalty"))
 					{
 						lag_penalty = atoi(ceppp->value);
@@ -7992,7 +8010,7 @@ int _conf_set(ConfigFile *conf, ConfigEntry *ce)
 						tempiConf.throttle_period = period;
 					} else if (!strcmp(ceppp->name, "max-concurrent-conversations"))
 					{
-						/* We use a hack here to make it fit our storage format */
+						/* Again a hack: store 'users' in the limit and 'new-user-every' in the period */
 						char buf[64];
 						int users = 0;
 						long every = 0;
@@ -8393,6 +8411,25 @@ int _conf_set(ConfigFile *conf, ConfigEntry *ce)
 	return 0;
 }
 
+/** Give feedback about set:: items that no longer exist.
+ */
+static int is_set_item_deprecated(ConfigEntry *cep)
+{
+	if (!strcmp(cep->name, "geoip-classic"))
+	{
+		config_error("%s:%i: set::geoip-classic: the geoip_classic module is being "
+		             "phased out. If you can, use set::geoip-mmdb instead. "
+		             "See https://www.unrealircd.org/docs/GeoIP#Settings",
+		             cep->file->filename, cep->line_number);
+		config_error("If you insist on using geoip_classic then re-run ./Config, answer "
+		             "'classic' at the GeoIP question and run make install. Note that "
+		             "database updates for 'geoip_classic' will stop somewhere in 2027.");
+		return 1;
+	}
+
+	return 0;
+}
+
 int _test_set(ConfigFile *conf, ConfigEntry *ce)
 {
 	ConfigEntry *cep, *cepp, *ceppp, *cep4;
@@ -8416,7 +8453,9 @@ int _test_set(ConfigFile *conf, ConfigEntry *ce)
 				             cep->file->filename, cep->line_number);
 				errors++;
 				continue;
-			} else if (match_simple("*@unrealircd.com", cep->value) || match_simple("*@unrealircd.org", cep->value) || match_simple("unreal-*@lists.sourceforge.net", cep->value))
+			} else if (match_simple("*@unrealircd.com", cep->value) ||
+			           match_simple("*@unrealircd.org", cep->value) ||
+			           match_simple("unreal-*@lists.sourceforge.net", cep->value))
 			{
 				config_error("%s:%i: set::kline-address may not be an UnrealIRCd Team address",
 				             cep->file->filename, cep->line_number);
@@ -8433,7 +8472,9 @@ int _test_set(ConfigFile *conf, ConfigEntry *ce)
 				             cep->file->filename, cep->line_number);
 				errors++;
 				continue;
-			} else if (match_simple("*@unrealircd.com", cep->value) || match_simple("*@unrealircd.org", cep->value) || match_simple("unreal-*@lists.sourceforge.net", cep->value))
+			} else if (match_simple("*@unrealircd.com", cep->value) ||
+			           match_simple("*@unrealircd.org", cep->value) ||
+			           match_simple("unreal-*@lists.sourceforge.net", cep->value))
 			{
 				config_error("%s:%i: set::gline-address may not be an UnrealIRCd Team address",
 				             cep->file->filename, cep->line_number);
@@ -8855,7 +8896,9 @@ int _test_set(ConfigFile *conf, ConfigEntry *ce)
 					for (h = Hooks[HOOKTYPE_CONFIGTEST]; h; h = h->next)
 					{
 						int value, errs = 0;
-						if (h->owner && !(h->owner->flags & MODFLAG_TESTING) && !(h->owner->options & MOD_OPT_PERM))
+						if (h->owner &&
+						    !(h->owner->flags & MODFLAG_TESTING) &&
+						    !(h->owner->options & MOD_OPT_PERM))
 							continue;
 						value = (*(h->func.intfunc))(conf, ceppp, CONFIG_SET_ANTI_FLOOD, &errs);
 						if (value == 2)
@@ -9002,7 +9045,8 @@ int _test_set(ConfigFile *conf, ConfigEntry *ce)
 									             cep4->file->filename, cep4->line_number);
 									errors++;
 								}
-							} else if (!strcmp(cep4->name, "ban-action") || !strcmp(cep4->name, "action"))
+							} else if (!strcmp(cep4->name, "ban-action") ||
+							           !strcmp(cep4->name, "action"))
 							{
 								CheckNull(cep4);
 								errors += test_ban_action_config(cep4);
@@ -9127,6 +9171,18 @@ int _test_set(ConfigFile *conf, ConfigEntry *ce)
 					{
 						has_lag_penalty_bytes = 1;
 						CheckNull(ceppp);
+					} else if (!strcmp(ceppp->name, "max-processing-time"))
+					{
+						CheckNull(ceppp);
+						if (strcmp(ceppp->value, "unlimited") && strcmp(ceppp->value, "max"))
+						{
+							int v = atoi(ceppp->value);
+							if ((v < 1) || (v > 10000))
+							{
+								config_error("%s:%i: set::anti-flood::%s::max-processing-time: value is in msec, use 1-10000 or 'unlimited'", ceppp->file->filename, ceppp->line_number, cepp->name);
+								errors++;
+							}
+						}
 					} else if (!strcmp(ceppp->name, "connect-flood"))
 					{
 						int cnt, period;
@@ -9985,9 +10041,12 @@ int _test_set(ConfigFile *conf, ConfigEntry *ce)
 			}
 			if (!used)
 			{
-				config_error("%s:%i: unknown directive set::%s",
-				             cep->file->filename, cep->line_number,
-				             cep->name);
+				if (!is_set_item_deprecated(cep))
+				{
+					config_error("%s:%i: unknown directive set::%s",
+					             cep->file->filename, cep->line_number,
+					             cep->name);
+				}
 				errors++;
 			}
 		}

@@ -555,7 +555,8 @@ int b64_decode(char const *src, unsigned char *target, size_t targsize)
 	 */
 
 	if (ch == Pad64)
-	{  /* We got a pad char. */
+	{
+		/* We got a pad char. */
 		ch = *src++;  /* Skip it, get next. */
 		switch (state)
 		{
@@ -564,11 +565,11 @@ int b64_decode(char const *src, unsigned char *target, size_t targsize)
 				return (-1);
 
 			case 2:  /* Valid, means one byte of info */
-                        /* Skip any number of spaces. */
+				/* Skip any number of spaces. */
 				for (; ch != '\0'; ch = *src++)
 					if (!isspace(ch))
 						break;
-                        /* Make sure there is another trailing = sign. */
+				/* Make sure there is another trailing = sign. */
 				if (ch != Pad64)
 					return (-1);
 				ch = *src++;  /* Skip the = */
@@ -1571,6 +1572,28 @@ int gettimeofday(struct timeval *tp, void *tzp)
 	return 0;
 }
 #endif
+
+/** Monotonic clock in nanoseconds. Unlike gettimeofday() this never jumps
+ * backward/forward on clock changes, so safe for time measurements
+ * (eg used for set::max-client-processing-time)
+ */
+long long monotime_ns(void)
+{
+#ifdef _WIN32
+	static LARGE_INTEGER freq;
+	LARGE_INTEGER cnt;
+	if (freq.QuadPart == 0)
+		QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&cnt);
+	/* Split the divide so cnt*1e9 cannot overflow */
+	return (cnt.QuadPart / freq.QuadPart) * 1000000000LL +
+	       ((cnt.QuadPart % freq.QuadPart) * 1000000000LL) / freq.QuadPart;
+#else
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
 
 /** Get the numer of characters per line that fit on the terminal (the width) */
 int get_terminal_width(void)
