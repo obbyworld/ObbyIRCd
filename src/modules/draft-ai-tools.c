@@ -39,14 +39,21 @@ static void        register_ait_tag(Module *module, ClientCapability *cap, const
 /*
  * is_ok — called for every incoming +draft/bot-tools tag from a client or
  * server.  Per IRCv3 client-only-tag semantics (the leading "+"), the server
- * MUST relay these verbatim regardless of whether the sender has negotiated the
- * capability — recipients verify trust themselves.  We therefore accept from
- * anyone and just reject empty values.
+ * relays these from any sender, and recipients verify trust themselves.  We
+ * only check that the value is a base64 envelope; the JSON inside is checked by
+ * whoever decodes it.
  */
 static int ai_tools_mtag_is_ok(Client *client, const char *name, const char *value)
 {
-	if (BadPtr(value))
+	const char *p;
+
+	if (BadPtr(value) || strlen(value) > 4094)
 		return 0;
+	for (p = value; *p; p++)
+	{
+		if (!isalnum(*p) && *p != '+' && *p != '/' && *p != '=')
+			return 0;
+	}
 	return 1;
 }
 
