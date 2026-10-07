@@ -40,10 +40,15 @@ static sqlite3 *ipdb = NULL;
 
 static int ipdb_open(void)
 {
-	if (ipdb) return 1;
+	if (ipdb)
+		return 1;
 	if (sqlite3_open(OBSIDIAN_DB, &ipdb) != SQLITE_OK)
 	{
-		if (ipdb) { sqlite3_close(ipdb); ipdb = NULL; }
+		if (ipdb)
+		{
+			sqlite3_close(ipdb);
+			ipdb = NULL;
+		}
 		return 0;
 	}
 	sqlite3_exec(ipdb, "PRAGMA busy_timeout = 1000;", NULL, NULL, NULL);
@@ -60,31 +65,37 @@ static int lookup_share_id(const char *share_id,
 	sqlite3_stmt *stmt;
 	int found = 0;
 
-	if (out_inviter && out_inviter_sz) out_inviter[0] = '\0';
-	if (out_channel && out_channel_sz) out_channel[0] = '\0';
-	if (out_valid) *out_valid = 0;
-	if (!share_id || !*share_id) return 0;
-	if (!ipdb_open()) return 0;
+	if (out_inviter && out_inviter_sz)
+		out_inviter[0] = '\0';
+	if (out_channel && out_channel_sz)
+		out_channel[0] = '\0';
+	if (out_valid)
+		*out_valid = 0;
+	if (!share_id || !*share_id)
+		return 0;
+	if (!ipdb_open())
+		return 0;
 
 	if (sqlite3_prepare_v2(ipdb,
-	    "SELECT i.inviter_account, COALESCE(i.channel,''), "
-	    "       CASE WHEN a.name IS NOT NULL THEN 1 ELSE 0 END "
-	    "FROM invitations i "
-	    "LEFT JOIN accounts a ON LOWER(a.name) = LOWER(i.inviter_account) "
-	    "WHERE i.share_id = ?",
-	    -1, &stmt, NULL) != SQLITE_OK)
+	                       "SELECT i.inviter_account, COALESCE(i.channel,''), "
+	                       "       CASE WHEN a.name IS NOT NULL THEN 1 ELSE 0 END "
+	                       "FROM invitations i "
+	                       "LEFT JOIN accounts a ON LOWER(a.name) = LOWER(i.inviter_account) "
+	                       "WHERE i.share_id = ?",
+	                       -1, &stmt, NULL) != SQLITE_OK)
 		return 0;
 	sqlite3_bind_text(stmt, 1, share_id, -1, SQLITE_STATIC);
 	if (sqlite3_step(stmt) == SQLITE_ROW)
 	{
 		const char *inv = (const char *)sqlite3_column_text(stmt, 0);
-		const char *ch  = (const char *)sqlite3_column_text(stmt, 1);
+		const char *ch = (const char *)sqlite3_column_text(stmt, 1);
 		int v = sqlite3_column_int(stmt, 2);
 		if (inv && out_inviter && out_inviter_sz)
 			strlcpy(out_inviter, inv, out_inviter_sz);
 		if (ch && out_channel && out_channel_sz)
 			strlcpy(out_channel, ch, out_channel_sz);
-		if (out_valid) *out_valid = v ? 1 : 0;
+		if (out_valid)
+			*out_valid = v ? 1 : 0;
 		found = 1;
 	}
 	sqlite3_finalize(stmt);
@@ -92,11 +103,11 @@ static int lookup_share_id(const char *share_id,
 }
 
 ModuleHeader MOD_HEADER = {
-	"invite-page",
-	"1.0",
-	"HTTP splash page that invites users to the network/a channel",
-	"obbyircd",
-	"unrealircd-6",
+    "invite-page",
+    "1.0",
+    "HTTP splash page that invites users to the network/a channel",
+    "obbyircd",
+    "unrealircd-6",
 };
 
 /* ===================================================================
@@ -118,7 +129,7 @@ struct {
 	                         * etc.). */
 	char *default_channel;  /* optional: auto-prefill the channel form */
 	char *accent_color;     /* optional hex accent, defaults to #5865F2 */
-} cfg = { 0 };
+} cfg = {0};
 
 /* ===================================================================
  * Forwards
@@ -156,7 +167,10 @@ MOD_INIT()
 	return MOD_SUCCESS;
 }
 
-MOD_LOAD() { return MOD_SUCCESS; }
+MOD_LOAD()
+{
+	return MOD_SUCCESS;
+}
 
 MOD_UNLOAD()
 {
@@ -198,9 +212,8 @@ static int invite_configtest_set(ConfigFile *cf, ConfigEntry *ce, int type, int 
 				             cep->file->filename, cep->line_number, cep->name);
 				errors++;
 			}
-		} else
-		if (!strcmp(cep->name, "irc-port") ||
-		    !strcmp(cep->name, "native-port"))
+		} else if (!strcmp(cep->name, "irc-port") ||
+		           !strcmp(cep->name, "native-port"))
 		{
 			int p = cep->value ? atoi(cep->value) : 0;
 			if (p <= 0 || p > 65535)
@@ -308,10 +321,10 @@ static void invite_send_html(Client *client, int status, const char *html)
 	char header[512];
 	size_t body_len = strlen(html);
 	const char *msg =
-	    (status == 200) ? "OK" :
-	    (status == 404) ? "Not Found" :
-	    (status == 400) ? "Bad Request" :
-	    (status == 503) ? "Service Unavailable" : "Internal Server Error";
+	    (status == 200) ? "OK" : (status == 404) ? "Not Found"
+	                         : (status == 400)   ? "Bad Request"
+	                         : (status == 503)   ? "Service Unavailable"
+	                                             : "Internal Server Error";
 
 	snprintf(header, sizeof(header),
 	         "HTTP/1.1 %d %s\r\n"
@@ -356,10 +369,12 @@ static void url_decode(char *dst, const char *src, size_t maxlen)
 			sscanf(src + 1, "%2x", &v);
 			dst[di++] = (char)v;
 			src += 3;
-		} else if (*src == '+') {
+		} else if (*src == '+')
+		{
 			dst[di++] = ' ';
 			src++;
-		} else {
+		} else
+		{
 			dst[di++] = *src++;
 		}
 	}
@@ -377,17 +392,38 @@ static const char *html_escape(const char *s)
 	char *buf = rings[slot];
 	size_t i = 0;
 	slot = (slot + 1) & 3;
-	if (!s) { buf[0] = '\0'; return buf; }
+	if (!s)
+	{
+		buf[0] = '\0';
+		return buf;
+	}
 	while (*s && i + 7 < sizeof(rings[0]))
 	{
 		switch (*s)
 		{
-			case '<': memcpy(buf+i, "&lt;", 4); i += 4; break;
-			case '>': memcpy(buf+i, "&gt;", 4); i += 4; break;
-			case '&': memcpy(buf+i, "&amp;", 5); i += 5; break;
-			case '"': memcpy(buf+i, "&quot;", 6); i += 6; break;
-			case '\'': memcpy(buf+i, "&#x27;", 6); i += 6; break;
-			default: buf[i++] = *s; break;
+			case '<':
+				memcpy(buf + i, "&lt;", 4);
+				i += 4;
+				break;
+			case '>':
+				memcpy(buf + i, "&gt;", 4);
+				i += 4;
+				break;
+			case '&':
+				memcpy(buf + i, "&amp;", 5);
+				i += 5;
+				break;
+			case '"':
+				memcpy(buf + i, "&quot;", 6);
+				i += 6;
+				break;
+			case '\'':
+				memcpy(buf + i, "&#x27;", 6);
+				i += 6;
+				break;
+			default:
+				buf[i++] = *s;
+				break;
 		}
 		s++;
 	}
@@ -408,16 +444,17 @@ static int invite_handle_request(Client *client, WebRequest *web)
 	/* Strip query string if any. */
 	strlcpy(path, uri, sizeof(path));
 	qmark = strchr(path, '?');
-	if (qmark) *qmark = '\0';
+	if (qmark)
+		*qmark = '\0';
 
 	if (!cfg.irc_host || !cfg.irc_port)
 	{
 		invite_send_html(client, 503,
-		    "<!DOCTYPE html><meta charset=utf-8>"
-		    "<title>invite-page not configured</title>"
-		    "<p>The invite-page module is loaded but "
-		    "<code>set::invite-page::irc-host</code> / "
-		    "<code>set::invite-page::irc-port</code> are not set.</p>");
+		                 "<!DOCTYPE html><meta charset=utf-8>"
+		                 "<title>invite-page not configured</title>"
+		                 "<p>The invite-page module is loaded but "
+		                 "<code>set::invite-page::irc-host</code> / "
+		                 "<code>set::invite-page::irc-port</code> are not set.</p>");
 		return 0;
 	}
 
@@ -444,7 +481,7 @@ static int invite_handle_request(Client *client, WebRequest *web)
 
 		url_decode(share_id, path + 3, sizeof(share_id));
 		L = strlen(share_id);
-		while (L && (share_id[L-1] == '/' || share_id[L-1] == '\n' || share_id[L-1] == '\r'))
+		while (L && (share_id[L - 1] == '/' || share_id[L - 1] == '\n' || share_id[L - 1] == '\r'))
 			share_id[--L] = '\0';
 
 		found = lookup_share_id(share_id, inviter, sizeof(inviter),
@@ -479,16 +516,16 @@ static int invite_handle_request(Client *client, WebRequest *web)
 		/* Strip any trailing slash. */
 		{
 			size_t L = strlen(decoded);
-			while (L && (decoded[L-1] == '/' || decoded[L-1] == '\n' || decoded[L-1] == '\r'))
+			while (L && (decoded[L - 1] == '/' || decoded[L - 1] == '\n' || decoded[L - 1] == '\r'))
 				decoded[--L] = '\0';
 		}
 		if (!*decoded || strchr(decoded, ' ') || strchr(decoded, ',') ||
-		    strchr(decoded, '\0'+1))
+		    strchr(decoded, '\0' + 1))
 		{
 			invite_send_html(client, 400,
-			    "<!DOCTYPE html><meta charset=utf-8>"
-			    "<title>Invalid channel</title>"
-			    "<p>Channel name is empty or malformed.</p>");
+			                 "<!DOCTYPE html><meta charset=utf-8>"
+			                 "<title>Invalid channel</title>"
+			                 "<p>Channel name is empty or malformed.</p>");
 			return 0;
 		}
 
@@ -509,8 +546,8 @@ static int invite_handle_request(Client *client, WebRequest *web)
 	/* Anything else 404s — we intentionally don't serve favicons /
 	 * /robots.txt etc to avoid stale browser cache surprises. */
 	invite_send_html(client, 404,
-	    "<!DOCTYPE html><meta charset=utf-8><title>Not found</title>"
-	    "<p>Try the <a href=\"/\">main invite page</a>.</p>");
+	                 "<!DOCTYPE html><meta charset=utf-8><title>Not found</title>"
+	                 "<p>Try the <a href=\"/\">main invite page</a>.</p>");
 	return 0;
 }
 
@@ -560,7 +597,8 @@ static char *build_invite_html(const char *channel, const char *inviter)
 				snprintf(encoded_chan + i, sizeof(encoded_chan) - i,
 				         "%%%02X", (unsigned char)*p);
 				i += 3;
-			} else {
+			} else
+			{
 				encoded_chan[i++] = *p;
 			}
 		}
@@ -568,54 +606,56 @@ static char *build_invite_html(const char *channel, const char *inviter)
 		snprintf(ircs_link, sizeof(ircs_link),
 		         "ircs://%s:%d/%s", host, port, encoded_chan);
 		snprintf(join_line, sizeof(join_line), "/join %s", channel);
-	} else {
+	} else
+	{
 		snprintf(ircs_link, sizeof(ircs_link),
 		         "ircs://%s:%d/", host, port);
 	}
 
 	out = safe_alloc(cap);
 	n = snprintf(out, cap,
-	    "<!DOCTYPE html>\n"
-	    "<html lang=\"en\"><head>\n"
-	    "<meta charset=\"utf-8\">\n"
-	    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-	    "<meta name=\"referrer\" content=\"no-referrer\">\n"
-	    "<title>Join %s%s%s</title>\n"
-	    "<style>\n"
-	    " *{box-sizing:border-box}\n"
-	    " body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#0d0e10;color:#e8e8ea;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}\n"
-	    " .card{max-width:480px;width:100%%;background:#181a1f;border-radius:16px;padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,.4);border-top:3px solid %s;text-align:center}\n"
-	    " h1{margin:0 0 8px;font-size:24px;font-weight:600}\n"
-	    " h1 .net{color:%s}\n"
-	    " .sub{color:#9a9aa3;margin:0 0 28px;font-size:14px;line-height:1.5}\n"
-	    " .chan{display:inline-flex;align-items:center;gap:6px;background:#222530;color:#fff;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:14px;padding:4px 10px;border-radius:8px;margin:0 4px}\n"
-	    " .by{margin:-4px 0 12px;font-size:13px;color:#a9aab2}\n"
-	    " .by strong{color:#fff}\n"
-	    " .icon{width:72px;height:72px;border-radius:16px;display:block;margin:0 auto 16px;object-fit:cover;background:#222530;box-shadow:0 4px 12px rgba(0,0,0,.3)}\n"
-	    " .btn{display:block;width:100%%;text-align:center;background:%s;color:#fff;text-decoration:none;font-weight:600;font-size:16px;padding:14px 18px;border-radius:10px;margin:0 0 12px;transition:filter .15s}\n"
-	    " .btn:hover{filter:brightness(1.1)}\n"
-	    " .btn.sec{background:#2a2d36;color:#e8e8ea}\n"
-	    " details{margin-top:18px;background:#11131a;border-radius:10px;border:1px solid #232631;text-align:left}\n"
-	    " summary{cursor:pointer;list-style:none;padding:12px 16px;font-size:13px;color:#a9aab2;user-select:none}\n"
-	    " summary::-webkit-details-marker{display:none}\n"
-	    " summary::after{content:'\\203A';float:right;color:#5d5e66;transition:transform .15s}\n"
-	    " details[open] summary::after{transform:rotate(90deg)}\n"
-	    " summary:hover{color:#fff}\n"
-	    " .manual{padding:4px 16px 14px;font-size:13px}\n"
-	    " .manual dl{margin:0;display:grid;grid-template-columns:max-content 1fr;gap:6px 14px}\n"
-	    " .manual dt{color:#6b6c75;font-size:11px;text-transform:uppercase;letter-spacing:.05em;align-self:center}\n"
-	    " .manual dd{margin:0;color:#e8e8ea;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px;word-break:break-all}\n"
-	    " .manual .note{margin-top:12px;color:#6b6c75;font-family:inherit;font-size:12px;line-height:1.5}\n"
-	    " .footer{margin-top:24px;text-align:center;font-size:11px;color:#5d5e66}\n"
-	    "</style>\n"
-	    "</head><body>\n"
-	    "<div class=\"card\">\n",
-	    /* title */ html_escape(net),
-	    channel ? " &middot; " : "",
-	    channel ? html_escape(channel) : "",
-	    accent, accent, accent);
+	             "<!DOCTYPE html>\n"
+	             "<html lang=\"en\"><head>\n"
+	             "<meta charset=\"utf-8\">\n"
+	             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+	             "<meta name=\"referrer\" content=\"no-referrer\">\n"
+	             "<title>Join %s%s%s</title>\n"
+	             "<style>\n"
+	             " *{box-sizing:border-box}\n"
+	             " body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#0d0e10;color:#e8e8ea;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}\n"
+	             " .card{max-width:480px;width:100%%;background:#181a1f;border-radius:16px;padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,.4);border-top:3px solid %s;text-align:center}\n"
+	             " h1{margin:0 0 8px;font-size:24px;font-weight:600}\n"
+	             " h1 .net{color:%s}\n"
+	             " .sub{color:#9a9aa3;margin:0 0 28px;font-size:14px;line-height:1.5}\n"
+	             " .chan{display:inline-flex;align-items:center;gap:6px;background:#222530;color:#fff;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:14px;padding:4px 10px;border-radius:8px;margin:0 4px}\n"
+	             " .by{margin:-4px 0 12px;font-size:13px;color:#a9aab2}\n"
+	             " .by strong{color:#fff}\n"
+	             " .icon{width:72px;height:72px;border-radius:16px;display:block;margin:0 auto 16px;object-fit:cover;background:#222530;box-shadow:0 4px 12px rgba(0,0,0,.3)}\n"
+	             " .btn{display:block;width:100%%;text-align:center;background:%s;color:#fff;text-decoration:none;font-weight:600;font-size:16px;padding:14px 18px;border-radius:10px;margin:0 0 12px;transition:filter .15s}\n"
+	             " .btn:hover{filter:brightness(1.1)}\n"
+	             " .btn.sec{background:#2a2d36;color:#e8e8ea}\n"
+	             " details{margin-top:18px;background:#11131a;border-radius:10px;border:1px solid #232631;text-align:left}\n"
+	             " summary{cursor:pointer;list-style:none;padding:12px 16px;font-size:13px;color:#a9aab2;user-select:none}\n"
+	             " summary::-webkit-details-marker{display:none}\n"
+	             " summary::after{content:'\\203A';float:right;color:#5d5e66;transition:transform .15s}\n"
+	             " details[open] summary::after{transform:rotate(90deg)}\n"
+	             " summary:hover{color:#fff}\n"
+	             " .manual{padding:4px 16px 14px;font-size:13px}\n"
+	             " .manual dl{margin:0;display:grid;grid-template-columns:max-content 1fr;gap:6px 14px}\n"
+	             " .manual dt{color:#6b6c75;font-size:11px;text-transform:uppercase;letter-spacing:.05em;align-self:center}\n"
+	             " .manual dd{margin:0;color:#e8e8ea;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px;word-break:break-all}\n"
+	             " .manual .note{margin-top:12px;color:#6b6c75;font-family:inherit;font-size:12px;line-height:1.5}\n"
+	             " .footer{margin-top:24px;text-align:center;font-size:11px;color:#5d5e66}\n"
+	             "</style>\n"
+	             "</head><body>\n"
+	             "<div class=\"card\">\n",
+	             /* title */ html_escape(net),
+	             channel ? " &middot; " : "",
+	             channel ? html_escape(channel) : "",
+	             accent, accent, accent);
 
-	if (n < 0 || (size_t)n >= cap) return out;
+	if (n < 0 || (size_t)n >= cap)
+		return out;
 
 	/* Network icon (set::network-icon).  Rendered above the heading
 	 * when configured; omitted otherwise so the card layout stays
@@ -624,13 +664,13 @@ static char *build_invite_html(const char *channel, const char *inviter)
 	if (icon && *icon)
 	{
 		n += snprintf(out + n, cap - n,
-		    "<img class=\"icon\" src=\"%s\" alt=\"%s\" referrerpolicy=\"no-referrer\">\n",
-		    html_escape(icon), html_escape(net));
+		              "<img class=\"icon\" src=\"%s\" alt=\"%s\" referrerpolicy=\"no-referrer\">\n",
+		              html_escape(icon), html_escape(net));
 	}
 
 	n += snprintf(out + n, cap - n,
-	    "<h1>You're invited to <span class=\"net\">%s</span></h1>\n",
-	    html_escape(net));
+	              "<h1>You're invited to <span class=\"net\">%s</span></h1>\n",
+	              html_escape(net));
 
 	/* Inviter byline (referrer-attributed /i/ flow). When present
 	 * the page reads "Invited by <name>" above the rest of the
@@ -638,19 +678,20 @@ static char *build_invite_html(const char *channel, const char *inviter)
 	if (inviter && *inviter)
 	{
 		n += snprintf(out + n, cap - n,
-		    "<p class=\"by\">Invited by <strong>%s</strong></p>\n",
-		    html_escape(inviter));
+		              "<p class=\"by\">Invited by <strong>%s</strong></p>\n",
+		              html_escape(inviter));
 	}
 
 	if (channel)
 	{
 		n += snprintf(out + n, cap - n,
-		    "<p class=\"sub\">Open the channel <span class=\"chan\">%s</span> in your IRC client to join the conversation.</p>\n",
-		    html_escape(channel));
-	} else {
+		              "<p class=\"sub\">Open the channel <span class=\"chan\">%s</span> in your IRC client to join the conversation.</p>\n",
+		              html_escape(channel));
+	} else
+	{
 		n += snprintf(out + n, cap - n,
-		    "<p class=\"sub\">Connect to <code>%s</code> in your IRC client.</p>\n",
-		    html_escape(host));
+		              "<p class=\"sub\">Connect to <code>%s</code> in your IRC client.</p>\n",
+		              html_escape(host));
 	}
 
 	/* Primary button: triggers the ircs:// handler ONLY on click.
@@ -659,8 +700,8 @@ static char *build_invite_html(const char *channel, const char *inviter)
 	 * action so e.g. previewing the invite in a browser tab doesn't
 	 * yank focus to the desktop IRC app. */
 	n += snprintf(out + n, cap - n,
-	    "<a class=\"btn\" href=\"%s\">Open in IRC client</a>\n",
-	    ircs_link);
+	              "<a class=\"btn\" href=\"%s\">Open in IRC client</a>\n",
+	              ircs_link);
 
 	/* Optional secondary "Join via Web" button. Only renders when
 	 * set::invite-page::web-url is configured. When the invite is
@@ -687,7 +728,8 @@ static char *build_invite_html(const char *channel, const char *inviter)
 					snprintf(encoded + ei, sizeof(encoded) - ei,
 					         "%%%02X", c);
 					ei += 3;
-				} else {
+				} else
+				{
 					encoded[ei++] = (char)c;
 				}
 			}
@@ -697,46 +739,47 @@ static char *build_invite_html(const char *channel, const char *inviter)
 			         cfg.web_url,
 			         strchr(cfg.web_url, '?') ? "&" : "?",
 			         encoded);
-		} else {
+		} else
+		{
 			strlcpy(web_join_url, cfg.web_url, sizeof(web_join_url));
 		}
 		n += snprintf(out + n, cap - n,
-		    "<a class=\"btn sec\" href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">Join via Web</a>\n",
-		    html_escape(web_join_url));
+		              "<a class=\"btn sec\" href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">Join via Web</a>\n",
+		              html_escape(web_join_url));
 	}
 
 	/* Manual-connect details: collapsed by default. Shows everything
 	 * a user would need to connect with another IRC client of their
 	 * choice (HexChat, irssi, weechat, etc.). */
 	n += snprintf(out + n, cap - n,
-	    "<details>\n"
-	    "<summary>Connect manually</summary>\n"
-	    "<div class=\"manual\">\n"
-	    "<dl>\n"
-	    "<dt>Server</dt><dd>%s</dd>\n"
-	    "<dt>Port</dt><dd>%d</dd>\n"
-	    "<dt>TLS</dt><dd>Required</dd>\n",
-	    html_escape(host), native_port);
+	              "<details>\n"
+	              "<summary>Connect manually</summary>\n"
+	              "<div class=\"manual\">\n"
+	              "<dl>\n"
+	              "<dt>Server</dt><dd>%s</dd>\n"
+	              "<dt>Port</dt><dd>%d</dd>\n"
+	              "<dt>TLS</dt><dd>Required</dd>\n",
+	              html_escape(host), native_port);
 
 	if (channel)
 	{
 		n += snprintf(out + n, cap - n,
-		    "<dt>Channel</dt><dd>%s</dd>\n"
-		    "<dt>Join</dt><dd>%s</dd>\n",
-		    html_escape(channel), html_escape(join_line));
+		              "<dt>Channel</dt><dd>%s</dd>\n"
+		              "<dt>Join</dt><dd>%s</dd>\n",
+		              html_escape(channel), html_escape(join_line));
 	}
 
 	n += snprintf(out + n, cap - n,
-	    "</dl>\n"
-	    "<p class=\"note\">Point your client at <code>%s</code> on port %d with TLS. "
-	    "Once connected%s, you're in.</p>\n"
-	    "</div>\n"
-	    "</details>\n"
-	    "<div class=\"footer\">powered by obbyircd</div>\n"
-	    "</div>\n"
-	    "</body></html>\n",
-	    html_escape(host), native_port,
-	    channel ? ", run the join command above" : "");
+	              "</dl>\n"
+	              "<p class=\"note\">Point your client at <code>%s</code> on port %d with TLS. "
+	              "Once connected%s, you're in.</p>\n"
+	              "</div>\n"
+	              "</details>\n"
+	              "<div class=\"footer\">powered by obbyircd</div>\n"
+	              "</div>\n"
+	              "</body></html>\n",
+	              html_escape(host), native_port,
+	              channel ? ", run the join command above" : "");
 
 	return out;
 }
@@ -754,28 +797,29 @@ static char *build_expired_html(void)
 
 	out = safe_alloc(cap);
 	n = snprintf(out, cap,
-	    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-	    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-	    "<title>Invitation expired</title>"
-	    "<style>"
-	    " *{box-sizing:border-box}"
-	    " body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#0d0e10;color:#e8e8ea;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}"
-	    " .card{max-width:420px;width:100%%;background:#181a1f;border-radius:16px;padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,.4);border-top:3px solid %s;text-align:center}"
-	    " .icon{width:64px;height:64px;border-radius:14px;display:block;margin:0 auto 16px;object-fit:cover;background:#222530;filter:grayscale(.5) opacity(.7)}"
-	    " h1{margin:0 0 10px;font-size:20px;font-weight:600;color:#fff}"
-	    " p{margin:0;color:#9a9aa3;font-size:14px;line-height:1.5}"
-	    "</style></head><body><div class=\"card\">",
-	    accent);
-	if (n < 0 || (size_t)n >= cap) return out;
+	             "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+	             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+	             "<title>Invitation expired</title>"
+	             "<style>"
+	             " *{box-sizing:border-box}"
+	             " body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#0d0e10;color:#e8e8ea;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}"
+	             " .card{max-width:420px;width:100%%;background:#181a1f;border-radius:16px;padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,.4);border-top:3px solid %s;text-align:center}"
+	             " .icon{width:64px;height:64px;border-radius:14px;display:block;margin:0 auto 16px;object-fit:cover;background:#222530;filter:grayscale(.5) opacity(.7)}"
+	             " h1{margin:0 0 10px;font-size:20px;font-weight:600;color:#fff}"
+	             " p{margin:0;color:#9a9aa3;font-size:14px;line-height:1.5}"
+	             "</style></head><body><div class=\"card\">",
+	             accent);
+	if (n < 0 || (size_t)n >= cap)
+		return out;
 	if (icon && *icon)
 	{
 		n += snprintf(out + n, cap - n,
-		    "<img class=\"icon\" src=\"%s\" alt=\"\" referrerpolicy=\"no-referrer\">",
-		    html_escape(icon));
+		              "<img class=\"icon\" src=\"%s\" alt=\"\" referrerpolicy=\"no-referrer\">",
+		              html_escape(icon));
 	}
 	n += snprintf(out + n, cap - n,
-	    "<h1>This invitation has expired</h1>"
-	    "<p>The link is no longer valid. The person who created it may no longer have an account on this network.</p>"
-	    "</div></body></html>");
+	              "<h1>This invitation has expired</h1>"
+	              "<p>The link is no longer valid. The person who created it may no longer have an account on this network.</p>"
+	              "</div></body></html>");
 	return out;
 }

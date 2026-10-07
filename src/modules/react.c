@@ -24,14 +24,13 @@
 
 #include "unrealircd.h"
 
-ModuleHeader MOD_HEADER
-  = {
-	"react",
-	"0.4",
-	"+draft/react (IRCv3) + text-only fallback for clients without message-tags",
-	"Valware",
-	"unrealircd-6",
-	};
+ModuleHeader MOD_HEADER = {
+    "react",
+    "0.4",
+    "+draft/react (IRCv3) + text-only fallback for clients without message-tags",
+    "Valware",
+    "unrealircd-6",
+};
 
 /* Set in MOD_LOAD by querying ClientCapabilityBit("message-tags"). 0
  * means message-tags isn't loaded -- the fallback then fires for every
@@ -157,17 +156,22 @@ static void utf8_truncate(const char *src, size_t srclen, size_t chars,
 		return;
 	size_t i = 0, codepoints = 0;
 	/* Trim trailing CTCP-end / NL */
-	while (srclen && (src[srclen-1] == '\1' || src[srclen-1] == '\r' || src[srclen-1] == '\n'))
+	while (srclen && (src[srclen - 1] == '\1' || src[srclen - 1] == '\r' || src[srclen - 1] == '\n'))
 		srclen--;
 	while (i < srclen && codepoints < chars)
 	{
 		unsigned char b = (unsigned char)src[i];
 		int extra;
-		if (b < 0x80) extra = 0;
-		else if ((b & 0xE0) == 0xC0) extra = 1;
-		else if ((b & 0xF0) == 0xE0) extra = 2;
-		else if ((b & 0xF8) == 0xF0) extra = 3;
-		else extra = 0; /* invalid byte, treat as single */
+		if (b < 0x80)
+			extra = 0;
+		else if ((b & 0xE0) == 0xC0)
+			extra = 1;
+		else if ((b & 0xF0) == 0xE0)
+			extra = 2;
+		else if ((b & 0xF8) == 0xF0)
+			extra = 3;
+		else
+			extra = 0; /* invalid byte, treat as single */
 		size_t step = 1 + (size_t)extra;
 		if (i + step > srclen)
 			break;
@@ -190,12 +194,12 @@ static void utf8_truncate(const char *src, size_t srclen, size_t chars,
 static const char *strip_ctcp_action(const char *text, size_t *out_len)
 {
 	size_t len = strlen(text);
-	if (len >= 8 && text[0] == '\1' && !strncmp(text+1, "ACTION ", 7))
+	if (len >= 8 && text[0] == '\1' && !strncmp(text + 1, "ACTION ", 7))
 	{
 		text += 8;
 		len -= 8;
 	}
-	while (len && (text[len-1] == '\1' || text[len-1] == '\r' || text[len-1] == '\n'))
+	while (len && (text[len - 1] == '\1' || text[len - 1] == '\r' || text[len - 1] == '\n'))
 		len--;
 	*out_len = len;
 	return text;
@@ -342,8 +346,7 @@ static int react_pre_chanmsg(Client *client, Channel *channel, MessageTag **mtag
 			continue; /* don't echo the user's own reaction back as
 			           * a /me; their client renders the reaction
 			           * inline already. */
-		if (CAP_MESSAGE_TAGS_FOR_REACT
-		    && HasCapabilityFast(target, CAP_MESSAGE_TAGS_FOR_REACT))
+		if (CAP_MESSAGE_TAGS_FOR_REACT && HasCapabilityFast(target, CAP_MESSAGE_TAGS_FOR_REACT))
 			continue; /* cap-aware: the normal TAGMSG broadcast
 			           * delivers the real reaction tag. */
 

@@ -172,7 +172,7 @@ depend:
 
 # Code reformatting using clang-format: work on git .c/.h files only, but skip vendored files.
 format:
-	clang-format -i `git ls-files src include | grep -E '\.(c|h)$$' | grep -vE 'crypt_blowfish|openssl_hostname_validation'`
+	clang-format -i `git ls-files src include | grep -E '\.(c|h)$$' | grep -vE 'crypt_blowfish|openssl_hostname_validation|duktape|duk_config'`
 
 install: all
 	$(INSTALL) -m 0700 -d $(DESTDIR)@BINDIR@

@@ -21,9 +21,9 @@ char *find_best_coredump(void)
 
 	if (!fd)
 		return NULL;
-	
+
 	*best_fname = '\0';
-	
+
 	while ((dir = readdir(fd)))
 	{
 		char *fname = dir->d_name;
@@ -32,7 +32,7 @@ char *find_best_coredump(void)
 		    !strstr(fname, ".done"))
 		{
 			char buf[512];
-			
+
 			snprintf(buf, sizeof(buf), "%s/%s", TMPDIR, fname);
 			t = get_file_time(buf);
 			if (t && (t > best_time))
@@ -47,11 +47,11 @@ char *find_best_coredump(void)
 	/* Windows */
 	WIN32_FIND_DATA hData;
 	HANDLE hFile;
-	
+
 	hFile = FindFirstFile("unrealircd.*.core", &hData);
 	if (hFile == INVALID_HANDLE_VALUE)
 		return NULL;
-	
+
 	do
 	{
 		char *fname = hData.cFileName;
@@ -68,11 +68,11 @@ char *find_best_coredump(void)
 		}
 	} while (FindNextFile(hFile, &hData));
 	FindClose(hFile);
-#endif	
-	
+#endif
+
 	if (*best_fname)
 		return best_fname;
-	
+
 	return NULL; /* none found */
 }
 
@@ -118,13 +118,13 @@ char *find_best_asan_log(void)
 #define EL_AR_MAX MAXPARA
 char **explode(char *str, char *delimiter)
 {
-	static char *ret[EL_AR_MAX+1];
+	static char *ret[EL_AR_MAX + 1];
 	static char buf[1024];
 	char *p, *name;
 	int cnt = 0;
-	
+
 	memset(&ret, 0, sizeof(ret)); /* make sure all elements are NULL */
-	
+
 	strlcpy(buf, str, sizeof(buf));
 	for (name = strtoken(&p, buf, delimiter); name; name = strtoken(&p, NULL, delimiter))
 	{
@@ -133,7 +133,7 @@ char **explode(char *str, char *delimiter)
 			break;
 	}
 	ret[cnt] = NULL;
-	
+
 	return ret;
 }
 
@@ -150,13 +150,13 @@ void crash_report_fix_libs(char *coredump, int *thirdpartymods)
 	setenv("LC_ALL", "C", 1);
 
 	snprintf(cmd, sizeof(cmd), "echo info sharedlibrary|gdb %s/unrealircd %s 2>&1",
-		BINDIR, coredump);
+	         BINDIR, coredump);
 
 	fd = popen(cmd, "r");
 	if (!fd)
 		return;
 
-	while((fgets(buf, sizeof(buf), fd)))
+	while ((fgets(buf, sizeof(buf), fd)))
 	{
 		char *file, *path;
 		char target[512];
@@ -165,26 +165,26 @@ void crash_report_fix_libs(char *coredump, int *thirdpartymods)
 		stripcrlf(buf);
 
 		if (strstr(buf, ".third."))
-		    *thirdpartymods = 1;
+			*thirdpartymods = 1;
 
 		/* Output we are interested is something like this:
 		 * <many spaces>    No        /home/blabla/unrealircd/tmp/5114DF16.m_kick.so
 		 */
 		if (!strstr(buf, " No "))
 			continue;
-		
+
 		path = strchr(buf, '/');
 		if (!path)
 			continue;
 
 		if (!strstr(path, TMPDIR))
 			continue; /* we only care about our TMPDIR stuff */
-		
+
 		file = strrchr(path, '/');
 		if (!file)
 			continue;
 		file++;
-		
+
 		/* files have the following two formats:
 		 * 5BE7DF9.m_svsnline.so          for modules/m_svsnline.so
 		 * 300AA138.chanmodes.nokick.so   for modules/chanmodes/nokick.so
@@ -194,11 +194,12 @@ void crash_report_fix_libs(char *coredump, int *thirdpartymods)
 			snprintf(target, sizeof(target), "%s/%s.%s", MODULESDIR, arr[1], arr[2]);
 		else
 			snprintf(target, sizeof(target), "%s/%s/%s.%s", MODULESDIR, arr[1], arr[2], arr[3]);
-		
+
 		if (!file_exists(target))
 		{
 			printf("WARNING: could not resolve %s: %s does not exist\n", path, target);
-		} else if (!file_exists(path)) {
+		} else if (!file_exists(path))
+		{
 			/* Only attempt the symlink when the temp path is missing.
 			 * On a normal restart after a crash, the freshly-copied
 			 * temp .so already exists from this run's module load,
@@ -208,7 +209,6 @@ void crash_report_fix_libs(char *coredump, int *thirdpartymods)
 			if (symlink(target, path) < 0)
 				printf("WARNING: could not create symlink %s -> %s\n", path, target);
 		}
-		
 	}
 	pclose(fd);
 #endif
@@ -243,16 +243,16 @@ int crash_report_backtrace(FILE *reportfd, char *coredump)
 	            "quit\n");
 	fclose(fd);
 
-	
+
 	snprintf(cmd, sizeof(cmd), "gdb -batch -x %s %s/unrealircd %s 2>&1",
-		buf, BINDIR, coredump);
-	
+	         buf, BINDIR, coredump);
+
 	fd = popen(cmd, "r");
 	if (!fd)
 		return 0;
-	
+
 	fprintf(reportfd, "START OF BACKTRACE\n");
-	while((fgets(buf, sizeof(buf), fd)))
+	while ((fgets(buf, sizeof(buf), fd)))
 	{
 		stripcrlf(buf);
 		fprintf(reportfd, " %s\n", buf);
@@ -270,7 +270,7 @@ int crash_report_backtrace(FILE *reportfd, char *coredump)
 	if (!fd)
 		return 0;
 	fprintf(reportfd, "START OF CRASH DUMP\n");
-	while((fgets(buf, sizeof(buf), fd)))
+	while ((fgets(buf, sizeof(buf), fd)))
 	{
 		stripcrlf(buf);
 		fprintf(reportfd, " %s\n", buf);
@@ -297,8 +297,8 @@ int crash_report_asan_log(FILE *reportfd, char *coredump)
 	asantime = get_file_time(asan_log);
 
 	fprintf(reportfd, "ASan log file found '%s' which is %ld seconds older than core file\n",
-		asan_log,
-		(long)((long)(coretime) - (long)asantime));
+	        asan_log,
+	        (long)((long)(coretime) - (long)asantime));
 
 	fd = fopen(asan_log, "r");
 	if (!fd)
@@ -307,7 +307,7 @@ int crash_report_asan_log(FILE *reportfd, char *coredump)
 		return 0;
 	}
 	fprintf(reportfd, "START OF ASAN LOG\n");
-	while((fgets(buf, sizeof(buf), fd)))
+	while ((fgets(buf, sizeof(buf), fd)))
 	{
 		stripcrlf(buf);
 		fprintf(reportfd, " %s\n", buf);
@@ -327,32 +327,33 @@ int crash_report_asan_log(FILE *reportfd, char *coredump)
 void crash_report_header(FILE *reportfd, char *coredump)
 {
 	time_t t;
-	
+
 	fprintf(reportfd, "== UNREALIRCD CRASH REPORT ==\n"
 	                  "\n"
 	                  "SYSTEM INFORMATION:\n");
-	
+
 	fprintf(reportfd, "UnrealIRCd version: %s\n", VERSIONONLY);
 #if defined(__VERSION__)
 	fprintf(reportfd, "          Compiler: %s\n", __VERSION__);
 #endif
-	
+
 	fprintf(reportfd, "  Operating System: %s\n", MYOSNAME);
 
-	
+
 	fprintf(reportfd, "Using core file: %s\n", coredump);
-	
+
 	t = get_file_time(coredump);
 	if (t != 0)
 	{
 		fprintf(reportfd, "Crash date/time: %s\n", myctime(t) ? myctime(t) : "???");
 		fprintf(reportfd, " Crash secs ago: %ld\n",
-			(long)(time(NULL) - t));
-	} else {
+		        (long)(time(NULL) - t));
+	} else
+	{
 		fprintf(reportfd, "Crash date/time: UNKNOWN\n");
 		fprintf(reportfd, " Crash secs ago: UNKNOWN\n");
 	}
-	
+
 	fprintf(reportfd, "\n");
 }
 
@@ -364,18 +365,18 @@ int corefile_vs_binary_mismatch(char *coredump)
 #ifndef _WIN32
 	time_t core, binary;
 	char fname[512];
-	
+
 	snprintf(fname, sizeof(fname), "%s/unrealircd", BINDIR);
-	
+
 	core = get_file_time(coredump);
 	binary = get_file_time(fname);
-	
+
 	if (!core || !binary)
 		return 0; /* don't know then */
-	
+
 	if (binary > core)
 		return 1; /* yup, mismatch ;/ */
-	
+
 	return 0; /* GOOD! */
 #else
 	return 0; /* guess we don't check this on Windows? Or will we check UnrealIRCd.exe... hmm.. yeah maybe good idea */
@@ -389,7 +390,7 @@ int attach_file(FILE *fdi, FILE *fdo)
 	size_t n, total = 0;
 
 	fprintf(fdo, "\n*** ATTACHMENT ****\n");
-	while((n = fread(binbuf, 1, sizeof(binbuf), fdi)) > 0)
+	while ((n = fread(binbuf, 1, sizeof(binbuf), fdi)) > 0)
 	{
 		b64_encode(binbuf, n, printbuf, sizeof(printbuf));
 		fprintf(fdo, "%s\n", printbuf);
@@ -468,14 +469,14 @@ int attach_coredump(FILE *fdo, char *coredump)
 	/* On *NIX we create a .tar.bz2 / .tar.gz (may take a couple of seconds) */
 	printf("Please wait...\n");
 	snprintf(fname, sizeof(fname), "tar c %s/unrealircd %s %s %s 2>/dev/null|(bzip2 || gzip) 2>/dev/null",
-		BINDIR, coredump, MODULESDIR, libcname);
+	         BINDIR, coredump, MODULESDIR, libcname);
 
 	fdi = popen(fname, "r");
 #else
 	/* On Windows we attach de .mdmp, the small minidump file */
 	strlcpy(fname, coredump, sizeof(fname));
 	if (strlen(fname) > 5)
-		fname[strlen(fname)-5] = '\0'; /* cut off the '.core' part */
+		fname[strlen(fname) - 5] = '\0'; /* cut off the '.core' part */
 	strlcat(fname, ".mdmp", sizeof(fname)); /* and add '.mdmp' */
 	fprintf(fdo, "Windows MINIDUMP: %s\n", fname);
 	fdi = fopen(fname, "rb");
@@ -502,15 +503,15 @@ char *generate_crash_report(char *coredump, int *thirdpartymods)
 
 	if (coredump == NULL)
 		coredump = find_best_coredump();
-	
+
 	if (coredump == NULL)
 		return NULL; /* nothing available */
 
 	if (corefile_vs_binary_mismatch(coredump))
 		return NULL;
-	
+
 	snprintf(reportfname, sizeof(reportfname), "%s/crash.report.%s.%ld.txt",
-		TMPDIR, unreal_getfilename(coredump), (long)time(NULL));
+	         TMPDIR, unreal_getfilename(coredump), (long)time(NULL));
 
 	reportfd = fopen(reportfname, "w");
 	if (!reportfd)
@@ -521,7 +522,7 @@ char *generate_crash_report(char *coredump, int *thirdpartymods)
 
 	crash_report_header(reportfd, coredump);
 	crash_report_fix_libs(coredump, thirdpartymods);
-	
+
 	crash_report_backtrace(reportfd, coredump);
 	crash_report_asan_log(reportfd, coredump);
 	attach_coredump(reportfd, coredump);
@@ -531,9 +532,9 @@ char *generate_crash_report(char *coredump, int *thirdpartymods)
 	return reportfname;
 }
 
-#define REPORT_NEVER	-1
-#define REPORT_ASK		0
-#define REPORT_AUTO		1
+#define REPORT_NEVER -1
+#define REPORT_ASK   0
+#define REPORT_AUTO  1
 
 #define CRASH_REPORT_HOST "crash.unrealircd.org"
 
@@ -550,20 +551,20 @@ int crashreport_send(char *fname)
 	BIO *socket = NULL;
 	int xfr = 0;
 	char *errstr = NULL;
-	
+
 	filesize = get_file_size(fname);
 	if (filesize < 0)
 		return 0;
-	
+
 	for (n = 0; n < sizeof(delimiter); n++)
-		delimiter[n] = getrandom8()%26 + 'a';
-	delimiter[sizeof(delimiter)-1] = '\0';
-	
+		delimiter[n] = getrandom8() % 26 + 'a';
+	delimiter[sizeof(delimiter) - 1] = '\0';
+
 	snprintf(header, sizeof(header), "--%s\r\n"
-	                           "Content-Disposition: form-data; name=\"upload\"; filename=\"crash.txt\"\r\n"
-	                           "Content-Type: text/plain\r\n"
-	                           "\r\n",
-	                           delimiter);
+	                                 "Content-Disposition: form-data; name=\"upload\"; filename=\"crash.txt\"\r\n"
+	                                 "Content-Type: text/plain\r\n"
+	                                 "\r\n",
+	         delimiter);
 	snprintf(footer, sizeof(footer), "\r\n--%s--\r\n", delimiter);
 
 	ctx_client = https_new_ctx();
@@ -575,7 +576,7 @@ int crashreport_send(char *fname)
 
 	/* We can safely require TLSv1.3+ on unrealircd.org infra */
 #if defined(HAS_SSL_CTX_SET_MIN_PROTO_VERSION) && defined(TLS1_3_VERSION)
-        SSL_CTX_set_min_proto_version(ctx_client, TLS1_3_VERSION);
+	SSL_CTX_set_min_proto_version(ctx_client, TLS1_3_VERSION);
 #endif
 
 	socket = BIO_new_ssl_connect(ctx_client);
@@ -584,7 +585,7 @@ int crashreport_send(char *fname)
 		printf("ERROR: TLS initalization failure (II)\n");
 		return 0;
 	}
-	
+
 	BIO_get_ssl(socket, &ssl);
 	if (!ssl)
 	{
@@ -601,7 +602,7 @@ int crashreport_send(char *fname)
 		printf("ERROR: Could not connect to %s\n", CRASH_REPORT_HOST);
 		return 0;
 	}
-	
+
 	if (BIO_do_handshake(socket) != 1)
 	{
 		printf("ERROR: Could not connect to %s (TLS handshake failed)\n", CRASH_REPORT_HOST);
@@ -616,21 +617,21 @@ int crashreport_send(char *fname)
 	}
 
 	snprintf(buf, sizeof(buf), "POST /crash.php HTTP/1.1\r\n"
-	                    "User-Agent: UnrealIRCd %s\r\n"
-	                    "Host: %s\r\n"
-	                    "Connection: close\r\n"
-	                    "Accept: */*\r\n"
-	                    "Content-Length: %d\r\n"
-	                    "Expect: 100-continue\r\n"
-	                    "Content-Type: multipart/form-data; boundary=%s\r\n"
-	                    "\r\n",
-	                    VERSIONONLY,
-	                    CRASH_REPORT_HOST,
-	                    (int)(filesize+strlen(header)+strlen(footer)),
-	                    delimiter);
-	
+	                           "User-Agent: UnrealIRCd %s\r\n"
+	                           "Host: %s\r\n"
+	                           "Connection: close\r\n"
+	                           "Accept: */*\r\n"
+	                           "Content-Length: %d\r\n"
+	                           "Expect: 100-continue\r\n"
+	                           "Content-Type: multipart/form-data; boundary=%s\r\n"
+	                           "\r\n",
+	         VERSIONONLY,
+	         CRASH_REPORT_HOST,
+	         (int)(filesize + strlen(header) + strlen(footer)),
+	         delimiter);
+
 	BIO_puts(socket, buf);
-	
+
 	memset(buf, 0, sizeof(buf));
 	n = BIO_read(socket, buf, 255);
 	if ((n < 0) || strncmp(buf, "HTTP/1.1 100", 12))
@@ -645,7 +646,7 @@ int crashreport_send(char *fname)
 		}
 		return 0;
 	}
-	
+
 	fd = fopen(fname, "rb");
 	if (!fd)
 		return 0;
@@ -670,7 +671,9 @@ int crashreport_send(char *fname)
 
 	BIO_puts(socket, footer);
 
-	do { } while(BIO_should_retry(socket)); /* make sure we are really finished (you never know with TLS) */
+	do
+	{
+	} while (BIO_should_retry(socket)); /* make sure we are really finished (you never know with TLS) */
 
 	/* Attempt to shut down gracefully (which is a two step process) */
 	if (SSL_shutdown(ssl) == 0)
@@ -680,18 +683,18 @@ int crashreport_send(char *fname)
 	printf("\n");
 #endif
 	BIO_free_all(socket);
-	
+
 	SSL_CTX_free(ctx_client);
-	
+
 	return 1;
 }
 
 void mark_coredump_as_read(char *coredump)
 {
 	char buf[512];
-	
+
 	snprintf(buf, sizeof(buf), "%s.%ld.done", coredump, (long)time(NULL));
-	
+
 	(void)rename(coredump, buf);
 }
 
@@ -699,11 +702,12 @@ static int report_pref = REPORT_ASK;
 
 void report_crash_not_sent(char *fname)
 {
-		printf("Crash report will not be sent to UnrealIRCd Team.\n"
-		       "\n"
-		       "Feel free to read the report at %s and delete it.\n"
-		       "Or, if you change your mind, you can submit it anyway at https://bugs.unrealircd.org/\n"
-		       " (if you do, please set the option 'View Status' at the end of the bug report page to 'private'!!)\n", fname);
+	printf("Crash report will not be sent to UnrealIRCd Team.\n"
+	       "\n"
+	       "Feel free to read the report at %s and delete it.\n"
+	       "Or, if you change your mind, you can submit it anyway at https://bugs.unrealircd.org/\n"
+	       " (if you do, please set the option 'View Status' at the end of the bug report page to 'private'!!)\n",
+	       fname);
 }
 
 /** This checks if there are indications that 3rd party modules are
@@ -748,11 +752,11 @@ void report_crash(void)
 		return; /* no crashes */
 
 	crashed_secs_ago = time(NULL) - get_file_time(coredump);
-	if (crashed_secs_ago > 86400*7)
+	if (crashed_secs_ago > 86400 * 7)
 		return; /* stop bothering about it after a while */
 
 	fname = generate_crash_report(coredump, &thirdpartymods);
-	
+
 	if (!fname)
 		return;
 
@@ -764,25 +768,24 @@ void report_crash(void)
 
 	if (thirdpartymods)
 	{
-	    printf("** IMPORTANT **\n"
-               "Your UnrealIRCd crashed and you have 3rd party modules loaded (modules created\n"
-               "by someone other than the UnrealIRCd team). If you installed new 3rd party\n"
-               "module(s) in the past few weeks we suggest to unload these modules and see if\n"
-               "the crash issue dissapears. If so, that module is probably to blame.\n"
-               "If you keep crashing without any 3rd party modules loaded then please do report\n"
-               "it to the UnrealIRCd team.\n"
-               "The reason we ask you to do this is because MORE THAN 95%% OF ALL CRASH ISSUES\n"
-               "ARE CAUSED BY 3RD PARTY MODULES and not by an UnrealIRCd bug.\n"
-               "\n");
+		printf("** IMPORTANT **\n"
+		       "Your UnrealIRCd crashed and you have 3rd party modules loaded (modules created\n"
+		       "by someone other than the UnrealIRCd team). If you installed new 3rd party\n"
+		       "module(s) in the past few weeks we suggest to unload these modules and see if\n"
+		       "the crash issue dissapears. If so, that module is probably to blame.\n"
+		       "If you keep crashing without any 3rd party modules loaded then please do report\n"
+		       "it to the UnrealIRCd team.\n"
+		       "The reason we ask you to do this is because MORE THAN 95%% OF ALL CRASH ISSUES\n"
+		       "ARE CAUSED BY 3RD PARTY MODULES and not by an UnrealIRCd bug.\n"
+		       "\n");
 	}
-		
+
 	if (report_pref == REPORT_NEVER)
 	{
 		report_crash_not_sent(fname);
 		mark_coredump_as_read(coredump);
 		return;
-	} else
-	if (report_pref == REPORT_ASK)
+	} else if (report_pref == REPORT_ASK)
 	{
 		char answerbuf[64], *answer;
 		printf("Shall I send a crash report to the UnrealIRCd developers?\n");
@@ -810,7 +813,7 @@ void report_crash(void)
 			}
 
 			printf("Invalid response. Please enter either Y or N\n\n");
-		} while(1);
+		} while (1);
 	} else if (report_pref != REPORT_AUTO)
 	{
 		printf("Huh. report_pref setting is weird. Aborting.\n");
@@ -825,7 +828,7 @@ void report_crash(void)
 		       "give you feedback about the crash? This is completely optional, just press ENTER to skip.\n\n"
 		       "E-mail address (optional): ");
 		line = fgets(buf, sizeof(buf), stdin);
-		
+
 		if (line && *line && (*line != '\n'))
 		{
 			FILE *fd = fopen(fname, "a");
@@ -840,7 +843,7 @@ void report_crash(void)
 		       "Again, this is completely optional. Just press ENTER to skip.\n\n"
 		       "Additional information (optional): ");
 		line = fgets(buf, sizeof(buf), stdin);
-		
+
 		if (line && *line && (*line != '\n'))
 		{
 			FILE *fd = fopen(fname, "a");
@@ -860,27 +863,27 @@ void report_crash(void)
 #else
 	/* Windows */
 	if (MessageBox(NULL, "UnrealIRCd crashed. May I send a report about this to the UnrealIRCd developers? This helps us a lot.",
-	                     "UnrealIRCd crash",
-	                     MB_YESNO|MB_ICONQUESTION) == IDYES)
+	               "UnrealIRCd crash",
+	               MB_YESNO | MB_ICONQUESTION) == IDYES)
 	{
 		/* Yay */
-		
+
 		if (crashreport_send(fname))
 		{
 			MessageBox(NULL, "The crash report has been sent to the UnrealIRCd developers. "
 			                 "If you have any additional information (like details surrounding "
 			                 "the crash) then please e-mail syzop@unrealircd.org, such "
 			                 "information is most welcome. Thanks!",
-			           "UnrealIRCd crash report sent", MB_ICONINFORMATION|MB_OK);
+			           "UnrealIRCd crash report sent", MB_ICONINFORMATION | MB_OK);
 		}
 	}
 #endif
 	mark_coredump_as_read(coredump);
-	
+
 #ifdef _WIN32
 	if (MessageBox(NULL, "Start UnrealIRCd again?",
-	                     "UnrealIRCd crash",
-	                     MB_YESNO|MB_ICONQUESTION) == IDYES)
+	               "UnrealIRCd crash",
+	               MB_YESNO | MB_ICONQUESTION) == IDYES)
 	{
 		StartUnrealAgain();
 	}

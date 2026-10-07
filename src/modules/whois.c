@@ -22,19 +22,18 @@
 #include "unrealircd.h"
 
 /* Structs */
-ModuleHeader MOD_HEADER
-  = {
-	"whois",	/* Name of module */
-	"5.0", /* Version */
-	"command /whois", /* Short description of module */
-	"UnrealIRCd Team",
-	"unrealircd-6",
-    };
+ModuleHeader MOD_HEADER = {
+    "whois", /* Name of module */
+    "5.0", /* Version */
+    "command /whois", /* Short description of module */
+    "UnrealIRCd Team",
+    "unrealircd-6",
+};
 
 typedef enum WhoisConfigUser {
-	WHOIS_CONFIG_USER_EVERYONE	= 1,
-	WHOIS_CONFIG_USER_SELF		= 2,
-	WHOIS_CONFIG_USER_OPER		= 3,
+	WHOIS_CONFIG_USER_EVERYONE = 1,
+	WHOIS_CONFIG_USER_SELF = 2,
+	WHOIS_CONFIG_USER_OPER = 3,
 } WhoisConfigUser;
 #define HIGHEST_WHOIS_CONFIG_USER_VALUE 3 /* adjust this if you edit the enum above !! */
 
@@ -48,7 +47,7 @@ typedef struct WhoisConfig WhoisConfig;
 struct WhoisConfig {
 	WhoisConfig *prev, *next;
 	char *name;
-	WhoisConfigDetails permissions[HIGHEST_WHOIS_CONFIG_USER_VALUE+1];
+	WhoisConfigDetails permissions[HIGHEST_WHOIS_CONFIG_USER_VALUE + 1];
 };
 
 /* Global variables */
@@ -256,7 +255,7 @@ static int whois_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *err
 		if (cep->value)
 		{
 			config_error("%s:%i: set::whois-details::%s item has a value, which is unexpected. Check your syntax!",
-				cep->file->filename, cep->line_number, cep->name);
+			             cep->file->filename, cep->line_number, cep->name);
 			errors++;
 			continue;
 		}
@@ -265,14 +264,13 @@ static int whois_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *err
 			if (!whois_config_user_strtovalue(cepp->name))
 			{
 				config_error("%s:%i: set::whois-details::%s contains unknown user category called '%s', must be one of: everyone, self, ircop",
-					cepp->file->filename, cepp->line_number, cep->name, cepp->name);
+				             cepp->file->filename, cepp->line_number, cep->name, cepp->name);
 				errors++;
 				continue;
-			} else
-			if (!cepp->value || !whois_config_details_strtovalue(cepp->value))
+			} else if (!cepp->value || !whois_config_details_strtovalue(cepp->value))
 			{
 				config_error("%s:%i: set::whois-details::%s contains unknown details type '%s', must be one of: full, limited, none",
-					cepp->file->filename, cepp->line_number, cep->name, cepp->name);
+				             cepp->file->filename, cepp->line_number, cep->name, cepp->name);
 				errors++;
 				continue;
 			} /* else it is good */
@@ -348,7 +346,7 @@ WhoisConfigDetails _whois_get_policy(Client *client, Client *target, const char 
  * account-level semantics.  See doc/specs/whois-batch.md. */
 static int whois_is_per_session_name(const char *name)
 {
-	static const char *names[] = { "realhost", "secure", "certfp", "geo", "asn", "idle", NULL };
+	static const char *names[] = {"realhost", "secure", "certfp", "geo", "asn", "idle", NULL};
 	int i;
 	if (!name)
 		return 0;
@@ -563,21 +561,21 @@ CMD_FUNC(cmd_whois)
 		if (whois_get_policy(client, target, "basic") > WHOIS_CONFIG_DETAILS_NONE)
 		{
 			add_nvplist_numeric(&list, -1000000, "basic", client, RPL_WHOISUSER, target->name,
-				target->user->username,
-				IsHidden(target) ? target->user->virthost : target->user->realhost,
-				target->info);
+			                    target->user->username,
+			                    IsHidden(target) ? target->user->virthost : target->user->realhost,
+			                    target->info);
 		}
 
 		if (whois_get_policy(client, target, "modes") > WHOIS_CONFIG_DETAILS_NONE)
 		{
 			add_nvplist_numeric(&list, -100000, "modes", client, RPL_WHOISMODES, target->name,
-				get_usermode_string(target), target->user->snomask ? target->user->snomask : "");
+			                    get_usermode_string(target), target->user->snomask ? target->user->snomask : "");
 		}
 		if (whois_get_policy(client, target, "realhost") > WHOIS_CONFIG_DETAILS_NONE)
 		{
 			add_nvplist_numeric(&list, -90000, "realhost", client, RPL_WHOISHOST, target->name,
-				(MyConnect(target) && strcmp(target->ident, "unknown")) ? target->ident : "*",
-				target->user->realhost, target->ip ? target->ip : "");
+			                    (MyConnect(target) && strcmp(target->ident, "unknown")) ? target->ident : "*",
+			                    target->user->realhost, target->ip ? target->ip : "");
 		}
 
 		if (IsRegNick(target) && (whois_get_policy(client, target, "registered-nick") > WHOIS_CONFIG_DETAILS_NONE))
@@ -596,7 +594,7 @@ CMD_FUNC(cmd_whois)
 				Hook *h;
 				int ret = EX_ALLOW;
 				int operoverride = 0;
-				
+
 				channel = lp->channel;
 				showchannel = 0;
 
@@ -615,28 +613,27 @@ CMD_FUNC(cmd_whois)
 					if (n == EX_DENY)
 					{
 						ret = EX_DENY;
-					}
-					else if (n == EX_ALWAYS_DENY)
+					} else if (n == EX_ALWAYS_DENY)
 					{
 						ret = EX_ALWAYS_DENY;
 						break;
 					}
 				}
-				
+
 				if (ret == EX_DENY)
 					showchannel = 0;
-				
+
 				/* If the channel is normally hidden, but the user is an IRCOp,
 				 * and has the channel:see:whois privilege,
 				 * and set::whois-details for 'channels' has 'oper full',
 				 * then show it:
 				 */
-				if (!showchannel && (ValidatePermissionsForPath("channel:see:whois",client,NULL,channel,NULL)) && (policy == WHOIS_CONFIG_DETAILS_FULL))
+				if (!showchannel && (ValidatePermissionsForPath("channel:see:whois", client, NULL, channel, NULL)) && (policy == WHOIS_CONFIG_DETAILS_FULL))
 				{
 					showchannel = 1; /* OperOverride */
 					operoverride = 1;
 				}
-				
+
 				if ((ret == EX_ALWAYS_DENY) && (target != client))
 					continue; /* a module asked us to really not expose this channel, so we don't (except target==ourselves). */
 
@@ -650,7 +647,7 @@ CMD_FUNC(cmd_whois)
 				{
 					if (len + strlen(channel->name) > (size_t)BUFSIZE - 4 - mlen)
 					{
-						add_nvplist_numeric_fmt(&list, -70500-channel_whois_lines, "channels", client, RPL_WHOISCHANNELS,
+						add_nvplist_numeric_fmt(&list, -70500 - channel_whois_lines, "channels", client, RPL_WHOISCHANNELS,
 						                        "%s :%s", target->name, buf);
 						channel_whois_lines++;
 						*buf = '\0';
@@ -666,8 +663,7 @@ CMD_FUNC(cmd_whois)
 						{
 							/* '?' means it's a secret/private channel (too) */
 							*(buf + len++) = '?';
-						}
-						else
+						} else
 						{
 							/* public channel but hidden in WHOIS (umode +p, service bot, etc) */
 							*(buf + len++) = '!';
@@ -680,8 +676,7 @@ CMD_FUNC(cmd_whois)
 						char c = mode_to_prefix(*lp->member_modes);
 						if (c)
 							*(buf + len++) = c;
-					}
-					else
+					} else
 					{
 						/* NAMES reply with all rights included (multi-prefix / NAMESX) */
 						strcpy(buf + len, modes_to_prefix(lp->member_modes));
@@ -698,8 +693,8 @@ CMD_FUNC(cmd_whois)
 
 			if (buf[0] != '\0')
 			{
-				add_nvplist_numeric_fmt(&list, -70500-channel_whois_lines, "channels", client, RPL_WHOISCHANNELS,
-							"%s :%s", target->name, buf);
+				add_nvplist_numeric_fmt(&list, -70500 - channel_whois_lines, "channels", client, RPL_WHOISCHANNELS,
+				                        "%s :%s", target->name, buf);
 				channel_whois_lines++;
 			}
 		}
@@ -730,8 +725,7 @@ CMD_FUNC(cmd_whois)
 					add_nvplist_numeric_fmt(&list, -40000, "oper", client, RPL_WHOISOPERATOR,
 					                        "%s :is %s (%s) [%s]",
 					                        target->name, "an IRC Operator", operlogin, operclass);
-				} else
-				if (operlogin)
+				} else if (operlogin)
 				{
 					add_nvplist_numeric_fmt(&list, -40000, "oper", client, RPL_WHOISOPERATOR,
 					                        "%s :is %s (%s)",
@@ -739,10 +733,9 @@ CMD_FUNC(cmd_whois)
 				} else
 				{
 					add_nvplist_numeric(&list, -40000, "oper", client, RPL_WHOISOPERATOR,
-							    target->name, "an IRC Operator");
+					                    target->name, "an IRC Operator");
 				}
-			} else
-			if (policy == WHOIS_CONFIG_DETAILS_LIMITED)
+			} else if (policy == WHOIS_CONFIG_DETAILS_LIMITED)
 			{
 				add_nvplist_numeric(&list, -40000, "oper", client, RPL_WHOISOPERATOR,
 				                    target->name, "an IRC Operator");
@@ -756,8 +749,7 @@ CMD_FUNC(cmd_whois)
 			{
 				add_nvplist_numeric(&list, -30000, "secure", client, RPL_WHOISSECURE,
 				                    target->name, "is using a Secure Connection");
-			} else
-			if (policy == WHOIS_CONFIG_DETAILS_FULL)
+			} else if (policy == WHOIS_CONFIG_DETAILS_FULL)
 			{
 				const char *ciphers = tls_get_cipher(target);
 				if (ciphers)
@@ -765,9 +757,10 @@ CMD_FUNC(cmd_whois)
 					add_nvplist_numeric_fmt(&list, -30000, "secure", client, RPL_WHOISSECURE,
 					                        "%s :is using a Secure Connection [%s]",
 					                        target->name, ciphers);
-				} else {
+				} else
+				{
 					add_nvplist_numeric(&list, -30000, "secure", client, RPL_WHOISSECURE,
-							    target->name, "is using a Secure Connection");
+					                    target->name, "is using a Secure Connection");
 				}
 			}
 		}
@@ -802,23 +795,28 @@ CMD_FUNC(cmd_whois)
 			{
 				struct sg_node *n = safe_alloc(sizeof(struct sg_node));
 				strlcpy(n->name, known_label, sizeof(n->name));
-				if (!sg_head) sg_head = n;
-				else sg_tail->next = n;
+				if (!sg_head)
+					sg_head = n;
+				else
+					sg_tail->next = n;
 				sg_tail = n;
 				sg_count++;
 				for (s = securitygroups; s; s = s->next)
 				{
-					if (!strcmp(s->name, "known-users")) continue;
-					if (!user_allowed_by_security_group_account(target, s)) continue;
+					if (!strcmp(s->name, "known-users"))
+						continue;
+					if (!user_allowed_by_security_group_account(target, s))
+						continue;
 					n = safe_alloc(sizeof(struct sg_node));
 					strlcpy(n->name, s->name, sizeof(n->name));
-					if (!sg_head) sg_head = n;
-					else sg_tail->next = n;
+					if (!sg_head)
+						sg_head = n;
+					else
+						sg_tail->next = n;
 					sg_tail = n;
 					sg_count++;
 				}
-			}
-			else
+			} else
 			{
 				int security_groups_whois_lines = 0;
 
@@ -833,10 +831,10 @@ CMD_FUNC(cmd_whois)
 				{
 					if (len + strlen(s->name) > (size_t)BUFSIZE - 4 - mlen)
 					{
-						buf[len-1] = '\0';
-						add_nvplist_numeric_fmt(&list, -15000-security_groups_whois_lines, "security-groups",
+						buf[len - 1] = '\0';
+						add_nvplist_numeric_fmt(&list, -15000 - security_groups_whois_lines, "security-groups",
 						                        target, RPL_WHOISSPECIAL,
-									"%s :is in security-groups: %s", target->name, buf);
+						                        "%s :is in security-groups: %s", target->name, buf);
 						security_groups_whois_lines++;
 						*buf = '\0';
 						len = 0;
@@ -844,7 +842,7 @@ CMD_FUNC(cmd_whois)
 					if (strcmp(s->name, "known-users") && user_allowed_by_security_group_account(target, s))
 					{
 						strcpy(buf + len, s->name);
-						len += strlen(buf+len);
+						len += strlen(buf + len);
 						strcpy(buf + len, ",");
 						len++;
 					}
@@ -852,10 +850,10 @@ CMD_FUNC(cmd_whois)
 
 				if (*buf)
 				{
-					buf[len-1] = '\0';
-					add_nvplist_numeric_fmt(&list, -15000-security_groups_whois_lines, "security-groups",
+					buf[len - 1] = '\0';
+					add_nvplist_numeric_fmt(&list, -15000 - security_groups_whois_lines, "security-groups",
 					                        client, RPL_WHOISSPECIAL,
-								"%s :is in security-groups: %s", target->name, buf);
+					                        "%s :is in security-groups: %s", target->name, buf);
 					security_groups_whois_lines++;
 				}
 			}
@@ -875,7 +873,7 @@ CMD_FUNC(cmd_whois)
 			{
 				if (hideoper && !IsOper(client) && s->setby && !strcmp(s->setby, "oper"))
 					continue; /* hide oper-based swhois entries */
-				add_nvplist_numeric(&list, 100000+swhois_lines, "swhois", client, RPL_WHOISSPECIAL,
+				add_nvplist_numeric(&list, 100000 + swhois_lines, "swhois", client, RPL_WHOISSPECIAL,
 				                    target->name, s->line);
 				swhois_lines++;
 			}
@@ -924,7 +922,7 @@ CMD_FUNC(cmd_whois)
 			int use_batch = MyUser(client) &&
 			                HasCapability(client, "batch") &&
 			                HasCapability(client, "obby.world/whois");
-			char parent_batch[BATCHLEN+1];
+			char parent_batch[BATCHLEN + 1];
 			Client *sessions[16];
 			int num_sessions = 0;
 			int per_session_emit = 0;
@@ -942,7 +940,7 @@ CMD_FUNC(cmd_whois)
 				 * privileged queriers) or a privacy-preserving
 				 * session-count summary (for everyone else). */
 				num_sessions = whois_collect_session_clients(target, sessions,
-				        sizeof(sessions) / sizeof(sessions[0]));
+				                                             sizeof(sessions) / sizeof(sessions[0]));
 				if (num_sessions >= 2 && (target == client || IsOper(client)))
 					per_session_emit = 1;
 			}
@@ -956,8 +954,7 @@ CMD_FUNC(cmd_whois)
 					MessageTag *mt = whois_batch_mtag(parent_batch);
 					sendto_one(client, mt, "%s", li->value);
 					free_message_tags(mt);
-				}
-				else
+				} else
 				{
 					sendto_one(client, NULL, "%s", li->value);
 				}
@@ -966,12 +963,13 @@ CMD_FUNC(cmd_whois)
 			if (per_session_emit)
 			{
 				int i;
-				int total = (num_sessions > (int)(sizeof(sessions)/sizeof(sessions[0])))
-				            ? (int)(sizeof(sessions)/sizeof(sessions[0])) : num_sessions;
+				int total = (num_sessions > (int)(sizeof(sessions) / sizeof(sessions[0])))
+				                ? (int)(sizeof(sessions) / sizeof(sessions[0]))
+				                : num_sessions;
 				for (i = 0; i < total; i++)
 				{
 					Client *sess = sessions[i];
-					char sub_batch[BATCHLEN+1];
+					char sub_batch[BATCHLEN + 1];
 					MessageTag *mt_outer;
 					MessageTag *mt_since = NULL;
 
@@ -1000,8 +998,7 @@ CMD_FUNC(cmd_whois)
 					sendto_one(client, mt_outer, ":%s BATCH -%s", me.name, sub_batch);
 					free_message_tags(mt_outer);
 				}
-			}
-			else if (use_batch && num_sessions >= 2)
+			} else if (use_batch && num_sessions >= 2)
 			{
 				/* Querier doesn't get to see per-session detail
 				 * (not target, not oper), but the account does
@@ -1028,7 +1025,7 @@ CMD_FUNC(cmd_whois)
 			 * entry. */
 			if (use_batch && sg_head)
 			{
-				char sg_batch[BATCHLEN+1];
+				char sg_batch[BATCHLEN + 1];
 				MessageTag *mt_outer;
 				MessageTag *mt_inner;
 				struct sg_node *n;

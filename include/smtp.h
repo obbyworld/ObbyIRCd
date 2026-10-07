@@ -27,7 +27,7 @@
  * 134 is the next available hook number after the core 132 hooks plus the
  * existing custom HOOKTYPE_ACCOUNT_REGISTER (133).
  */
-#define HOOKTYPE_SEND_EMAIL  134
+#define HOOKTYPE_SEND_EMAIL 134
 
 /**
  * Outcome of an asynchronous SMTP delivery attempt.

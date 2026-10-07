@@ -33,19 +33,19 @@ struct
 } cfg;
 
 ModuleHeader MOD_HEADER = {
-	"filehost",
-	"1.0",
-	"Link previews via message tags and IRCv3 draft/FILEHOST support",
-	"ObbyIRCd Team",
-	"unrealircd-6",
+    "filehost",
+    "1.0",
+    "Link previews via message tags and IRCv3 draft/FILEHOST support",
+    "ObbyIRCd Team",
+    "unrealircd-6",
 };
 
 /* Maximum sizes for safety */
-#define MAX_DOWNLOAD_SIZE 1048576  /* 1MB */
-#define MAX_TITLE_LENGTH 500
+#define MAX_DOWNLOAD_SIZE  1048576  /* 1MB */
+#define MAX_TITLE_LENGTH   500
 #define MAX_SNIPPET_LENGTH 500
-#define MAX_META_LENGTH 2048
-#define MAX_URL_LENGTH 2048
+#define MAX_META_LENGTH    2048
+#define MAX_URL_LENGTH     2048
 
 /* Structure to hold context for async callback */
 typedef struct {
@@ -229,9 +229,9 @@ void link_preview_download_complete(OutgoingWebRequest *request, OutgoingWebResp
 	if (response->errorbuf || !response->memory)
 	{
 		unreal_log(ULOG_DEBUG, "filehost", "DOWNLOAD_ERROR", NULL,
-				   "Error downloading $url: $error",
-				   log_data_string("url", context->url),
-				   log_data_string("error", response->errorbuf ? response->errorbuf : "No data"));
+		           "Error downloading $url: $error",
+		           log_data_string("url", context->url),
+		           log_data_string("error", response->errorbuf ? response->errorbuf : "No data"));
 		goto cleanup;
 	}
 
@@ -239,9 +239,9 @@ void link_preview_download_complete(OutgoingWebRequest *request, OutgoingWebResp
 	if (response->memory_len > MAX_DOWNLOAD_SIZE)
 	{
 		unreal_log(ULOG_DEBUG, "filehost", "DOWNLOAD_TOO_LARGE", NULL,
-				   "Download from $url exceeded size limit ($size bytes)",
-				   log_data_string("url", context->url),
-				   log_data_integer("size", response->memory_len));
+		           "Download from $url exceeded size limit ($size bytes)",
+		           log_data_string("url", context->url),
+		           log_data_integer("size", response->memory_len));
 		goto cleanup;
 	}
 
@@ -286,8 +286,7 @@ void link_preview_download_complete(OutgoingWebRequest *request, OutgoingWebResp
 
 			url_start_async(upload_req);
 			safe_free(json_payload);
-		}
-		else
+		} else
 		{
 			/* No image or no filehost configured, send preview directly */
 			send_link_preview(context->channel, context->msgid, title, snippet, meta_image && *meta_image ? meta_image : NULL);
@@ -344,8 +343,7 @@ void image_upload_complete(OutgoingWebRequest *request, OutgoingWebResponse *res
 
 		/* Send preview with local image URL */
 		send_link_preview(context->channel, context->msgid, context->title, context->snippet, saved_url);
-	}
-	else
+	} else
 	{
 		/* Send preview without image */
 		send_link_preview(context->channel, context->msgid, context->title, context->snippet, NULL);
@@ -368,7 +366,7 @@ char *extract_url_from_message(const char *text)
 {
 	pcre2_code *re;
 	pcre2_match_data *match_data;
-	PCRE2_SPTR pattern = (PCRE2_SPTR)"https?://[^\\s<>\"]+";
+	PCRE2_SPTR pattern = (PCRE2_SPTR) "https?://[^\\s<>\"]+";
 	PCRE2_SPTR subject = (PCRE2_SPTR)text;
 	int errornumber;
 	PCRE2_SIZE erroroffset;
@@ -411,12 +409,15 @@ char *extract_url_from_message(const char *text)
 			}
 			if (c == ')' || c == ']' || c == '}')
 			{
-				char open = (c == ')') ? '(' : (c == ']') ? '[' : '{';
+				char open = (c == ')') ? '(' : (c == ']') ? '['
+				                                          : '{';
 				int balance = 0;
 				for (size_t i = 0; i < url_len - 1; i++)
 				{
-					if (result[i] == open) balance++;
-					else if (result[i] == c) balance--;
+					if (result[i] == open)
+						balance++;
+					else if (result[i] == c)
+						balance--;
 				}
 				if (balance > 0)
 					break; /* matched, keep the closer */
@@ -440,7 +441,7 @@ char *extract_title_from_html(const char *html)
 {
 	pcre2_code *re;
 	pcre2_match_data *match_data;
-	PCRE2_SPTR pattern = (PCRE2_SPTR)"<title[^>]*>([^<]+)</title>";
+	PCRE2_SPTR pattern = (PCRE2_SPTR) "<title[^>]*>([^<]+)</title>";
 	PCRE2_SPTR subject = (PCRE2_SPTR)html;
 	int errornumber;
 	PCRE2_SIZE erroroffset;
@@ -471,7 +472,8 @@ char *extract_title_from_html(const char *html)
 
 		/* Trim whitespace */
 		char *p = result;
-		while (*p && isspace(*p)) p++;
+		while (*p && isspace(*p))
+			p++;
 		if (p != result)
 			memmove(result, p, strlen(p) + 1);
 
@@ -501,12 +503,12 @@ char *extract_snippet_from_html(const char *html)
 	char *result = NULL;
 
 	/* Try meta description first */
-	pattern = (PCRE2_SPTR)"<meta[^>]+name=[\"']description[\"'][^>]+content=[\"']([^\"']+)[\"']";
+	pattern = (PCRE2_SPTR) "<meta[^>]+name=[\"']description[\"'][^>]+content=[\"']([^\"']+)[\"']";
 	re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, PCRE2_CASELESS, &errornumber, &erroroffset, NULL);
 	if (!re)
 	{
 		/* Try alternative format */
-		pattern = (PCRE2_SPTR)"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+name=[\"']description[\"']";
+		pattern = (PCRE2_SPTR) "<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+name=[\"']description[\"']";
 		re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, PCRE2_CASELESS, &errornumber, &erroroffset, NULL);
 	}
 
@@ -530,7 +532,8 @@ char *extract_snippet_from_html(const char *html)
 
 			/* Trim whitespace */
 			char *p = result;
-			while (*p && isspace(*p)) p++;
+			while (*p && isspace(*p))
+				p++;
 			if (p != result)
 				memmove(result, p, strlen(p) + 1);
 
@@ -546,7 +549,7 @@ char *extract_snippet_from_html(const char *html)
 	/* If no meta description, try Open Graph description */
 	if (!result)
 	{
-		pattern = (PCRE2_SPTR)"<meta[^>]+property=[\"']og:description[\"'][^>]+content=[\"']([^\"']+)[\"']";
+		pattern = (PCRE2_SPTR) "<meta[^>]+property=[\"']og:description[\"'][^>]+content=[\"']([^\"']+)[\"']";
 		re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, PCRE2_CASELESS, &errornumber, &erroroffset, NULL);
 
 		if (re)
@@ -568,7 +571,8 @@ char *extract_snippet_from_html(const char *html)
 
 				/* Trim whitespace */
 				char *p = result;
-				while (*p && isspace(*p)) p++;
+				while (*p && isspace(*p))
+					p++;
 				if (p != result)
 					memmove(result, p, strlen(p) + 1);
 
@@ -600,12 +604,12 @@ char *extract_meta_image_from_html(const char *html)
 	char *result = NULL;
 
 	/* Try Open Graph image first (og:image) */
-	pattern = (PCRE2_SPTR)"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']";
+	pattern = (PCRE2_SPTR) "<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']";
 	re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, PCRE2_CASELESS, &errornumber, &erroroffset, NULL);
 	if (!re)
 	{
 		/* Try alternative format */
-		pattern = (PCRE2_SPTR)"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']";
+		pattern = (PCRE2_SPTR) "<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']";
 		re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, PCRE2_CASELESS, &errornumber, &erroroffset, NULL);
 	}
 
@@ -629,7 +633,8 @@ char *extract_meta_image_from_html(const char *html)
 
 			/* Trim whitespace */
 			char *p = result;
-			while (*p && isspace(*p)) p++;
+			while (*p && isspace(*p))
+				p++;
 			if (p != result)
 				memmove(result, p, strlen(p) + 1);
 
@@ -645,7 +650,7 @@ char *extract_meta_image_from_html(const char *html)
 	/* If no og:image, try Twitter Card image (twitter:image or twitter:image:src) */
 	if (!result)
 	{
-		pattern = (PCRE2_SPTR)"<meta[^>]+name=[\"']twitter:image(:src)?[\"'][^>]+content=[\"']([^\"']+)[\"']";
+		pattern = (PCRE2_SPTR) "<meta[^>]+name=[\"']twitter:image(:src)?[\"'][^>]+content=[\"']([^\"']+)[\"']";
 		re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, PCRE2_CASELESS, &errornumber, &erroroffset, NULL);
 
 		if (re)
@@ -671,7 +676,8 @@ char *extract_meta_image_from_html(const char *html)
 
 				/* Trim whitespace */
 				char *p = result;
-				while (*p && isspace(*p)) p++;
+				while (*p && isspace(*p))
+					p++;
 				if (p != result)
 					memmove(result, p, strlen(p) + 1);
 
@@ -874,7 +880,6 @@ int filehost_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 
 		if (!strcmp(cep->name, "external"))
 			addmultiline(&cfg.external, cep->value);
-
 	}
 
 	for (MultiLine *m = cfg.hosts; m; m = m->next)
