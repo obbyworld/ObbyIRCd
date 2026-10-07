@@ -2710,7 +2710,6 @@ static void pb_mtag_forward(Client *sender, MessageTag *recv_mtags,
 	static const char *names[] = {
 		"+draft/bot-cmd", "+draft/bot-cmds-query",
 		"+draft/bot-cmds", "+draft/bot-cmds-changed",
-		"+draft/bot-tools",
 		"+draft/invoked-by",
 		"batch",
 		NULL
