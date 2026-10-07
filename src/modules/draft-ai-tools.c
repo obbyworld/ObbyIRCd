@@ -51,7 +51,7 @@ static int ai_tools_mtag_is_ok(Client *client, const char *name, const char *val
 		return 0;
 	for (p = value; *p; p++)
 	{
-		if (!isalnum(*p) && *p != '+' && *p != '/' && *p != '=')
+		if (!isalnum((unsigned char)*p) && *p != '+' && *p != '/' && *p != '=')
 			return 0;
 	}
 	return 1;
