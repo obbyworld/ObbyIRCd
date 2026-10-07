@@ -5399,7 +5399,7 @@ static int b64url_encode(const unsigned char *in, size_t in_len,
 /* ----- minimal CBOR decoder (RFC 8949 subset) ----- */
 
 typedef struct {
-	int major;	           /* 0..7 */
+	int major;            /* 0..7 */
 	uint64_t arg;                /* uint value, length, or count */
 	const unsigned char *bytes;         /* for major 2/3: data start */
 	size_t bytes_len;                   /* for major 2/3: data length */
