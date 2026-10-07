@@ -263,7 +263,9 @@ void _join_channel(Channel *channel, Client *client, MessageTag *recv_mtags, con
 			new_message_special(&me, recv_mtags, &mtags_mode, ":%s MODE %s %s %s", me.name, channel->name, modebuf, parabuf);
 			sendto_server(NULL, 0, 0, mtags_mode, ":%s MODE %s %s %s %lld",
 			    me.id, channel->name, modebuf, parabuf, (long long)channel->creationtime);
-			sendto_one(client, mtags_mode, ":%s MODE %s %s %s", me.name, channel->name, modebuf, parabuf);
+			/* Cap-holders get PROP from the named-modes hook below, so we send MODE only to the others. */
+			if (!HasCapability(client, "draft/named-modes"))
+				sendto_one(client, mtags_mode, ":%s MODE %s %s %s", me.name, channel->name, modebuf, parabuf);
 			RunHook(HOOKTYPE_LOCAL_CHANMODE, &me, channel, mtags_mode, modebuf, parabuf, 0, 0, &should_destroy);
 			free_message_tags(mtags_mode);
 		}

@@ -457,7 +457,6 @@ static void pb_workflow_remember_sid(PbWorkflow *w, const char *sid);
 static void pb_workflow_terminate(PbWorkflow *w);
 static void pb_workflow_free(PbWorkflow *w);
 static void pb_workflow_drop_for_bot(PbBot *bot);
-static int pb_mtag_bottools_is_ok(Client *c, const char *n, const char *v);
 static int pb_route_bottools_action(Client *invoker, Client *target_user,
                                     Channel *target_chan, const char *bot_tools_b64);
 EVENT(pb_workflow_gc);
@@ -591,9 +590,6 @@ MOD_INIT()
 		MessageTagHandlerAdd(modinfo->handle, &m);
 		m.is_ok = pb_mtag_botcmd_is_ok;
 		m.name = "+draft/bot-cmd-error";
-		MessageTagHandlerAdd(modinfo->handle, &m);
-		m.is_ok = pb_mtag_bottools_is_ok;
-		m.name = "+draft/bot-tools";
 		MessageTagHandlerAdd(modinfo->handle, &m);
 	}
 	/* Forward client-prefixed bot-cmd tags from recv_mtags into the
@@ -2429,22 +2425,6 @@ static void pb_send_botcmds_to(Client *client, PbBot *b)
  * draft/bot-tools workflow streaming
  * =================================================================== */
 
-static int pb_mtag_bottools_is_ok(Client *c, const char *n, const char *v)
-{
-	/* Same shape as pb_mtag_botcmd_is_ok: just sanity-check the base64
-	 * envelope. Actual JSON validation happens when we decode. */
-	if (!v || !*v) return 0;
-	int len = strlen(v);
-	if (len > 4094) return 0;
-	for (const char *p = v; *p; p++) {
-		if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
-		      (*p >= '0' && *p <= '9') ||
-		      *p == '+' || *p == '/' || *p == '='))
-			return 0;
-	}
-	return 1;
-}
-
 static PbWorkflow *pb_workflow_find(const char *wid)
 {
 	if (!wid || !*wid) return NULL;
@@ -2710,7 +2690,6 @@ static void pb_mtag_forward(Client *sender, MessageTag *recv_mtags,
 	static const char *names[] = {
 		"+draft/bot-cmd", "+draft/bot-cmds-query",
 		"+draft/bot-cmds", "+draft/bot-cmds-changed",
-		"+draft/bot-tools",
 		"+draft/invoked-by",
 		"batch",
 		NULL
