@@ -229,6 +229,9 @@ Windows is not a supported target at this time.
 - **UnrealIRCd bug tracker**: https://bugs.unrealircd.org
 - **IRC support** (upstream): [#unreal-support on irc.unrealircd.org](ircs://irc.unrealircd.org:6697/unreal-support)
 
+* [SECURITY.md](https://github.com/unrealircd/unrealircd/blob/unreal60_dev/SECURITY.md#security-policy) - How to report security issues
+* [LICENSE](https://github.com/unrealircd/unrealircd/blob/unreal60_dev/LICENSE) - LICENSE: GPLv2 or later
+* [Contributing](https://www.unrealircd.org/docs/Contributing) - How to help: report bugs, test, write or translate documentations, ..
 For ObbyIRCd-specific issues and contributions, open an issue or pull request in this repository.
 
 ---

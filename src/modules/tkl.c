@@ -150,6 +150,7 @@ struct TKLTypeTable
  * - update help.conf (HELPOP ELINE)
  * - more?
  */
+/* clang-format off */
 TKLTypeTable tkl_types[] = {
 	/* <config name> <letter> <TKL_xxx type>               <logging name> <tkl option?> <exempt option?> <ip address only?> <TKLID Prefix> */
 	{ "gline",                'G', TKL_KILL       | TKL_GLOBAL, "G-Line",               1, 1, 0, "G" },
@@ -172,6 +173,7 @@ TKLTypeTable tkl_types[] = {
 	{ "ban-version",          'v', TKL_BAN_VERSION,             "Ban Version",          0, 1, 0, NULL },
 	{ NULL,                   '\0', 0,                          NULL,                   0, 0, 0, NULL },
 };
+/* clang-format on */
 #define ALL_VALID_EXCEPTION_TYPES "kline, gline, zline, gzline, spamfilter, shun, qline, blacklist, connect-flood, handshake-data-flood, antirandom, antimixedutf8, ban-version"
 
 /* Global variables for this module */
@@ -2238,7 +2240,7 @@ void cmd_tkl_line(Client *client, int parc, const char *parv[], char *type)
 		"0",			/*6  expire_at */
 		NULL,			/*7  set_at */
 		"no reason",	/*8  reason */
-		NULL
+		NULL,
 	};
 	struct tm *t;
 
@@ -2589,7 +2591,7 @@ CMD_FUNC(cmd_eline)
 		"-",			/*7  set_at */
 		"-",			/*8  ban types */
 		"-",			/*9  reason */
-		NULL
+		NULL,
 	};
 	TKLTypeTable *t;
 
@@ -2738,7 +2740,7 @@ void spamfilter_del_by_id(Client *client, const char *id)
 		"",			/*  9 tkl reason */
 		"",			/* 10 match method */
 		"",			/* 11 regex */
-		NULL
+		NULL,
 	};
 
 	for (index = 0; index < TKLISTLEN; index++)
@@ -2810,7 +2812,7 @@ CMD_FUNC(cmd_spamfilter)
 		"",			/*  9 tkl reason */
 		"",			/* 10 match method */
 		"",			/* 11 regex */
-		NULL
+		NULL,
 	};
 	int targets = 0, action = 0;
 	char targetbuf[64], actionbuf[2];
@@ -5789,7 +5791,7 @@ static int take_action_ex(Client *client, BanAction *actions, const char *reason
 					NULL,
 					NULL,		/*6  expire_at */
 					NULL,		/*7  set_at */
-					NULL		/*8  reason */
+					NULL,		/*8  reason */
 				};
 
 				if (take_action_flags & TAKE_ACTION_SIMULATE_USER_ACTION)

@@ -233,6 +233,7 @@ int  smycmp(const char *s1, const char *s2)
 	return (res);
 }
 
+/* clang-format off */
 u_char tolowertab[] = {
 	0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa,
 	0xb, 0xc, 0xd, 0xe, 0xf, 0x10, 0x11, 0x12, 0x13, 0x14,
@@ -267,7 +268,9 @@ u_char tolowertab[] = {
 	0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9,
 	0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
+/* clang-format on */
 
+/* clang-format off */
 u_char touppertab[] = {
 	0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa,
 	0xb, 0xc, 0xd, 0xe, 0xf, 0x10, 0x11, 0x12, 0x13, 0x14,
@@ -302,7 +305,9 @@ u_char touppertab[] = {
 	0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9,
 	0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
+/* clang-format on */
 
+/* clang-format off */
 u_char char_atribs[] = {
 /* 0-7 */ CNTRL, CNTRL, CNTRL, CNTRL, CNTRL, CNTRL, CNTRL, CNTRL,
 /* 8-12 */ CNTRL, CNTRL | SPACE, CNTRL | SPACE, CNTRL | SPACE,
@@ -370,6 +375,18 @@ u_char char_atribs[] = {
 /* e0-ef */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 /* f0-ff */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+/* clang-format on */
+
+/* Set up global match state. Called once at startup. */
+void init_match(void)
+{
+	unreal_pcre2_match_ctx = pcre2_match_context_create(NULL);
+	if (unreal_pcre2_match_ctx)
+	{
+		pcre2_set_match_limit(unreal_pcre2_match_ctx, UNREAL_PCRE2_MATCH_LIMIT);
+		pcre2_set_depth_limit(unreal_pcre2_match_ctx, UNREAL_PCRE2_DEPTH_LIMIT);
+	}
+}
 
 /* Set up global match state. Called once at startup. */
 void init_match(void)

@@ -390,7 +390,8 @@ typedef enum ClientStatus {
 #define IsStartTLSHandshake(x)	((x)->status == CLIENT_STATUS_TLS_STARTTLS_HANDSHAKE)	/**< Currently doing a STARTTLS handshake */
 #define IsTLSAcceptHandshake(x)	((x)->status == CLIENT_STATUS_TLS_ACCEPT_HANDSHAKE)	/**< Currently doing a TLS handshake - incoming */
 #define IsTLSConnectHandshake(x)	((x)->status == CLIENT_STATUS_TLS_CONNECT_HANDSHAKE)	/**< Currently doing a TLS handshake - outgoing */
-#define IsTLSHandshake(x) (IsTLSAcceptHandshake(x) || IsTLSConnectHandshake(x) | IsStartTLSHandshake(x))	/**< Currently doing a TLS handshake (incoming/outgoing/STARTTLS) */
+/** Currently doing a TLS handshake (incoming/outgoing/STARTTLS) */
+#define IsTLSHandshake(x) (IsTLSAcceptHandshake(x) || IsTLSConnectHandshake(x) | IsStartTLSHandshake(x))
 
 #define SetStartTLSHandshake(x)	((x)->status = CLIENT_STATUS_TLS_STARTTLS_HANDSHAKE)
 #define SetTLSAcceptHandshake(x)	((x)->status = CLIENT_STATUS_TLS_ACCEPT_HANDSHAKE)
@@ -543,6 +544,7 @@ typedef enum ClientStatus {
 #define IsIdentLookupSent(x)		((x)->flags & CLIENT_FLAG_IDENTLOOKUPSENT)
 #define IsAsyncRPC(x)			((x)->flags & CLIENT_FLAG_ASYNC_RPC)
 #define IsIPV6(x)			((x)->flags & CLIENT_FLAG_IPV6)
+/* clang-format off */
 #define SetIdentLookup(x)		do { (x)->flags |= CLIENT_FLAG_IDENTLOOKUP; } while(0)
 #define SetClosing(x)			do { (x)->flags |= CLIENT_FLAG_CLOSING; } while(0)
 #define SetDCCBlock(x)			do { (x)->flags |= CLIENT_FLAG_DCCBLOCK; } while(0)
@@ -608,6 +610,7 @@ typedef enum ClientStatus {
 #define ClearIdentLookupSent(x)		do { (x)->flags &= ~CLIENT_FLAG_IDENTLOOKUPSENT; } while(0)
 #define ClearAsyncRPC(x)		do { (x)->flags &= ~CLIENT_FLAG_ASYNC_RPC; } while(0)
 #define ClearIPV6(x)			do { (x)->flags &= ~CLIENT_FLAG_IPV6; } while(0)
+/* clang-format on */
 /** @} */
 
 #define IsUnixSocket(x)			((x)->local->socket_type == SOCKET_TYPE_UNIX)
@@ -1147,9 +1150,11 @@ struct CRuleNode {
   int flags;
   crule_funcptr funcptr; /**< Evaluation function for this node. */
   int numargs;           /**< Number of arguments. */
-  void *arg[CR_MAXARGS]; /**< Array of arguments.  For operators, each arg
-                            is a tree element; for functions, each arg is
-                            a string. */
+  /** Array of arguments.  For operators, each arg
+   * is a tree element; for functions, each arg is
+   * a string.
+   */
+  void *arg[CR_MAXARGS];
   int func_test_type;    /* for >, < and == */
   int func_test_value;   /* integer value to compare against */
 };
@@ -1516,9 +1521,11 @@ struct Client {
 	time_t lastnick;			/**< Timestamp on nick */
 	uint64_t flags;				/**< Client flags (one or more of CLIENT_FLAG_*) */
 	long umodes;				/**< Client usermodes (if user) */
-	Client *direction;			/**< Direction from which this client originated.
-	                                             This always points to a directly connected server or &me.
-	                                             It is never NULL */
+	/** Direction from which this client originated.
+	 * This always points to a directly connected server or &me.
+	 * It is never NULL
+	 */
+	Client *direction;
 	unsigned char hopcount;			/**< Number of servers to this, 0 means local client */
 	unsigned char known_user_cached;	/**< Cached as a "known user" */
 	char ident[USERLEN + 1];		/**< Ident of the user, if available. Otherwise set to "unknown". */
@@ -1980,6 +1987,9 @@ struct HTTPForwardedHeader
  * and bad: w->url = "...";
  * All the data is freed by the URL Subsystem, you don't need to worry
  * about this.
+ * If you are adding fields to this struct:
+ * 1) update duplicate_outgoingwebrequest() in src/misc.c
+ * 2) and update free_outgoingwebrequest() there as well (if something needs to be freed)
  */
 struct OutgoingWebRequest
 {
@@ -2003,12 +2013,11 @@ struct OutgoingWebRequest
 	                     *   DOWNLOAD_MAX_SIZE_MEMORY_BACKED (small, since it
 	                     *   sits in RAM) or DOWNLOAD_MAX_SIZE_FILE_BACKED
 	                     *   (larger). */
-	// If you are adding fields here:
-	// 1) update duplicate_outgoingwebrequest() in src/misc.c
-	// 2) and update free_outgoingwebrequest() there as well (if something needs to be freed)
 };
 
-/** The result of an HTTP(S) call, such as the downloaded file, error, etc. */
+/** The result of an HTTP(S) call, such as the downloaded file, error, etc.
+ * If you add or modify fields, update url_callback() in src/misc.c!
+ */
 struct OutgoingWebResponse
 {
 	const char *file; /**< The temporary file of the download, or NULL. This is only set if OutgoingWebRequest had 'store_in_file' set to 1 and the download was succesful. */
@@ -2017,7 +2026,6 @@ struct OutgoingWebResponse
 	const char *errorbuf; /**< If this is non-NULL then an error occured and this is the error string. Check this member before checking any others! */
 	int cached; /**< Set to 1 if OutgoingWebRequest had 'cachetime' set and we have a cache hit on the webserver. The file and errobuf will be NULL since there was no data transfer. */
 	void *ptr; /**< The OutgoingWebRequest 'callback_data' */
-	// If you add or modify fields, update url_callback() in src/misc.c!
 };
 
 typedef struct WebRequest WebRequest;
@@ -2746,20 +2754,21 @@ typedef enum WhoisConfigDetails {
 #define UNRL_STRIP_LOW_ASCII    0x1     /**< Strip all ASCII < 32 (control codes) */
 #define UNRL_STRIP_KEEP_LF      0x2     /**< Do not strip LF (line feed, \n) */
 
-/** JSON-RPC API Errors, according to jsonrpc.org spec */
+/** JSON-RPC API Errors, according to jsonrpc.org spec.
+ * The -327xx range are the official JSON-RPC error codes,
+ * the -320xx range are UnrealIRCd JSON-RPC server specific error codes,
+ * and -1000 and below are UnrealIRCd specific application error codes.
+ */
 typedef enum JsonRpcError {
-	// Official JSON-RPC error codes:
 	JSON_RPC_ERROR_PARSE_ERROR	= -32700, /**< JSON parse error (fatal) */
 	JSON_RPC_ERROR_INVALID_REQUEST	= -32600, /**< Invalid JSON-RPC Request */
 	JSON_RPC_ERROR_METHOD_NOT_FOUND	= -32601, /**< Method not found */
 	JSON_RPC_ERROR_INVALID_PARAMS	= -32602, /**< Method parameters invalid */
 	JSON_RPC_ERROR_INTERNAL_ERROR	= -32603, /**< Internal server error */
-	// UnrealIRCd JSON-RPC server specific error codes:
 	JSON_RPC_ERROR_API_CALL_DENIED	= -32000, /**< The api user does not have enough permissions to do this call */
 	JSON_RPC_ERROR_SERVER_GONE	= -32001, /**< The request was forwarded to a remote server, but this server went gone while processing the request */
 	JSON_RPC_ERROR_TIMEOUT		= -32002, /**< The request was forwarded to a remote server, but the request/response timed out (15 seconds) */
 	JSON_RPC_ERROR_REMOTE_SERVER_NO_RPC	= -32003, /**< The request was going to be forwarded to a remote server, but the remote server does not support JSON-RPC */
-	// UnrealIRCd specific application error codes:
 	JSON_RPC_ERROR_NOT_FOUND	=  -1000, /**< Target not found (no such nick / channel / ..) */
 	JSON_RPC_ERROR_ALREADY_EXISTS	=  -1001, /**< Resource already exists by that name (eg on nickchange request, a gline, etc) */
 	JSON_RPC_ERROR_INVALID_NAME	=  -1002, /**< Name is not permitted (eg: nick, channel, ..) */
@@ -2810,6 +2819,6 @@ typedef enum JsonRpcError {
 #define BUILDVARSTRING_UNKNOWN_VAR_IS_EMPTY	0x4
 #define BUILDVARSTRING_KEEP_SPACE_FOR_EMPTY_VAR	0x8
 
-#endif /* __struct_include__ */
-
 #include "dynconf.h"
+
+#endif /* __struct_include__ */

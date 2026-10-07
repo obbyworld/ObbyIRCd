@@ -642,15 +642,24 @@ struct HistoryResult {
 typedef struct HistoryBackend HistoryBackend;
 struct HistoryBackend {
 	HistoryBackend *prev, *next;
-	char *name;                                   /**< The name of the history backend (eg: "mem") */
-	int (*history_set_limit)(const char *object, int max_lines, long max_time); /**< Impose a limit on a history object */
-	int (*history_add)(const char *object, MessageTag *mtags, const char *line); /**< Add to history */
-	HistoryResult *(*history_request)(const char *object, HistoryFilter *filter);  /**< Request history */
-	int (*history_delete)(const char *object, HistoryFilter *filter, int *rejected_deletes);  /**< Delete lines from the history. Returns the number of matching lines and sets rejected_deletes if not NULL */
-	int (*history_destroy)(const char *object);  /**< Destroy history of this object completely */
-	int (*history_add_multiline)(const char *object, MessageTag *mtags, const char *source, const char *cmd, const char *target, MLine *lines); /**< Add multiline batch to history (optional, may be NULL) */
-	Module *owner;                                /**< Module introducing this */
-	char unloaded;                                /**< Internal flag to indicate module is being unloaded */
+	/** The name of the history backend (eg: "mem") */
+	char *name;
+	/** Impose a limit on a history object */
+	int (*history_set_limit)(const char *object, int max_lines, long max_time);
+	/** Add to history */
+	int (*history_add)(const char *object, MessageTag *mtags, const char *line);
+	/** Request history */
+	HistoryResult *(*history_request)(const char *object, HistoryFilter *filter);
+	/** Delete lines from the history. Returns the number of matching lines and sets rejected_deletes if not NULL */
+	int (*history_delete)(const char *object, HistoryFilter *filter, int *rejected_deletes);
+	/** Destroy history of this object completely */
+	int (*history_destroy)(const char *object);
+	/** Add multiline batch to history (optional, may be NULL) */
+	int (*history_add_multiline)(const char *object, MessageTag *mtags, const char *source, const char *cmd, const char *target, MLine *lines);
+	/** Module introducing this */
+	Module *owner;
+	/** Internal flag to indicate module is being unloaded */
+	char unloaded;
 };
 
 /** The struct used to register a history backend.
@@ -844,6 +853,7 @@ struct Module
 #define MOD_OPT_GLOBAL		0x0008 /* Module is required to be loaded globally (i.e. across the entire network) */
 #define MOD_OPT_PRIORITY	0x1000 /* Module wants a higher or lower priority for unloading, init, load, etc */
 #define MOD_OPT_UNLOAD_PRIORITY	0x1000 /* Alias for MOD_OPT_PRIORITY */
+
 #define MOD_Dep(name, container,module) {#name, (vFP *) &container, module}
 
 /** Websocket module should init 'first' because it handles sockets */
