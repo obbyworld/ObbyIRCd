@@ -133,7 +133,7 @@ struct JSHttpRequest {
 typedef struct JSTimer JSTimer;
 struct JSTimer {
 	JSTimer *prev, *next;
-	int id;	         /* Timer ID for clearInterval/clearTimeout */
+	int id;          /* Timer ID for clearInterval/clearTimeout */
 	char *handler_code;     /* Stash key for handler function */
 	duk_context *ctx;
 	Event *event;           /* UnrealIRCd event handle */
@@ -456,10 +456,10 @@ static JSMessageTag *js_mtag_handlers = NULL;
 typedef struct JSDatabase JSDatabase;
 struct JSDatabase {
 	JSDatabase *prev, *next;
-	int id;	             /* Database handle ID for JavaScript */
+	int id;              /* Database handle ID for JavaScript */
 	char *filename;             /* Database filename */
 	UnrealDB *db;               /* UnrealIRCd database handle */
-	int mode;	           /* UNREALDB_MODE_READ or UNREALDB_MODE_WRITE */
+	int mode;            /* UNREALDB_MODE_READ or UNREALDB_MODE_WRITE */
 };
 
 static JSDatabase *js_databases = NULL;
@@ -1937,7 +1937,7 @@ duk_ret_t js_api_registerCommand(duk_context *ctx)
 	duk_push_heap_stash(ctx);          /* Stack: [config_obj, handler_func, stash] */
 	duk_dup(ctx, -2);                  /* Stack: [config_obj, handler_func, stash, handler_func_copy] */
 	duk_put_prop_string(ctx, -2, stash_key); /* Stack: [config_obj, handler_func, stash] */
-	duk_pop(ctx);	              /* Stack: [config_obj, handler_func] */
+	duk_pop(ctx);               /* Stack: [config_obj, handler_func] */
 
 	safe_strdup(jscmd->handler_code, stash_key); /* Store stash key */
 
@@ -5188,7 +5188,7 @@ duk_ret_t js_api_registerHook(duk_context *ctx)
 	duk_push_heap_stash(ctx);          /* Stack: [config_obj, handler_func, stash] */
 	duk_dup(ctx, -2);                  /* Stack: [config_obj, handler_func, stash, handler_func_copy] */
 	duk_put_prop_string(ctx, -2, stash_key); /* Stack: [config_obj, handler_func, stash] */
-	duk_pop(ctx);	              /* Stack: [config_obj, handler_func] */
+	duk_pop(ctx);               /* Stack: [config_obj, handler_func] */
 
 	safe_strdup(jshook->handler_code, stash_key); /* Store stash key */
 

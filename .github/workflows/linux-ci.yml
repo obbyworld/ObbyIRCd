@@ -88,4 +88,4 @@ jobs:
       - name: Check code formatting
         run: |
           clang-format-21 --version
-          clang-format-21 --dry-run --Werror `git ls-files src include | grep -E '\.(c|h)$' | grep -vE 'crypt_blowfish|openssl_hostname_validation'`
+          clang-format-21 --dry-run --Werror `git ls-files src include | grep -E '\.(c|h)$' | grep -vE 'crypt_blowfish|openssl_hostname_validation|duktape|duk_config'`

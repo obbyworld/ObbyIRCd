@@ -178,7 +178,7 @@ format:
 # without modifying any file. Fails if 'make format' would change something.
 # The CI runs this too (see .github/workflows/linux-ci.yml).
 format-check:
-	clang-format --dry-run --Werror `git ls-files src include | grep -E '\.(c|h)$$' | grep -vE 'crypt_blowfish|openssl_hostname_validation'`
+	clang-format --dry-run --Werror `git ls-files src include | grep -E '\.(c|h)$$' | grep -vE 'crypt_blowfish|openssl_hostname_validation|duktape|duk_config'`
 
 install: all
 	$(INSTALL) -m 0700 -d $(DESTDIR)@BINDIR@

@@ -2917,7 +2917,7 @@ const char *StripControlCodesEx(const char *text, char *output, size_t outputlen
 						len -= 2;
 						break;
 					}
-                                /*fallthrough*/
+				/*fallthrough*/
 				default:
 					if ((*text >= ' ') ||
 					    !(strip_flags & UNRL_STRIP_LOW_ASCII) ||
