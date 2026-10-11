@@ -1043,6 +1043,13 @@ int user_allowed_by_security_group_account(Client *client, SecurityGroup *s)
 	return 0;
 }
 
+Client *account_canonical_client(Client *client)
+{
+	ModDataInfo *canon_md = findmoddata_byname("account_canonical", MODDATATYPE_CLIENT);
+	Client *canonical = canon_md ? moddata_client(client, canon_md).ptr : NULL;
+	return canonical ? canonical : client;
+}
+
 int user_allowed_by_security_group_account_name(Client *client, const char *secgroupname)
 {
 	ModDataInfo *canon_md;

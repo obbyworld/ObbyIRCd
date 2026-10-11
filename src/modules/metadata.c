@@ -81,7 +81,9 @@ void sendnumericfmt_tags(Client *to, MessageTag *mtags, int numeric, FORMAT_STRI
 				} \
 			} else \
 			{ \
-				user = client; \
+                        /* A session's nick resolves to its canonical, so we keep \
+			 * the presence's metadata there. */ \
+				user = account_canonical_client(client); \
 			} \
 		} \
 	}
@@ -161,6 +163,7 @@ int metadata_configrun(ConfigFile *cf, ConfigEntry *ce, int type);
 int metadata_server_sync(Client *client);
 int metadata_join(Client *client, Channel *channel, MessageTag *mtags);
 int metadata_user_registered(Client *client);
+int metadata_hand_over_on_quit(Client *client, MessageTag *mtags, const char *comment);
 void metadata_user_free(ModData *md);
 void metadata_channel_free(ModData *md);
 void metadata_free(struct metadata *metadata);
@@ -457,6 +460,7 @@ MOD_INIT()
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_JOIN, -2, metadata_join);
 	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_JOIN, -2, metadata_join);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT, 0, metadata_user_registered);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, -1, metadata_hand_over_on_quit);
 #if UNREAL_VERSION_TIME < 202346
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT, 0, metadata_monitor_connect);
 	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_CONNECT, 0, metadata_monitor_connect);
@@ -647,16 +651,27 @@ void metadata_send_change(Client *client, MessageTag *mtags, const char *who, co
 void user_metadata_changed(Client *user, const char *key, const char *value, Client *changer)
 {
 	Client *acptr;
+	int sibling_edit;
 	if (!user || !key)
 		return; /* sanity check */
+	sibling_edit = changer && changer != user && IsUser(changer) && account_canonical_client(changer) == user;
 	list_for_each_entry(acptr, &lclient_list, lclient_node)
 	{ /* notifications for local subscribers */
 		if (!IsUser(acptr) || !IsUser(user))
 			continue;
+		if (acptr == changer)
+			continue; /* clients don't receive notifications for their own changes (spec: "excluding changes they make themselves") */
+		/* Every connection of a multi-session presence shows the same
+		 * profile, so each hears an edit made from another one, whether or
+		 * not it subscribed. */
+		if (account_canonical_client(acptr) == user && (acptr != user || sibling_edit) &&
+		    HasCapabilityFast(acptr, CAP_METADATA))
+		{
+			metadata_notify_or_queue(acptr, NULL, user, NULL, key, value, changer);
+			continue;
+		}
 		if (!metadata_is_subscribed(acptr, key))
 			continue;
-		if (acptr == user && changer == user)
-			continue; /* clients don't receive notifications for their own changes (spec: "excluding changes they make themselves") */
 		if (acptr == user || has_common_channels(user, acptr))
 			metadata_notify_or_queue(acptr, NULL, user, NULL, key, value, changer);
 	}
@@ -1170,31 +1185,72 @@ int metadata_key_valid(const char *key)
 	return 1;
 }
 
+/* When the canonical client of a multi-session presence quits, one of its
+ * sessions becomes canonical, so we give every session an exact copy of the
+ * metadata first, dropping keys the presence no longer has. We run before
+ * the persistence module's quit hook, while the sessions still point at this
+ * client. The copy is quiet: nobody watching sees a change, since the
+ * presence's metadata stays the same. */
+int metadata_hand_over_on_quit(Client *client, MessageTag *mtags, const char *comment)
+{
+	struct metadata_moddata_user *from = USER_METADATA(client);
+	struct metadata *item;
+	struct metadata *copy;
+	Client *other;
+
+	if (!IsLoggedIn(client) || account_canonical_client(client) != client)
+		return 0;
+	list_for_each_entry(other, &lclient_list, lclient_node)
+	{
+		if (other == client || account_canonical_client(other) != client)
+			continue;
+		struct metadata_moddata_user *to = USER_METADATA(other);
+		if (!to)
+			to = metadata_prepare_user_moddata(other);
+		while (to->metadata)
+		{
+			copy = to->metadata;
+			to->metadata = copy->next;
+			metadata_free(copy);
+		}
+		for (item = from ? from->metadata : NULL; item; item = item->next)
+		{
+			copy = safe_alloc(sizeof(struct metadata));
+			safe_strdup(copy->name, item->name);
+			safe_strdup(copy->value, item->value);
+			copy->next = to->metadata;
+			to->metadata = copy;
+		}
+	}
+	return 0;
+}
+
 int metadata_check_perms(Client *user, Channel *channel, Client *client, const char *key, int mode)
 { /* either user or channel should be NULL */
+	Client *self = account_canonical_client(client);
 	if (!IsUser(client) && channel) /* ignore channel metadata requests for unregistered users */
 		return 0;
-	if ((user == client) || (!user && !channel)) /* specified target is "*" or own nick */
+	if ((user == self) || (!user && !channel)) /* specified target is "*" or own nick */
 		return 1;
 	if (IsOper(client) && mode == MODE_GET)
 		return 1; /* allow ircops to view everything */
 	if (channel)
 	{
 		/* The only requirement for GET is to be in the channel */
-		if ((mode == MODE_GET) && IsMember(client, channel))
+		if ((mode == MODE_GET) && IsMember(self, channel))
 			return 1;
 		/* Otherwise, +hoaq */
-		if (check_channel_access(client, channel, "hoaq"))
+		if (check_channel_access(self, channel, "hoaq"))
 			return 1;
 	} else if (user)
 	{
 		if (mode == MODE_SET)
 		{
-			if (user == client)
+			if (user == self)
 				return 1;
 		} else if (mode == MODE_GET)
 		{
-			if (has_common_channels(user, client))
+			if (has_common_channels(user, self))
 				return 1;
 		}
 	}

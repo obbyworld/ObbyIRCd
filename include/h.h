@@ -1498,6 +1498,8 @@ extern int user_allowed_by_security_group_name(Client *client, const char *secgr
  * unit; per-connection security boundaries (allow / oper / deny /
  * vhost / tkl-ban / crule / etc.) keep using the plain helpers above. */
 extern int user_allowed_by_security_group_account(Client *client, SecurityGroup *s);
+/* The canonical client of a multi-session presence, or `client` itself. */
+extern Client *account_canonical_client(Client *client);
 extern int user_allowed_by_security_group_account_name(Client *client, const char *secgroupname);
 extern const char *get_security_groups(Client *client);
 extern int test_match_item(ConfigFile *conf, ConfigEntry *cep, int *errors);
