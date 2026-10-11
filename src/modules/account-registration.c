@@ -9,7 +9,7 @@
  *   - Built-in SASL server: PLAIN and ANONYMOUS mechanisms
  *   - RPC: obsidianirc.accounts.list, obsidianirc.accounts.find
  *   - Config block: account-registration { ... }
- *   - Custom hook HOOKTYPE_ACCOUNT_REGISTER (133) fired on new registrations
+ *   - Custom hook HOOKTYPE_ACCOUNT_REGISTER fired on new registrations
  *
  * Config example (obbyircd.conf):
  *   account-registration {

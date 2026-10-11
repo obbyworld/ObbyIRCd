@@ -53,9 +53,10 @@
 /* ===================================================================
  * Custom hook: fired after a new account is registered.
  * Handler prototype: int my_handler(Account *acc, Client *client)
- * Note: 133 is the next available hook number after the core 132 hooks.
+ * Our custom hooks use 190 and up, so new core hook numbers never collide
+ * with them.
  * =================================================================== */
-#define HOOKTYPE_ACCOUNT_REGISTER 133
+#define HOOKTYPE_ACCOUNT_REGISTER 190
 
 /* ===================================================================
  * SASL type constants
