@@ -1402,7 +1402,21 @@ static int persist_welcome(Client *client, int after_numeric)
 	{
 		e = (PersistEntry *)moddata_client(client, restore_md).ptr;
 		if (!e)
+		{
+			/* Nothing to restore, but later connections of this account
+			 * still attach to this one as sessions, so we register it as
+			 * the canonical. */
+			if (IsLoggedIn(client) && !is_session_client(client))
+			{
+				e = get_or_create_entry(client->user->account);
+				if (!e->canonical || IsDead(e->canonical) || is_ghost_client(e->canonical))
+				{
+					e->canonical = client;
+					canonical_md_set(client, client);
+				}
+			}
 			return 0;
+		}
 
 		if (is_session_client(client))
 		{
