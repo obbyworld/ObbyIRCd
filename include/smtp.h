@@ -24,10 +24,10 @@
  *               SMTPCallback cb, void *userdata);
  *   returns 1 if the email was queued, 0 if no SMTP backend handled it.
  *
- * 134 is the next available hook number after the core 132 hooks plus the
- * existing custom HOOKTYPE_ACCOUNT_REGISTER (133).
+ * Our custom hooks use 190 and up, so new core hook numbers never collide
+ * with them.
  */
-#define HOOKTYPE_SEND_EMAIL  134
+#define HOOKTYPE_SEND_EMAIL 191
 
 /**
  * Outcome of an asynchronous SMTP delivery attempt.

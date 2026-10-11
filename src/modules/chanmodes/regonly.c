@@ -20,18 +20,17 @@
 #include "unrealircd.h"
 
 
-ModuleHeader MOD_HEADER
-  = {
-	"chanmodes/regonly",
-	"4.2",
-	"Channel Mode +R",
-	"UnrealIRCd Team",
-	"unrealircd-6",
-    };
+ModuleHeader MOD_HEADER = {
+    "chanmodes/regonly",
+    "4.2",
+    "Channel Mode +R",
+    "UnrealIRCd Team",
+    "unrealircd-6",
+};
 
 Cmode_t EXTCMODE_REGONLY;
 
-#define IsRegOnly(channel)    (channel->mode.mode & EXTCMODE_REGONLY)
+#define IsRegOnly(channel) (channel->mode.mode & EXTCMODE_REGONLY)
 
 int regonly_check(Client *client, Channel *channel, const char *key, char **errmsg);
 
@@ -43,7 +42,7 @@ MOD_TEST()
 
 MOD_INIT()
 {
-CmodeInfo req;
+	CmodeInfo req;
 
 	memset(&req, 0, sizeof(req));
 	req.paracount = 0;
@@ -51,10 +50,10 @@ CmodeInfo req;
 	req.name = "regonly";
 	req.is_ok = extcmode_default_requirehalfop;
 	CmodeAdd(modinfo->handle, req, &EXTCMODE_REGONLY);
-	
+
 	HookAdd(modinfo->handle, HOOKTYPE_CAN_JOIN, 0, regonly_check);
 
-	
+
 	MARK_AS_OFFICIAL_MODULE(modinfo);
 	return MOD_SUCCESS;
 }
@@ -69,7 +68,7 @@ MOD_UNLOAD()
 	return MOD_SUCCESS;
 }
 
-int regonly_check (Client *client, Channel *channel, const char *key, char **errmsg)
+int regonly_check(Client *client, Channel *channel, const char *key, char **errmsg)
 {
 	if (IsRegOnly(channel) && !IsLoggedIn(client))
 	{
@@ -78,4 +77,3 @@ int regonly_check (Client *client, Channel *channel, const char *key, char **err
 	}
 	return 0;
 }
-

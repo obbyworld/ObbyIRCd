@@ -21,11 +21,11 @@
 #include <errno.h>
 
 ModuleHeader MOD_HEADER = {
-	"sentinel",
-	"0.1",
-	"emit behavioural events to local sentry pipeline",
-	"obbyircd",
-	"unrealircd-6",
+    "sentinel",
+    "0.1",
+    "emit behavioural events to local sentry pipeline",
+    "obbyircd",
+    "unrealircd-6",
 };
 
 #define SENTINEL_DEFAULT_SOCK "/run/obby/sentry.sock"
@@ -40,7 +40,8 @@ static time_t last_connect_attempt = 0;
 
 static void sentinel_disconnect(void)
 {
-	if (sentinel_fd >= 0) {
+	if (sentinel_fd >= 0)
+	{
 		close(sentinel_fd);
 		sentinel_fd = -1;
 	}
@@ -70,8 +71,8 @@ static int sentinel_connect(void)
 
 	/* Non-blocking connect; EINPROGRESS is fine (later writev EAGAINs
 	 * silently until the socket comes up). */
-	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0
-	    && errno != EINPROGRESS) {
+	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0 && errno != EINPROGRESS)
+	{
 		close(fd);
 		return -1;
 	}
@@ -85,7 +86,8 @@ static void sentinel_emit(json_t *frame)
 {
 	if (!frame)
 		return;
-	if (sentinel_fd < 0 && sentinel_connect() < 0) {
+	if (sentinel_fd < 0 && sentinel_connect() < 0)
+	{
 		json_decref(frame);
 		return;
 	}
@@ -106,7 +108,8 @@ static void sentinel_emit(json_t *frame)
 	iov[1].iov_len = 1;
 	ssize_t w = writev(sentinel_fd, iov, 2);
 	free(encoded);
-	if (w < 0) {
+	if (w < 0)
+	{
 		/* EAGAIN under load just drops the event; serious errors
 		 * tear the socket down so the next emit reconnects. */
 		if (errno != EAGAIN && errno != EWOULDBLOCK)
@@ -117,12 +120,14 @@ static void sentinel_emit(json_t *frame)
 /* Stamp the common per-client identity fields into the frame. */
 static void put_subject(json_t *frame, Client *c)
 {
-	if (!c) return;
+	if (!c)
+		return;
 	if (*c->name)
 		json_object_set_new(frame, "nick", json_string(c->name));
 	if (*c->id)
 		json_object_set_new(frame, "uid", json_string(c->id));
-	if (c->user) {
+	if (c->user)
+	{
 		if (*c->user->username)
 			json_object_set_new(frame, "ident", json_string(c->user->username));
 		if (*c->user->realhost)
@@ -183,14 +188,17 @@ static int sentinel_quit_hook(Client *client, MessageTag *_mtags, const char *co
 		kind = "oper_kill";
 		const char *p = comment + 10;
 		const char *paren = strchr(p, ' ');
-		if (paren) {
+		if (paren)
+		{
 			size_t n = (size_t)(paren - p);
-			if (n >= sizeof(oper_buf)) n = sizeof(oper_buf) - 1;
+			if (n >= sizeof(oper_buf))
+				n = sizeof(oper_buf) - 1;
 			memcpy(oper_buf, p, n);
 			oper_buf[n] = 0;
 			oper_name = oper_buf;
 			const char *open_paren = strchr(paren, '(');
-			if (open_paren) {
+			if (open_paren)
+			{
 				kill_reason = strdup(open_paren + 1);
 				size_t kl = strlen(kill_reason);
 				if (kl > 0 && kill_reason[kl - 1] == ')')
@@ -241,7 +249,8 @@ static int sentinel_kick_hook(Client *client, Client *victim, Channel *channel,
 	/* `subject` is the victim. The actor (kicker) goes in oper/target
 	 * fields so the L3 trainer can use it as a positive label when an
 	 * oper kicks. */
-	if (victim) put_subject(f, victim);
+	if (victim)
+		put_subject(f, victim);
 	json_object_set_new(f, "channel", json_string(channel->name));
 	if (client && *client->name)
 		json_object_set_new(f, "oper", json_string(client->name));
@@ -273,11 +282,14 @@ static int is_ctcp(const char *text)
 }
 
 static int sentinel_chanmsg_hook(Client *client, Channel *channel, int sendflags,
-                                  const char *member_modes, const char *target,
-                                  MessageTag *_mtags, const char *text, SendType sendtype)
+                                 const char *member_modes, const char *target,
+                                 MessageTag *_mtags, const char *text, SendType sendtype)
 {
-	(void)sendflags; (void)member_modes; (void)target;
-	if (!channel || !text) return 0;
+	(void)sendflags;
+	(void)member_modes;
+	(void)target;
+	if (!channel || !text)
+		return 0;
 	const char *kind = "chanmsg";
 	if (sendtype == SEND_TYPE_NOTICE)
 		kind = "channotice";
@@ -297,7 +309,7 @@ static int sentinel_chanmsg_hook(Client *client, Channel *channel, int sendflags
 }
 
 static int sentinel_usermsg_hook(Client *client, Client *to,
-                                  MessageTag *_mtags, const char *text, SendType sendtype)
+                                 MessageTag *_mtags, const char *text, SendType sendtype)
 {
 	const char *kind = (sendtype == SEND_TYPE_NOTICE) ? "usernotice" : "usermsg";
 	if (sendtype == SEND_TYPE_TAGMSG)
@@ -339,7 +351,8 @@ static int sentinel_tkl_add_hook(Client *client, TKL *tkl)
 	if (!tkl || !client || !IsOper(client))
 		return 0;
 	const char *btype = NULL;
-	if (TKLIsServerBan(tkl)) {
+	if (TKLIsServerBan(tkl))
+	{
 		if (tkl->type & TKL_KILL)
 			btype = (tkl->type & TKL_GLOBAL) ? "gline" : "kline";
 		else if (tkl->type & TKL_ZAP)
@@ -353,7 +366,8 @@ static int sentinel_tkl_add_hook(Client *client, TKL *tkl)
 	json_t *f = json_object();
 	json_object_set_new(f, "kind", json_string("oper_kline"));
 	json_object_set_new(f, "oper", json_string(client->name));
-	if (tkl->ptr.serverban) {
+	if (tkl->ptr.serverban)
+	{
 		if (tkl->ptr.serverban->usermask)
 			json_object_set_new(f, "target_ident", json_string(tkl->ptr.serverban->usermask));
 		if (tkl->ptr.serverban->hostmask)
@@ -369,14 +383,14 @@ static int sentinel_tkl_add_hook(Client *client, TKL *tkl)
 /* Detector: per-client sliding-window state, rule evaluators, and the
  * CAN_SEND / CAN_JOIN hook handlers that block + kill on a rule hit. */
 
-#define SENTINEL_WINDOW_SEC      60
-#define SENTINEL_MAX_URL_TS      64
-#define SENTINEL_MAX_PM_HIST     64
-#define SENTINEL_MAX_MENTION_TS  64
-#define SENTINEL_MAX_MSG         32
-#define SENTINEL_MAX_JOIN        16
-#define SENTINEL_MAX_NICK        16
-#define SENTINEL_MAX_HOP         64
+#define SENTINEL_WINDOW_SEC     60
+#define SENTINEL_MAX_URL_TS     64
+#define SENTINEL_MAX_PM_HIST    64
+#define SENTINEL_MAX_MENTION_TS 64
+#define SENTINEL_MAX_MSG        32
+#define SENTINEL_MAX_JOIN       16
+#define SENTINEL_MAX_NICK       16
+#define SENTINEL_MAX_HOP        64
 
 #define SENTINEL_LINK_SPAM_AGE   30   /* URL in <= N seconds from connect */
 #define SENTINEL_MENTION_STORM_R 3    /* >= N mention-bomb msgs in 60s */
@@ -396,13 +410,13 @@ static int sentinel_tkl_add_hook(Client *client, TKL *tkl)
 
 typedef struct {
 	time_t at;
-	char  *target;
+	char *target;
 } PMRecord;
 
 typedef struct {
-	time_t   at;
+	time_t at;
 	uint64_t hash;     /* FNV-64a of the lowercased+normalised text */
-	int      upper_pc; /* uppercase percentage 0..100 */
+	int upper_pc; /* uppercase percentage 0..100 */
 } MsgRecord;
 
 typedef struct {
@@ -411,29 +425,29 @@ typedef struct {
 	time_t last_msg_at;
 	time_t burst_start_idle_gap;
 
-	time_t    url_ts[SENTINEL_MAX_URL_TS];
-	int       url_n;
+	time_t url_ts[SENTINEL_MAX_URL_TS];
+	int url_n;
 
-	time_t    mention_ts[SENTINEL_MAX_MENTION_TS];
-	int       mention_n;
+	time_t mention_ts[SENTINEL_MAX_MENTION_TS];
+	int mention_n;
 
-	PMRecord  pm_hist[SENTINEL_MAX_PM_HIST];
-	int       pm_n;
+	PMRecord pm_hist[SENTINEL_MAX_PM_HIST];
+	int pm_n;
 
 	MsgRecord msgs[SENTINEL_MAX_MSG];
-	int       msg_n;
+	int msg_n;
 
-	time_t    join_ts[SENTINEL_MAX_JOIN];
-	int       join_n;
+	time_t join_ts[SENTINEL_MAX_JOIN];
+	int join_n;
 
-	time_t    nick_ts[SENTINEL_MAX_NICK];
-	int       nick_n;
+	time_t nick_ts[SENTINEL_MAX_NICK];
+	int nick_n;
 
-	time_t    hop_ts[SENTINEL_MAX_HOP];  /* joins + parts together */
-	int       hop_n;
+	time_t hop_ts[SENTINEL_MAX_HOP];  /* joins + parts together */
+	int hop_n;
 
-	int       ctcp_count;     /* CTCPs in 60s window (decayed lazily) */
-	time_t    last_ctcp_at;
+	int ctcp_count;     /* CTCPs in 60s window (decayed lazily) */
+	time_t last_ctcp_at;
 } SentinelState;
 
 static ModDataInfo *sentinel_md = NULL;
@@ -443,7 +457,8 @@ static ModDataInfo *sentinel_md = NULL;
 static SentinelState *sentinel_state_ensure(Client *c)
 {
 	SentinelState *s = SENT_MD(c);
-	if (!s) {
+	if (!s)
+	{
 		s = safe_alloc(sizeof(SentinelState));
 		s->first_seen = TStime();
 		moddata_local_client(c, sentinel_md).ptr = s;
@@ -469,7 +484,8 @@ static int sentinel_count_urls(const char *text)
 	if (!text)
 		return 0;
 	int n = 0;
-	for (const char *p = text; (p = strstr(p, "://")); p++) {
+	for (const char *p = text; (p = strstr(p, "://")); p++)
+	{
 		if (p - text >= 4 &&
 		    (!strncasecmp(p - 4, "http", 4) || !strncasecmp(p - 5, "https", 5)))
 			n++;
@@ -505,19 +521,23 @@ static int has_suffix_ci(const char *host, int host_len, const char *suf)
 static int host_starts_with_ipv4(const char *h, int n)
 {
 	int dots = 0, digits = 0, run = 0;
-	for (int i = 0; i < n; i++) {
+	for (int i = 0; i < n; i++)
+	{
 		char c = h[i];
-		if (c >= '0' && c <= '9') {
+		if (c >= '0' && c <= '9')
+		{
 			digits++;
 			run++;
 			if (run > 3)
 				return 0;
-		} else if (c == '.') {
+		} else if (c == '.')
+		{
 			if (run == 0)
 				return 0;
 			run = 0;
 			dots++;
-		} else {
+		} else
+		{
 			break;
 		}
 	}
@@ -528,7 +548,8 @@ static int subdomain_is_digit_heavy(const char *host, int host_len)
 {
 	int first_dot = -1;
 	for (int i = 0; i < host_len; i++)
-		if (host[i] == '.') {
+		if (host[i] == '.')
+		{
 			first_dot = i;
 			break;
 		}
@@ -552,7 +573,8 @@ static int count_dots(const char *host, int host_len)
 
 static int has_punycode_label(const char *host, int host_len)
 {
-	for (int i = 0; i < host_len - 4; i++) {
+	for (int i = 0; i < host_len - 4; i++)
+	{
 		if ((i == 0 || host[i - 1] == '.') &&
 		    !strncasecmp(host + i, "xn--", 4))
 			return 1;
@@ -588,25 +610,26 @@ static int sentinel_url_score(const char *url, int url_len)
 	 * current-era reality: Freenom set is declining, BinkyMoon
 	 * ultra-cheap new-gTLDs dominate, .top is the volume leader. */
 	static const char *bad_tlds[] = {
-		/* Highest normalized phishing rate (Interisle 2024) */
-		".lol", ".bond", ".support", ".top", ".sbs",
-		/* >99% mail malicious (Cloudflare) */
-		".bar", ".rest", ".uno", ".academy", ".directory", ".beauty",
-		/* Spamhaus top-20 worst, toll-road scam vectors */
-		".xin", ".cyou", ".cfd", ".buzz", ".monster",
-		/* Cheap new-gTLD burner pool */
-		".xyz", ".icu", ".click", ".work", ".link", ".live",
-		".country", ".pw", ".review", ".download", ".stream", ".gdn",
-		/* Google confusable-with-filename TLDs */
-		".zip", ".mov",
-		/* Freenom-era (declining but present) */
-		".tk", ".ml", ".ga", ".cf", ".gq",
-		/* ccTLD with >85% malicious mail share (Cloudflare) */
-		".zw",
-		NULL
-	};
-	for (int i = 0; bad_tlds[i]; i++) {
-		if (has_suffix_ci(host_start, host_len, bad_tlds[i])) {
+	        /* Highest normalized phishing rate (Interisle 2024) */
+	    ".lol", ".bond", ".support", ".top", ".sbs",
+	        /* >99% mail malicious (Cloudflare) */
+	    ".bar", ".rest", ".uno", ".academy", ".directory", ".beauty",
+	        /* Spamhaus top-20 worst, toll-road scam vectors */
+	    ".xin", ".cyou", ".cfd", ".buzz", ".monster",
+	        /* Cheap new-gTLD burner pool */
+	    ".xyz", ".icu", ".click", ".work", ".link", ".live",
+	    ".country", ".pw", ".review", ".download", ".stream", ".gdn",
+	        /* Google confusable-with-filename TLDs */
+	    ".zip", ".mov",
+	        /* Freenom-era (declining but present) */
+	    ".tk", ".ml", ".ga", ".cf", ".gq",
+	        /* ccTLD with >85% malicious mail share (Cloudflare) */
+	    ".zw",
+	    NULL};
+	for (int i = 0; bad_tlds[i]; i++)
+	{
+		if (has_suffix_ci(host_start, host_len, bad_tlds[i]))
+		{
 			score += 5;
 			break;
 		}
@@ -614,15 +637,16 @@ static int sentinel_url_score(const char *url, int url_len)
 
 	/* Known shortener domains -- exact host match. */
 	static const char *shorteners[] = {
-		"bit.ly", "tinyurl.com", "goo.gl", "t.co", "ow.ly", "is.gd",
-		"buff.ly", "cutt.ly", "tiny.cc", "rebrand.ly", "shorturl.at",
-		"lnkd.in", "v.gd", "s.id", "ift.tt", "clck.ru", "tr.im",
-		"shorte.st", "adf.ly", "linktr.ee",
-		NULL
-	};
-	for (int i = 0; shorteners[i]; i++) {
+	    "bit.ly", "tinyurl.com", "goo.gl", "t.co", "ow.ly", "is.gd",
+	    "buff.ly", "cutt.ly", "tiny.cc", "rebrand.ly", "shorturl.at",
+	    "lnkd.in", "v.gd", "s.id", "ift.tt", "clck.ru", "tr.im",
+	    "shorte.st", "adf.ly", "linktr.ee",
+	    NULL};
+	for (int i = 0; shorteners[i]; i++)
+	{
 		int n = (int)strlen(shorteners[i]);
-		if (host_len == n && !strncasecmp(host_start, shorteners[i], n)) {
+		if (host_len == n && !strncasecmp(host_start, shorteners[i], n))
+		{
 			score += 4;
 			break;
 		}
@@ -646,21 +670,23 @@ static int sentinel_url_score(const char *url, int url_len)
 		score += 2;
 
 	/* Common spam path tokens. Compare against path lowercased on the fly. */
-	if (path_len > 0) {
+	if (path_len > 0)
+	{
 		char low[128];
 		int copy = path_len < (int)sizeof(low) - 1 ? path_len : (int)sizeof(low) - 1;
-		for (int i = 0; i < copy; i++) {
+		for (int i = 0; i < copy; i++)
+		{
 			char c = path_start[i];
 			low[i] = (c >= 'A' && c <= 'Z') ? (c | 0x20) : c;
 		}
 		low[copy] = 0;
 		static const char *spam_tokens[] = {
-			"/promo", "/claim", "/win", "/verify", "/signup", "/ref",
-			"/track", "/click", "/go?", "/free", "/bonus", "/redeem",
-			"?ref=", "?promo=", NULL
-		};
+		    "/promo", "/claim", "/win", "/verify", "/signup", "/ref",
+		    "/track", "/click", "/go?", "/free", "/bonus", "/redeem",
+		    "?ref=", "?promo=", NULL};
 		for (int i = 0; spam_tokens[i]; i++)
-			if (strstr(low, spam_tokens[i])) {
+			if (strstr(low, spam_tokens[i]))
+			{
 				score += 2;
 				break;
 			}
@@ -674,7 +700,8 @@ static int sentinel_max_url_score(const char *text)
 	if (!text)
 		return 0;
 	int max = 0;
-	for (const char *p = text; *p; ) {
+	for (const char *p = text; *p;)
+	{
 		const char *colon = strstr(p, "://");
 		if (!colon)
 			break;
@@ -682,7 +709,8 @@ static int sentinel_max_url_score(const char *text)
 		while (url_start > text && url_start[-1] != ' ' && url_start[-1] != '\t' &&
 		       url_start[-1] != '<' && url_start[-1] != '(')
 			url_start--;
-		if (strncasecmp(url_start, "http", 4) && strncasecmp(url_start, "https", 5)) {
+		if (strncasecmp(url_start, "http", 4) && strncasecmp(url_start, "https", 5))
+		{
 			p = colon + 3;
 			continue;
 		}
@@ -706,14 +734,17 @@ static int sentinel_count_mentions(const char *text)
 		return 0;
 	int n = 0;
 	const char *p = text;
-	while (*p) {
+	while (*p)
+	{
 		while (*p && (*p == ' ' || *p == '\t'))
 			p++;
 		if (!*p)
 			break;
-		if (*p == '@' && p[1] && p[1] != ' ') {
+		if (*p == '@' && p[1] && p[1] != ' ')
+		{
 			n++;
-		} else {
+		} else
+		{
 			/* "nick:" leading-address style: check for trailing ':' */
 			const char *q = p;
 			while (*q && *q != ' ' && *q != ':')
@@ -736,18 +767,18 @@ static int sentinel_has_nickserv_spoof(const char *text)
 		return 0;
 	char low[1024];
 	int i;
-	for (i = 0; i < (int)sizeof(low) - 1 && text[i]; i++) {
+	for (i = 0; i < (int)sizeof(low) - 1 && text[i]; i++)
+	{
 		char c = text[i];
 		low[i] = (c >= 'A' && c <= 'Z') ? (c | 0x20) : c;
 	}
 	low[i] = 0;
 	static const char *needles[] = {
-		"nickserv identify", "/msg nickserv", "msg nickserv id",
-		"identify your password", "verify your password",
-		"to confirm your account", "type /msg",
-		"your account has been compromised", "re-authenticate",
-		NULL
-	};
+	    "nickserv identify", "/msg nickserv", "msg nickserv id",
+	    "identify your password", "verify your password",
+	    "to confirm your account", "type /msg",
+	    "your account has been compromised", "re-authenticate",
+	    NULL};
 	for (int j = 0; needles[j]; j++)
 		if (strstr(low, needles[j]))
 			return 1;
@@ -767,7 +798,8 @@ static int sentinel_has_cnc_verb(const char *text)
 	int i = 1;
 	while (i < (int)sizeof(tok) - 1 && text[i] &&
 	       text[i] != ' ' && text[i] != '\t' && text[i] != '\r' &&
-	       text[i] != '\n') {
+	       text[i] != '\n')
+	{
 		char c = text[i];
 		tok[i - 1] = (c >= 'A' && c <= 'Z') ? (c | 0x20) : c;
 		i++;
@@ -776,14 +808,13 @@ static int sentinel_has_cnc_verb(const char *text)
 	if (i < 3)
 		return 0;
 	static const char *verbs[] = {
-		"scan", "ddos", "udp", "tcp", "syn", "ack",
-		"download", "visit", "exec", "shell", "kill",
-		"login", "logout", "auth", "join", "part",
-		"flood", "spam", "raid", "attack",
-		"update", "upgrade", "reload", "restart",
-		"mirai", "kaiten", "sdbot", "rbot",
-		NULL
-	};
+	    "scan", "ddos", "udp", "tcp", "syn", "ack",
+	    "download", "visit", "exec", "shell", "kill",
+	    "login", "logout", "auth", "join", "part",
+	    "flood", "spam", "raid", "attack",
+	    "update", "upgrade", "reload", "restart",
+	    "mirai", "kaiten", "sdbot", "rbot",
+	    NULL};
 	for (int j = 0; verbs[j]; j++)
 		if (!strcmp(tok, verbs[j]))
 			return 1;
@@ -796,14 +827,17 @@ static uint64_t sentinel_hash_text(const char *text)
 		return 0;
 	uint64_t h = 14695981039346656037ULL;
 	int prev_space = 1;
-	for (const char *p = text; *p; p++) {
+	for (const char *p = text; *p; p++)
+	{
 		char c = *p;
-		if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+		if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
+		{
 			if (prev_space)
 				continue;
 			c = ' ';
 			prev_space = 1;
-		} else {
+		} else
+		{
 			prev_space = 0;
 			if (c >= 'A' && c <= 'Z')
 				c |= 0x20;
@@ -820,11 +854,14 @@ static int sentinel_upper_pct(const char *text)
 	if (!text)
 		return 0;
 	int up = 0, alpha = 0;
-	for (const char *p = text; *p; p++) {
-		if (*p >= 'A' && *p <= 'Z') {
+	for (const char *p = text; *p; p++)
+	{
+		if (*p >= 'A' && *p <= 'Z')
+		{
 			up++;
 			alpha++;
-		} else if (*p >= 'a' && *p <= 'z') {
+		} else if (*p >= 'a' && *p <= 'z')
+		{
 			alpha++;
 		}
 	}
@@ -838,7 +875,8 @@ static int sentinel_upper_pct(const char *text)
 static int sentinel_sw_compact(time_t *ts, int *n, time_t now, int window_sec)
 {
 	int kept = 0;
-	for (int i = 0; i < *n; i++) {
+	for (int i = 0; i < *n; i++)
+	{
 		if (now - ts[i] <= window_sec)
 			ts[kept++] = ts[i];
 	}
@@ -848,7 +886,8 @@ static int sentinel_sw_compact(time_t *ts, int *n, time_t now, int window_sec)
 
 static void sentinel_sw_push(time_t *ts, int *n, int max, time_t now)
 {
-	if (*n >= max) {
+	if (*n >= max)
+	{
 		memmove(ts, ts + 1, sizeof(time_t) * (max - 1));
 		*n = max - 1;
 	}
@@ -862,7 +901,8 @@ static void sentinel_sw_push(time_t *ts, int *n, int max, time_t now)
 static void sentinel_record_chanmsg(SentinelState *s, const char *text, time_t now)
 {
 	/* Burst-gap bookkeeping: was the user silent before this msg? */
-	if (s->last_msg_at != 0) {
+	if (s->last_msg_at != 0)
+	{
 		time_t gap = now - s->last_msg_at;
 		if (gap >= SENTINEL_IDLE_GAP)
 			s->burst_start_idle_gap = gap;
@@ -873,11 +913,12 @@ static void sentinel_record_chanmsg(SentinelState *s, const char *text, time_t n
 
 	/* Append to message history (capacity SENTINEL_MAX_MSG). */
 	MsgRecord rec = {
-		.at = now,
-		.hash = sentinel_hash_text(text),
-		.upper_pc = sentinel_upper_pct(text),
+	    .at = now,
+	    .hash = sentinel_hash_text(text),
+	    .upper_pc = sentinel_upper_pct(text),
 	};
-	if (s->msg_n >= SENTINEL_MAX_MSG) {
+	if (s->msg_n >= SENTINEL_MAX_MSG)
+	{
 		memmove(s->msgs, s->msgs + 1,
 		        sizeof(MsgRecord) * (SENTINEL_MAX_MSG - 1));
 		s->msg_n = SENTINEL_MAX_MSG - 1;
@@ -890,7 +931,8 @@ static void sentinel_decay_ctcp(SentinelState *s, time_t now)
 {
 	if (s->ctcp_count == 0)
 		return;
-	if (now - s->last_ctcp_at > SENTINEL_WINDOW_SEC) {
+	if (now - s->last_ctcp_at > SENTINEL_WINDOW_SEC)
+	{
 		s->ctcp_count = 0;
 	}
 }
@@ -904,11 +946,13 @@ static int sentinel_block_chanmsg(Client *client, const char *text,
 
 	/* CTCP detection: PRIVMSG body wrapped in 0x01. */
 	int is_ctcp = (text && text[0] == 0x01 && sendtype == SEND_TYPE_PRIVMSG);
-	if (is_ctcp) {
+	if (is_ctcp)
+	{
 		sentinel_decay_ctcp(s, now);
 		s->ctcp_count++;
 		s->last_ctcp_at = now;
-		if (s->ctcp_count >= SENTINEL_CTCP_STORM) {
+		if (s->ctcp_count >= SENTINEL_CTCP_STORM)
+		{
 			*reason_out = "ctcp_storm";
 			return 1;
 		}
@@ -920,7 +964,8 @@ static int sentinel_block_chanmsg(Client *client, const char *text,
 	sentinel_record_chanmsg(s, text, now);
 
 	/* botnet C&C verb: ".scan", "!login", etc. */
-	if (sentinel_has_cnc_verb(text)) {
+	if (sentinel_has_cnc_verb(text))
+	{
 		*reason_out = "botnet_cnc";
 		return 1;
 	}
@@ -930,7 +975,8 @@ static int sentinel_block_chanmsg(Client *client, const char *text,
 	 * marginal URL still trips for drive-by spammers, but a normal
 	 * github.com URL from a new user no longer fires. */
 	int urls = sentinel_count_urls(text);
-	if (urls > 0) {
+	if (urls > 0)
+	{
 		for (int i = 0; i < urls; i++)
 			sentinel_sw_push(s->url_ts, &s->url_n,
 			                 SENTINEL_MAX_URL_TS, now);
@@ -939,7 +985,8 @@ static int sentinel_block_chanmsg(Client *client, const char *text,
 		int score = sentinel_max_url_score(text);
 		if (now - s->first_seen <= SENTINEL_LINK_SPAM_AGE)
 			score += 2;
-		if (score >= SENTINEL_URL_BLOCK_SCORE) {
+		if (score >= SENTINEL_URL_BLOCK_SCORE)
+		{
 			*reason_out = "link_spam";
 			return 1;
 		}
@@ -947,12 +994,14 @@ static int sentinel_block_chanmsg(Client *client, const char *text,
 
 	/* mention_storm. */
 	int men = sentinel_count_mentions(text);
-	if (men >= 3) {
+	if (men >= 3)
+	{
 		sentinel_sw_push(s->mention_ts, &s->mention_n,
 		                 SENTINEL_MAX_MENTION_TS, now);
 		sentinel_sw_compact(s->mention_ts, &s->mention_n, now,
 		                    SENTINEL_WINDOW_SEC);
-		if (s->mention_n >= SENTINEL_MENTION_STORM_R) {
+		if (s->mention_n >= SENTINEL_MENTION_STORM_R)
+		{
 			*reason_out = "mention_storm";
 			return 1;
 		}
@@ -960,37 +1009,43 @@ static int sentinel_block_chanmsg(Client *client, const char *text,
 
 	/* Compact msg history to the 60s window. */
 	int kept = 0;
-	for (int i = 0; i < s->msg_n; i++) {
+	for (int i = 0; i < s->msg_n; i++)
+	{
 		if (now - s->msgs[i].at <= SENTINEL_WINDOW_SEC)
 			s->msgs[kept++] = s->msgs[i];
 	}
 	s->msg_n = kept;
 
 	/* flood: msgs/min over the window. */
-	if (s->msg_n >= SENTINEL_FLOOD_RATE) {
+	if (s->msg_n >= SENTINEL_FLOOD_RATE)
+	{
 		*reason_out = "flood";
 		return 1;
 	}
 
 	/* repeat: same hash hits >= threshold (excluding the original). */
-	for (int i = 0; i < s->msg_n; i++) {
+	for (int i = 0; i < s->msg_n; i++)
+	{
 		int dups = 0;
 		for (int j = 0; j < s->msg_n; j++)
 			if (i != j && s->msgs[i].hash == s->msgs[j].hash)
 				dups++;
-		if (dups >= SENTINEL_REPEAT_DUPS) {
+		if (dups >= SENTINEL_REPEAT_DUPS)
+		{
 			*reason_out = "repeat";
 			return 1;
 		}
 	}
 
 	/* shouting: sustained high uppercase ratio. */
-	if (s->msg_n >= SENTINEL_SHOUT_MIN_MSG) {
+	if (s->msg_n >= SENTINEL_SHOUT_MIN_MSG)
+	{
 		int sum = 0;
 		for (int i = 0; i < s->msg_n; i++)
 			sum += s->msgs[i].upper_pc;
 		int mean = sum / s->msg_n;
-		if (mean >= SENTINEL_SHOUT_RATIO) {
+		if (mean >= SENTINEL_SHOUT_RATIO)
+		{
 			*reason_out = "shouting";
 			return 1;
 		}
@@ -999,7 +1054,8 @@ static int sentinel_block_chanmsg(Client *client, const char *text,
 	/* idle_burst: age > 10min + prior idle >= 5min + recent rate >= 10/min. */
 	if (now - s->first_seen >= SENTINEL_IDLE_AGE &&
 	    s->burst_start_idle_gap >= SENTINEL_IDLE_GAP &&
-	    s->msg_n >= SENTINEL_IDLE_RATE) {
+	    s->msg_n >= SENTINEL_IDLE_RATE)
+	{
 		*reason_out = "idle_burst";
 		return 1;
 	}
@@ -1016,41 +1072,50 @@ static int sentinel_block_usermsg(Client *client, Client *target,
 
 	/* CTCP in PM counts toward ctcp_storm. */
 	int is_ctcp = (text && text[0] == 0x01 && sendtype == SEND_TYPE_PRIVMSG);
-	if (is_ctcp) {
+	if (is_ctcp)
+	{
 		sentinel_decay_ctcp(s, now);
 		s->ctcp_count++;
 		s->last_ctcp_at = now;
-		if (s->ctcp_count >= SENTINEL_CTCP_STORM) {
+		if (s->ctcp_count >= SENTINEL_CTCP_STORM)
+		{
 			*reason_out = "ctcp_storm";
 			return 1;
 		}
 		return 0;
 	}
 
-	if (sentinel_has_nickserv_spoof(text)) {
+	if (sentinel_has_nickserv_spoof(text))
+	{
 		*reason_out = "nickserv_spoof";
 		return 1;
 	}
 
-	if (sentinel_has_cnc_verb(text)) {
+	if (sentinel_has_cnc_verb(text))
+	{
 		*reason_out = "botnet_cnc";
 		return 1;
 	}
 
 	/* Prune expired PM history. */
 	int kept = 0;
-	for (int i = 0; i < s->pm_n; i++) {
-		if (now - s->pm_hist[i].at <= SENTINEL_WINDOW_SEC) {
+	for (int i = 0; i < s->pm_n; i++)
+	{
+		if (now - s->pm_hist[i].at <= SENTINEL_WINDOW_SEC)
+		{
 			s->pm_hist[kept++] = s->pm_hist[i];
-		} else {
+		} else
+		{
 			safe_free(s->pm_hist[i].target);
 		}
 	}
 	s->pm_n = kept;
 
 	/* Push this PM. */
-	if (target && target->name[0]) {
-		if (s->pm_n >= SENTINEL_MAX_PM_HIST) {
+	if (target && target->name[0])
+	{
+		if (s->pm_n >= SENTINEL_MAX_PM_HIST)
+		{
 			safe_free(s->pm_hist[0].target);
 			memmove(s->pm_hist, s->pm_hist + 1,
 			        sizeof(PMRecord) * (SENTINEL_MAX_PM_HIST - 1));
@@ -1062,24 +1127,28 @@ static int sentinel_block_usermsg(Client *client, Client *target,
 	}
 
 	/* pm_flood: outbound PMs/min over window. */
-	if (s->pm_n >= SENTINEL_PM_FLOOD) {
+	if (s->pm_n >= SENTINEL_PM_FLOOD)
+	{
 		*reason_out = "pm_flood";
 		return 1;
 	}
 
 	/* pm_shotgun: distinct PM targets in window. */
 	int distinct = 0;
-	for (int i = 0; i < s->pm_n; i++) {
+	for (int i = 0; i < s->pm_n; i++)
+	{
 		int dup = 0;
 		for (int j = 0; j < i; j++)
-			if (!strcasecmp(s->pm_hist[i].target, s->pm_hist[j].target)) {
+			if (!strcasecmp(s->pm_hist[i].target, s->pm_hist[j].target))
+			{
 				dup = 1;
 				break;
 			}
 		if (!dup)
 			distinct++;
 	}
-	if (distinct >= SENTINEL_PM_SHOTGUN_K) {
+	if (distinct >= SENTINEL_PM_SHOTGUN_K)
+	{
 		*reason_out = "pm_shotgun";
 		return 1;
 	}
@@ -1089,8 +1158,8 @@ static int sentinel_block_usermsg(Client *client, Client *target,
 /* ---- the actual hooks ---------------------------------------------- */
 
 static int sentinel_can_send_chan(Client *client, Channel *channel,
-    Membership *member, const char **text, const char **errmsg,
-    SendType sendtype, ClientContext *clictx)
+                                  Membership *member, const char **text, const char **errmsg,
+                                  SendType sendtype, ClientContext *clictx)
 {
 	if (!MyUser(client))
 		return HOOK_CONTINUE;
@@ -1126,8 +1195,8 @@ static int sentinel_can_send_chan(Client *client, Channel *channel,
 }
 
 static int sentinel_can_send_user(Client *client, Client *target,
-    const char **text, const char **errmsg, SendType sendtype,
-    ClientContext *clictx)
+                                  const char **text, const char **errmsg, SendType sendtype,
+                                  ClientContext *clictx)
 {
 	if (!MyUser(client))
 		return HOOK_CONTINUE;
@@ -1171,11 +1240,13 @@ static int sentinel_block_join(Client *client, const char **reason_out)
 	sentinel_sw_push(s->hop_ts, &s->hop_n, SENTINEL_MAX_HOP, now);
 	sentinel_sw_compact(s->hop_ts, &s->hop_n, now, SENTINEL_WINDOW_SEC);
 
-	if (s->join_n >= SENTINEL_MASS_JOIN) {
+	if (s->join_n >= SENTINEL_MASS_JOIN)
+	{
 		*reason_out = "mass_join";
 		return 1;
 	}
-	if (s->hop_n >= SENTINEL_HOP_FLOOD) {
+	if (s->hop_n >= SENTINEL_HOP_FLOOD)
+	{
 		*reason_out = "hop_flood";
 		return 1;
 	}
@@ -1183,7 +1254,7 @@ static int sentinel_block_join(Client *client, const char **reason_out)
 }
 
 static int sentinel_can_join_hook(Client *client, Channel *channel,
-    const char *key, char **errmsg)
+                                  const char *key, char **errmsg)
 {
 	if (!MyUser(client))
 		return 0;
@@ -1219,7 +1290,8 @@ static int sentinel_nickflip_post(Client *client, MessageTag *mtags, const char 
 	sentinel_sw_push(s->nick_ts, &s->nick_n, SENTINEL_MAX_NICK, now);
 	sentinel_sw_compact(s->nick_ts, &s->nick_n, now, SENTINEL_WINDOW_SEC);
 
-	if (s->nick_n >= SENTINEL_NICK_FLIP) {
+	if (s->nick_n >= SENTINEL_NICK_FLIP)
+	{
 		json_t *f = json_object();
 		json_object_set_new(f, "kind", json_string("sentinel_block"));
 		put_subject(f, client);
@@ -1239,30 +1311,31 @@ MOD_INIT()
 
 	ModDataInfo mreq;
 	memset(&mreq, 0, sizeof(mreq));
-	mreq.name  = "sentinel-state";
-	mreq.type  = MODDATATYPE_LOCAL_CLIENT;
-	mreq.free  = sentinel_state_free;
+	mreq.name = "sentinel-state";
+	mreq.type = MODDATATYPE_LOCAL_CLIENT;
+	mreq.free = sentinel_state_free;
 	sentinel_md = ModDataAdd(modinfo->handle, mreq);
-	if (!sentinel_md) {
+	if (!sentinel_md)
+	{
 		config_error("sentinel: ModDataAdd failed");
 		return MOD_FAILED;
 	}
 
 	HookAdd(modinfo->handle, HOOKTYPE_CAN_SEND_TO_CHANNEL, 0, sentinel_can_send_chan);
-	HookAdd(modinfo->handle, HOOKTYPE_CAN_SEND_TO_USER,    0, sentinel_can_send_user);
-	HookAdd(modinfo->handle, HOOKTYPE_CAN_JOIN,            0, sentinel_can_join_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT,       0, sentinel_connect_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_WELCOME,             0, sentinel_register_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT,          0, sentinel_quit_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_JOIN,          0, sentinel_join_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_PART,          0, sentinel_part_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_KICK,          0, sentinel_kick_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_NICKCHANGE,    0, sentinel_nickchange_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_NICKCHANGE,    1, sentinel_nickflip_post);
-	HookAdd(modinfo->handle, HOOKTYPE_CHANMSG,             0, sentinel_chanmsg_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_USERMSG,             0, sentinel_usermsg_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_KILL,          0, sentinel_kill_hook);
-	HookAdd(modinfo->handle, HOOKTYPE_TKL_ADD,             0, sentinel_tkl_add_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_CAN_SEND_TO_USER, 0, sentinel_can_send_user);
+	HookAdd(modinfo->handle, HOOKTYPE_CAN_JOIN, 0, sentinel_can_join_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT, 0, sentinel_connect_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_WELCOME, 0, sentinel_register_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 0, sentinel_quit_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_JOIN, 0, sentinel_join_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_PART, 0, sentinel_part_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_KICK, 0, sentinel_kick_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_NICKCHANGE, 0, sentinel_nickchange_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_NICKCHANGE, 1, sentinel_nickflip_post);
+	HookAdd(modinfo->handle, HOOKTYPE_CHANMSG, 0, sentinel_chanmsg_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_USERMSG, 0, sentinel_usermsg_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_KILL, 0, sentinel_kill_hook);
+	HookAdd(modinfo->handle, HOOKTYPE_TKL_ADD, 0, sentinel_tkl_add_hook);
 
 	return MOD_SUCCESS;
 }
