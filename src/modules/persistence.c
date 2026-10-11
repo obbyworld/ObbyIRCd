@@ -760,6 +760,21 @@ static void canonical_md_refresh_group(PersistEntry *e)
 		canonical_md_set(sess->client, e->canonical);
 }
 
+/* A canonical that quits without handing over must not stay referenced:
+ * its sessions would keep an "account_canonical" pointer to a freed Client,
+ * so we point them back at themselves. */
+static void forget_canonical(Client *client)
+{
+	PersistEntry *e;
+	for (e = persist_list; e; e = e->next)
+	{
+		if (e->canonical != client)
+			continue;
+		e->canonical = NULL;
+		canonical_md_refresh_group(e);
+	}
+}
+
 static void add_session(PersistEntry *e, Client *client)
 {
 	PersistSession *sess;
@@ -1170,7 +1185,10 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 		return 0;
 
 	if (!IsLoggedIn(client))
+	{
+		forget_canonical(client);
 		return 0;
+	}
 
 	e = find_entry(client->user->account);
 	if (!persistence_effective(client, e))
@@ -1179,8 +1197,7 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 		 * persistence ON may have left e->canonical pointing at us.
 		 * Clear it now so a subsequent reconnect's session-attach check
 		 * doesn't latch onto a use-after-free Client pointer. */
-		if (e && e->canonical == client)
-			e->canonical = NULL;
+		forget_canonical(client);
 		return 0;
 	}
 

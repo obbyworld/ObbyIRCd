@@ -91,11 +91,12 @@ int metadatadb_configrun(ConfigFile *cf, ConfigEntry *ce, int type);
 EVENT(write_metadatadb_evt);
 
 int account_login(Client *client, MessageTag *recv_mtags);
-int user_quit(Client *client, MessageTag *mtags, const char *comment);
+int user_connected(Client *client);
+CMD_OVERRIDE_FUNC(store_after_metadata_edit);
 
 int write_metadatadb(void);
 int write_metadata_entry(FILE *fd, const char *tmpfname, struct metadata *metadata, char *name, time_t last_seen);
-void store_metadata_for_user(Client *client, int remove);
+void store_metadata_for_user(Client *client);
 int read_metadatadb(void);
 void free_metadata_storage(void);
 int how_many_metadata_channel(Channel *channel, ModDataInfo *channelmd);
@@ -136,8 +137,10 @@ MOD_LOAD(){
 	}
 
 	HookAdd(modinfo->handle, HOOKTYPE_ACCOUNT_LOGIN, 0, account_login);
-	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_QUIT, 0, user_quit);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 0, user_quit);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT, 0, user_connected);
+	/* We add the override in MOD_LOAD because the metadata module registers
+	 * METADATA in its own MOD_INIT. */
+	CommandOverrideAdd(modinfo->handle, "METADATA", 0, store_after_metadata_edit);
 
 	/* Deferred to MOD_LOAD so the metadata module's MOD_LOAD has set
 	 * its limit defaults (max_channel_metadata etc); otherwise
@@ -267,12 +270,6 @@ int metadatadb_configrun(ConfigFile *cf, ConfigEntry *ce, int type){
 }
 
 EVENT(write_metadatadb_evt){
-	Client *acptr;
-	list_for_each_entry(acptr, &client_list, client_node){
-		if(!IsUser(acptr)) continue;
-		if(!IsLoggedIn(acptr)) continue;
-		store_metadata_for_user(acptr, 1);
-	}
 	write_metadatadb();
 }
 
@@ -556,7 +553,7 @@ int read_metadatadb(void){
 #undef FreeMetadataEntry
 #undef R_SAFE
 
-void store_metadata_for_user(Client *client, int remove){ /* client must be logged in */
+void store_metadata_for_user(Client *client){ /* client must be logged in */
 	struct metadata *metadata;
 	struct metadata_storage *sm, *prev_sm, *next_sm;
 	ModDataInfo *usermd;
@@ -609,7 +606,6 @@ void store_metadata_for_user(Client *client, int remove){ /* client must be logg
 	}
 
 	/* remove metadata that the user no longer wants */
-	if(!remove) return;
 	sm = metadata_storage;
 	prev_sm = NULL;
 	while(sm){
@@ -646,33 +642,45 @@ void store_metadata_for_user(Client *client, int remove){ /* client must be logg
 	}
 }
 
-int account_login(Client *client, MessageTag *recv_mtags){
-	ModDataInfo *usermd;
+/* We apply the account's last stored edit; the metadata module ignores a key
+ * that already holds the same value. */
+static void apply_stored_metadata(Client *client){
 	struct metadata_storage *sm;
-
-	usermd = findmoddata_byname("metadata_user", MODDATATYPE_CLIENT);
-	if(!usermd){
-		unreal_log(ULOG_ERROR, "metadata-db", "METADATA_MODDATA", NULL, "Error obtaining moddata for metadata! Maybe you forgot to load the metadata module?");
-		return 0;
-	}
-	if(!IsLoggedIn(client)){ /* just logged out, ignoring */
-		return 0;
-	}
-
-	store_metadata_for_user(client, 0);
-
-	/* set all stored metadata for the user */
+	Client *presence = account_canonical_client(client);
 	FOREACH_STORED_METADATA(sm){
 		if(strcmp(sm->account, client->user->account)) /* other user */
 			continue;
-		send_out_metadata(client->name, sm->name, sm->value);
 		sm->last_seen = TStime();
+		send_out_metadata(presence->name, sm->name, sm->value);
 	}
+}
+
+int account_login(Client *client, MessageTag *recv_mtags){
+	/* A SASL login comes before registration, when the nick does not name a
+	 * user yet, so user_connected applies the stored copy for those. */
+	if(IsLoggedIn(client) && IsUser(client))
+		apply_stored_metadata(client);
 	return 0;
 }
 
-int user_quit(Client *client, MessageTag *mtags, const char *comment){
-	if(!IsUser(client) || !IsLoggedIn(client)) return 0;
-	store_metadata_for_user(client, 1);
+int user_connected(Client *client){
+	if(IsLoggedIn(client))
+		apply_stored_metadata(client);
 	return 0;
+}
+
+/* We store a logged-in user's metadata when they edit it, and only then:
+ * the last edit from any of their clients is what the account keeps. */
+CMD_OVERRIDE_FUNC(store_after_metadata_edit){
+	int is_edit = parc >= 3 && (!strcasecmp(parv[2], "SET") || !strcasecmp(parv[2], "CLEAR"));
+	Client *presence;
+
+	CALL_NEXT_COMMAND_OVERRIDE();
+	if(!is_edit || !MyUser(client) || IsDead(client) || !IsLoggedIn(client))
+		return;
+	presence = account_canonical_client(client);
+	if(strcmp(parv[1], "*") && hash_find_nickatserver(parv[1], NULL) != presence)
+		return;
+	if(IsLoggedIn(presence))
+		store_metadata_for_user(presence);
 }
