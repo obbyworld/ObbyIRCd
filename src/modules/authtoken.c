@@ -29,11 +29,11 @@
 #include "unrealircd.h"
 
 ModuleHeader MOD_HEADER = {
-	"authtoken",
-	"1.0",
-	"draft/authtoken - Authentication tokens for external services",
-	"ObbyIRCd Team",
-	"unrealircd-6",
+    "authtoken",
+    "1.0",
+    "draft/authtoken - Authentication tokens for external services",
+    "ObbyIRCd Team",
+    "unrealircd-6",
 };
 
 /* ===================================================================
@@ -50,14 +50,12 @@ ModuleHeader MOD_HEADER = {
  * Types
  * =================================================================== */
 
-typedef struct AuthMask_
-{
+typedef struct AuthMask_ {
 	char *mask;
 	struct AuthMask_ *next;
 } AuthMask;
 
-typedef struct AuthService_
-{
+typedef struct AuthService_ {
 	char *key;
 	char *url;
 	char *description;
@@ -66,8 +64,7 @@ typedef struct AuthService_
 	struct AuthService_ *next;
 } AuthService;
 
-typedef struct AuthToken_
-{
+typedef struct AuthToken_ {
 	char *token;
 	char *service_key;
 	char *service_url;
@@ -80,15 +77,13 @@ typedef struct AuthToken_
 	struct AuthToken_ *next;
 } AuthToken;
 
-typedef struct TokenPiece_
-{
+typedef struct TokenPiece_ {
 	char *text;
 	struct TokenPiece_ *next;
 } TokenPiece;
 
 /* In-flight client-initiated draft/authtoken batch (long VALIDATE). */
-typedef struct PendingValidate_
-{
+typedef struct PendingValidate_ {
 	Client *client;
 	char ref[MAXBATCHREFLEN + 1];
 	char *service_key;
@@ -359,8 +354,7 @@ static void cull_expired(void)
 			else
 				tokens = next;
 			free_token(t);
-		}
-		else
+		} else
 		{
 			prev = t;
 		}
@@ -413,8 +407,7 @@ static void purge_pending_for_client(Client *c)
 			else
 				pending = next;
 			free_pending(cur);
-		}
-		else
+		} else
 		{
 			prev = cur;
 		}
@@ -755,7 +748,8 @@ CMD_OVERRIDE_FUNC(authtoken_override_batch)
 		{
 			sendto_one(client, NULL,
 			           ":%s FAIL BATCH INVALID_REFTAG %s :Invalid "
-			           "batch reference tag", me.name, ref);
+			           "batch reference tag",
+			           me.name, ref);
 			return;
 		}
 
@@ -763,8 +757,8 @@ CMD_OVERRIDE_FUNC(authtoken_override_batch)
 		{
 			send_fail(client, "NEED_CAPABILITY", "draft/authtoken",
 			          NULL, "You must negotiate the draft/authtoken "
-			          "capability before sending a draft/authtoken "
-			          "batch");
+			                "capability before sending a draft/authtoken "
+			                "batch");
 			return;
 		}
 
@@ -1009,22 +1003,20 @@ static int authtoken_configtest_service(ConfigEntry *ce, int *errs)
 			if (strlen(cep->value) > 250)
 			{
 				config_error("%s:%i: authtoken::service::url exceeds "
-				             "250 bytes", cep->file->filename,
+				             "250 bytes",
+				             cep->file->filename,
 				             cep->line_number);
 				errors++;
 				continue;
 			}
 			has_url = 1;
-		}
-		else if (!strcasecmp(cep->name, "description"))
+		} else if (!strcasecmp(cep->name, "description"))
 		{
 			/* Free-form, optional. */
-		}
-		else if (!strcasecmp(cep->name, "require-account"))
+		} else if (!strcasecmp(cep->name, "require-account"))
 		{
 			/* yes/no validated by config_checkval at run time. */
-		}
-		else if (!strcasecmp(cep->name, "allow-validate-mask"))
+		} else if (!strcasecmp(cep->name, "allow-validate-mask"))
 		{
 			if (BadPtr(cep->value))
 			{
@@ -1033,8 +1025,7 @@ static int authtoken_configtest_service(ConfigEntry *ce, int *errs)
 				             cep->file->filename, cep->line_number);
 				errors++;
 			}
-		}
-		else
+		} else
 		{
 			config_warn("%s:%i: unknown directive authtoken::service::"
 			            "%s (ignored)",
@@ -1085,13 +1076,13 @@ static int authtoken_configtest(ConfigFile *cf, ConfigEntry *ce,
 			if (n < AT_MIN_TOKEN_LENGTH || n > AT_MAX_TOKEN_LENGTH)
 			{
 				config_error("%s:%i: authtoken::token-length must be "
-				             "between %d and %d", cep->file->filename,
+				             "between %d and %d",
+				             cep->file->filename,
 				             cep->line_number, AT_MIN_TOKEN_LENGTH,
 				             AT_MAX_TOKEN_LENGTH);
 				errors++;
 			}
-		}
-		else if (!strcasecmp(cep->name, "token-lifetime"))
+		} else if (!strcasecmp(cep->name, "token-lifetime"))
 		{
 			if (BadPtr(cep->value))
 			{
@@ -1099,12 +1090,10 @@ static int authtoken_configtest(ConfigFile *cf, ConfigEntry *ce,
 				             cep->file->filename, cep->line_number);
 				errors++;
 			}
-		}
-		else if (!strcasecmp(cep->name, "service"))
+		} else if (!strcasecmp(cep->name, "service"))
 		{
 			authtoken_configtest_service(cep, &errors);
-		}
-		else
+		} else
 		{
 			config_warn("%s:%i: unknown directive authtoken::%s",
 			            cep->file->filename, cep->line_number,

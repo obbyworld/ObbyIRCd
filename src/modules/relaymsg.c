@@ -8,7 +8,7 @@
 #include "unrealircd.h"
 
 #define CONF_BLOCK_NAME "relaymsg"
-#define NAME_RELAYMSG "draft/relaymsg"
+#define NAME_RELAYMSG   "draft/relaymsg"
 
 long CAP_RELAYMSG = 0L;
 
@@ -25,21 +25,19 @@ CMD_FUNC(cmd_relaymsg);
 CMD_FUNC(cmd_rrelaymsg);
 static void relay_to_channel(Channel *channel, MessageTag *mtags, const char *nick, const char *text);
 
-struct MyConfStruct
-{
+struct MyConfStruct {
 	char *hostmask;
 
 	bool got_hostmask;
 };
 static struct MyConfStruct MyConf;
 
-ModuleHeader MOD_HEADER
-={
-		"relaymsg", /* Name of module */
-		"1.0.1", /* Version */
-		"Implements draft/relaymsg", /* Short description of module */
-		"Valware", /* Author */
-		"unrealircd-6", /* Version of UnrealIRCd */
+ModuleHeader MOD_HEADER = {
+    "relaymsg", /* Name of module */
+    "1.0.1", /* Version */
+    "Implements draft/relaymsg", /* Short description of module */
+    "Valware", /* Author */
+    "unrealircd-6", /* Version of UnrealIRCd */
 };
 
 // Module initialization
@@ -53,7 +51,7 @@ MOD_INIT()
 
 	set_config(); // Set defaults
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, hookfunc_configrun); // Run through the config and set the values
-	
+
 	memset(&c, 0, sizeof(c));
 	c.name = NAME_RELAYMSG;
 	c.parameter = relay_msg_cap_parameter;
@@ -65,8 +63,8 @@ MOD_INIT()
 	mtag.clicap_handler = c2;
 	MessageTagHandlerAdd(modinfo->handle, &mtag);
 
-	CommandAdd(modinfo->handle, "RELAYMSG", cmd_relaymsg, 4, CMD_USER|CMD_SERVER|CMD_NOLAG); // Add the command
-	CommandAdd(modinfo->handle, "RRELAYMSG", cmd_rrelaymsg, 5, CMD_SERVER|CMD_NOLAG|CMD_BIGLINES); // Add the command
+	CommandAdd(modinfo->handle, "RELAYMSG", cmd_relaymsg, 4, CMD_USER | CMD_SERVER | CMD_NOLAG); // Add the command
+	CommandAdd(modinfo->handle, "RRELAYMSG", cmd_rrelaymsg, 5, CMD_SERVER | CMD_NOLAG | CMD_BIGLINES); // Add the command
 
 	return MOD_SUCCESS;
 }
@@ -87,10 +85,10 @@ MOD_UNLOAD()
 // Module test
 MOD_TEST()
 {
-   memset(&MyConf, 0, sizeof(MyConf)); // Clear it out
+	memset(&MyConf, 0, sizeof(MyConf)); // Clear it out
 
-   HookAdd(modinfo->handle, HOOKTYPE_CONFIGTEST, 0, hookfunc_configtest); // Test the config
-   return MOD_SUCCESS;
+	HookAdd(modinfo->handle, HOOKTYPE_CONFIGTEST, 0, hookfunc_configtest); // Test the config
+	return MOD_SUCCESS;
 }
 
 // Set defaults for the configuration settings here (called in MOD_INIT)
@@ -114,21 +112,21 @@ int hookfunc_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 	ConfigEntry *cep, *cep2;
 
 	// Filter on CONFIG_MAIN only (top-level block)
-	if(type != CONFIG_MAIN)
+	if (type != CONFIG_MAIN)
 		return 0;
 
 	// Validation check
-	if(!ce || !ce->name)
+	if (!ce || !ce->name)
 		return 0;
 
 	// Check if it's our block
-	if(strcmp(ce->name, CONF_BLOCK_NAME))
+	if (strcmp(ce->name, CONF_BLOCK_NAME))
 		return 0;
 
 	// Look inside the block
-	for(cep = ce->items; cep; cep = cep->next)
+	for (cep = ce->items; cep; cep = cep->next)
 	{
-		if(!cep->value)
+		if (!cep->value)
 		{
 			config_error("%s:%i: blank %s value", cep->file->filename, cep->line_number, CONF_BLOCK_NAME); // Rep0t error
 			errors++;
@@ -137,9 +135,9 @@ int hookfunc_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 
 		// Check for known directives
 		// If it's a string, check if it's empty
-		if(!strcmp(cep->name, "hostmask"))
+		if (!strcmp(cep->name, "hostmask"))
 		{
-			if(MyConf.got_hostmask)
+			if (MyConf.got_hostmask)
 			{
 				config_error("%s:%i: duplicate %s::%s directive", cep->file->filename, cep->line_number, CONF_BLOCK_NAME, cep->name);
 				errors++;
@@ -147,7 +145,7 @@ int hookfunc_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 			}
 
 			MyConf.got_hostmask = 1;
-			if(!strlen(cep->value) || !strcmp(cep->value, "@"))
+			if (!strlen(cep->value) || !strcmp(cep->value, "@"))
 			{
 				config_error("%s:%i: %s::%s must be non-empty and be in nick@hostmask format", cep->file->filename, cep->line_number, CONF_BLOCK_NAME, cep->name);
 				errors++;
@@ -174,21 +172,21 @@ int hookfunc_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 {
 	ConfigEntry *cep, *cep2;
 
-	if(type != CONFIG_MAIN)
+	if (type != CONFIG_MAIN)
 		return 0;
 
-	if(!ce || !ce->name)
+	if (!ce || !ce->name)
 		return 0;
 
-	if(strcmp(ce->name, CONF_BLOCK_NAME))
+	if (strcmp(ce->name, CONF_BLOCK_NAME))
 		return 0;
 
-	for(cep = ce->items; cep; cep = cep->next) 
+	for (cep = ce->items; cep; cep = cep->next)
 	{
-		if(!cep->name)
+		if (!cep->name)
 			continue;
 
-		if(!strcmp(cep->name, "hostmask"))
+		if (!strcmp(cep->name, "hostmask"))
 		{
 			safe_strdup(MyConf.hostmask, cep->value);
 			continue;
@@ -259,18 +257,18 @@ CMD_FUNC(cmd_relaymsg)
 			return;
 		}
 	}
-	 
+
 	if (!strchr(parv[2], '/'))
 	{
 		sendnotice(client, "Invalid spoofed nick format");
 		return;
 	}
 
-    if (strlen(parv[2]) > 35)
-    {
-        sendnotice(client, "Spoofed nick too long");
-        return;
-    }
+	if (strlen(parv[2]) > 35)
+	{
+		sendnotice(client, "Spoofed nick too long");
+		return;
+	}
 
 	Channel *channel = find_channel(parv[1]);
 	if (!channel)
@@ -290,7 +288,7 @@ CMD_FUNC(cmd_relaymsg)
 
 	relay_to_channel(channel, mtags, parv[2], parv[3]);
 	sendto_server(NULL, 0, 0, mtags,
-						 ":%s RRELAYMSG %s %s %s :%s", me.name, client->id, parv[1], parv[2], parv[3]);
+	              ":%s RRELAYMSG %s %s %s :%s", me.name, client->id, parv[1], parv[2], parv[3]);
 }
 
 CMD_FUNC(cmd_rrelaymsg)
@@ -298,21 +296,21 @@ CMD_FUNC(cmd_rrelaymsg)
 	if (parc < 4)
 		return;
 
-	// We validated before but let's do it again just in case 
+	// We validated before but let's do it again just in case
 	// someone tries to bypass the command and send messed up stuff
 	const char *invalid_chars = " \t\n\r!+%@&#$:'\"?*,.";
 	for (const char *p = parv[2]; *p; p++)
 		if (strchr(invalid_chars, *p))
 			return;
-	 
+
 	if (!strchr(parv[1], '/'))
 		return;
 
 	Channel *channel = find_channel(parv[2]);
 	if (!channel)
 		return;
-	
+
 	relay_to_channel(channel, recv_mtags, parv[3], parv[4]);
 	sendto_server(client, 0, 0, recv_mtags,
-				 ":%s RRELAYMSG %s %s %s :%s", me.name, parv[1], parv[2], parv[3], parv[4]);
+	              ":%s RRELAYMSG %s %s %s :%s", me.name, parv[1], parv[2], parv[3], parv[4]);
 }

@@ -30,18 +30,18 @@
 #include <openssl/evp.h>
 #include <stdint.h>
 
-#define MYCONF "pushbot"
+#define MYCONF     "pushbot"
 #define DEFAULT_DB "pushbot.db"
 
 /* Gateway URL path. */
 #define PB_GATEWAY_PATH "/pushbot/v1/gateway"
 
 /* WS close codes (Discord-style). */
-#define PB_CLOSE_GOING_AWAY 1001 /* RFC 6455: endpoint is going away */
-#define PB_CLOSE_AUTH_FAILED 4004
+#define PB_CLOSE_GOING_AWAY      1001 /* RFC 6455: endpoint is going away */
+#define PB_CLOSE_AUTH_FAILED     4004
 #define PB_CLOSE_INVALID_SESSION 4006
-#define PB_CLOSE_TIMEOUT 4009
-#define PB_CLOSE_QUEUE_OVERFLOW 4011
+#define PB_CLOSE_TIMEOUT         4009
+#define PB_CLOSE_QUEUE_OVERFLOW  4011
 
 /* Default heartbeat interval (ms). */
 #define PB_HEARTBEAT_INTERVAL_MS 30000
@@ -49,14 +49,14 @@
 #define PB_HEARTBEAT_GRACE_MS (PB_HEARTBEAT_INTERVAL_MS * 2 + 5000)
 
 /* Opcodes per spec §4.3. */
-#define PB_OP_DISPATCH       0
-#define PB_OP_HEARTBEAT      1
-#define PB_OP_IDENTIFY       2
-#define PB_OP_RESUME         6
-#define PB_OP_RECONNECT      7
+#define PB_OP_DISPATCH        0
+#define PB_OP_HEARTBEAT       1
+#define PB_OP_IDENTIFY        2
+#define PB_OP_RESUME          6
+#define PB_OP_RECONNECT       7
 #define PB_OP_INVALID_SESSION 9
-#define PB_OP_HELLO          10
-#define PB_OP_HEARTBEAT_ACK  11
+#define PB_OP_HELLO           10
+#define PB_OP_HEARTBEAT_ACK   11
 /* Phase 5: slash-command opcodes. */
 #define PB_OP_COMMAND_REGISTER     20  /* bot -> server */
 #define PB_OP_INTERACTION_RESPONSE 21  /* bot -> server */
@@ -65,9 +65,9 @@
 #define PB_OP_SEND_MESSAGE         31  /* bot -> server: spontaneous PRIVMSG/NOTICE */
 #define PB_OP_SEND_TAGMSG          32  /* bot -> server: TAGMSG with client-only tags */
 
-#define PB_WORKFLOW_TTL_SEC          3600
-#define PB_WORKFLOW_GC_INTERVAL_MS   60000
-#define PB_WORKFLOW_JSON_BUDGET      3000
+#define PB_WORKFLOW_TTL_SEC        3600
+#define PB_WORKFLOW_GC_INTERVAL_MS 60000
+#define PB_WORKFLOW_JSON_BUDGET    3000
 
 #define PB_INTERACTION_TIMEOUT_SEC 3
 #define PB_INTERACTION_DEFER_SEC   15
@@ -80,12 +80,11 @@
 #define PB_INTERACTION_WORKFLOW_SEC (30 * 60)
 
 ModuleHeader MOD_HEADER = {
-	"pushbot",
-	"0.2",
-	"Discord-style out-of-process bots (phase 1+2: skeleton + gateway)",
-	"ObbyIRCd Team",
-	"unrealircd-6"
-};
+    "pushbot",
+    "0.2",
+    "Discord-style out-of-process bots (phase 1+2: skeleton + gateway)",
+    "ObbyIRCd Team",
+    "unrealircd-6"};
 
 /* ===================================================================
  * Internal state
@@ -93,20 +92,20 @@ ModuleHeader MOD_HEADER = {
 
 typedef enum {
 	PB_SCOPE_CHANNEL = 0,
-	PB_SCOPE_SERVER  = 1,
+	PB_SCOPE_SERVER = 1,
 } PbScope;
 
 typedef enum {
 	PB_TRANSPORT_GATEWAY = 0,
 	PB_TRANSPORT_WEBHOOK = 1,
-	PB_TRANSPORT_BOTH    = 2,
+	PB_TRANSPORT_BOTH = 2,
 } PbTransport;
 
 typedef enum {
-	PB_STATUS_PENDING   = 0,
-	PB_STATUS_ACTIVE    = 1,
+	PB_STATUS_PENDING = 0,
+	PB_STATUS_ACTIVE = 1,
 	PB_STATUS_SUSPENDED = 2,
-	PB_STATUS_DELETED   = 3,
+	PB_STATUS_DELETED = 3,
 } PbStatus;
 
 struct PbSession;
@@ -143,8 +142,8 @@ struct PbBot {
 	PbStatus status;
 	char *webhook_url;     /* may be NULL */
 	char *webhook_secret;  /* HMAC-SHA256 signing key; may be NULL */
-	int   webhook_failures; /* consecutive non-2xx; reset on success */
-	int   webhook_suspended; /* 1 = stop firing webhooks until /REHASH */
+	int webhook_failures; /* consecutive non-2xx; reset on success */
+	int webhook_suspended; /* 1 = stop firing webhooks until /REHASH */
 	char *config_token;    /* plaintext token from config; NULL for self-reg */
 	NameList *auto_join;   /* channels to auto-join after ghost creation */
 	int from_config;       /* 1 = defined in obbyircd.conf this run */
@@ -266,7 +265,8 @@ static long pb_cap_away_notify = 0L;
 static void pb_broadcast_away(Client *ghost)
 {
 	MessageTag *mtags = NULL;
-	if (!ghost || !ghost->user) return;
+	if (!ghost || !ghost->user)
+		return;
 	new_message(ghost, NULL, &mtags);
 	if (ghost->user->away)
 		sendto_local_common_channels(ghost, ghost, pb_cap_away_notify, mtags,
@@ -425,21 +425,21 @@ RPC_CALL_FUNC(pb_rpc_unsuspend);
 RPC_CALL_FUNC(pb_rpc_delete);
 
 /* obby.world/channel-bots cap helpers */
-static int  pb_mtag_bot_info_is_ok(Client *c, const char *n, const char *v);
-static int  pb_mtag_invoked_by_is_ok(Client *c, const char *n, const char *v);
-static int  pb_hook_welcome_burst(Client *client);
-static int  pb_hook_oper_change(Client *client, int add,
-                                const char *oper_block, const char *operclass);
+static int pb_mtag_bot_info_is_ok(Client *c, const char *n, const char *v);
+static int pb_mtag_invoked_by_is_ok(Client *c, const char *n, const char *v);
+static int pb_hook_welcome_burst(Client *client);
+static int pb_hook_oper_change(Client *client, int add,
+                               const char *oper_block, const char *operclass);
 static void pb_send_bot_burst(Client *client);
 static void pb_broadcast_bot_event(PbBot *b, const char *event);
-static int  pb_bot_visible_to(PbBot *b, Client *client);
+static int pb_bot_visible_to(PbBot *b, Client *client);
 static json_t *pb_bot_to_burst_json(PbBot *b, int for_oper, const char *event);
 
 /* Phase 5: slash commands */
-static int  pb_mtag_botcmd_is_ok(Client *c, const char *n, const char *v);
-static int  pb_mtag_botcmds_query_is_ok(Client *c, const char *n, const char *v);
-static int  pb_mtag_botcmds_is_ok(Client *c, const char *n, const char *v);
-static int  pb_mtag_botcmds_changed_is_ok(Client *c, const char *n, const char *v);
+static int pb_mtag_botcmd_is_ok(Client *c, const char *n, const char *v);
+static int pb_mtag_botcmds_query_is_ok(Client *c, const char *n, const char *v);
+static int pb_mtag_botcmds_is_ok(Client *c, const char *n, const char *v);
+static int pb_mtag_botcmds_changed_is_ok(Client *c, const char *n, const char *v);
 static void pb_send_botcmds_to(Client *client, PbBot *b);
 static void pb_mtag_forward(Client *sender, MessageTag *recv_mtags,
                             MessageTag **mtag_list, const char *signature);
@@ -461,10 +461,10 @@ static int pb_mtag_bottools_is_ok(Client *c, const char *n, const char *v);
 static int pb_route_bottools_action(Client *invoker, Client *target_user,
                                     Channel *target_chan, const char *bot_tools_b64);
 EVENT(pb_workflow_gc);
-static int  pb_route_botcmd_channel(Client *invoker, Channel *channel,
-                                    MessageTag *mtags, const char *botcmd_b64);
-static int  pb_route_botcmd_user(Client *invoker, Client *to, MessageTag *mtags,
-                                 const char *botcmd_b64, const char *channel_context);
+static int pb_route_botcmd_channel(Client *invoker, Channel *channel,
+                                   MessageTag *mtags, const char *botcmd_b64);
+static int pb_route_botcmd_user(Client *invoker, Client *to, MessageTag *mtags,
+                                const char *botcmd_b64, const char *channel_context);
 static PbInteraction *pb_interaction_new(PbBot *bot, Client *invoker,
                                          const char *channel, const char *msgid,
                                          int invoked_public);
@@ -506,7 +506,8 @@ MOD_INIT()
 	mreq.type = MODDATATYPE_LOCAL_CLIENT;
 	mreq.free = pb_moddata_session_free;
 	pb_session_md = ModDataAdd(modinfo->handle, mreq);
-	if (!pb_session_md) {
+	if (!pb_session_md)
+	{
 		config_error("[pushbot] ModDataAdd(pushbot_session) failed: %s",
 		             ModuleGetErrorStr(modinfo->handle));
 		return MOD_FAILED;
@@ -535,7 +536,8 @@ MOD_INIT()
 		ClientCapabilityInfo cap;
 		memset(&cap, 0, sizeof(cap));
 		cap.name = PB_CAP_NAME;
-		if (!ClientCapabilityAdd(modinfo->handle, &cap, &CAP_CHANBOTS)) {
+		if (!ClientCapabilityAdd(modinfo->handle, &cap, &CAP_CHANBOTS))
+		{
 			config_error("[pushbot] ClientCapabilityAdd(%s) failed", PB_CAP_NAME);
 			return MOD_FAILED;
 		}
@@ -546,7 +548,8 @@ MOD_INIT()
 		ClientCapabilityInfo cmdcap;
 		memset(&cmdcap, 0, sizeof(cmdcap));
 		cmdcap.name = "draft/bot-cmds";
-		if (!ClientCapabilityAdd(modinfo->handle, &cmdcap, &CAP_BOT_CMDS)) {
+		if (!ClientCapabilityAdd(modinfo->handle, &cmdcap, &CAP_BOT_CMDS))
+		{
 			config_error("[pushbot] ClientCapabilityAdd(draft/bot-cmds) failed");
 			return MOD_FAILED;
 		}
@@ -618,13 +621,27 @@ MOD_INIT()
 		RPCHandlerInfo r;
 		memset(&r, 0, sizeof(r));
 		r.loglevel = ULOG_DEBUG;
-		r.method = "pushbot.list";    r.call = pb_rpc_list;       RPCHandlerAdd(modinfo->handle, &r);
-		r.method = "pushbot.get";     r.call = pb_rpc_get;        RPCHandlerAdd(modinfo->handle, &r);
-		r.method = "pushbot.register";r.call = pb_rpc_register;   RPCHandlerAdd(modinfo->handle, &r);
-		r.method = "pushbot.approve"; r.call = pb_rpc_approve;    RPCHandlerAdd(modinfo->handle, &r);
-		r.method = "pushbot.suspend"; r.call = pb_rpc_suspend;    RPCHandlerAdd(modinfo->handle, &r);
-		r.method = "pushbot.unsuspend"; r.call = pb_rpc_unsuspend;RPCHandlerAdd(modinfo->handle, &r);
-		r.method = "pushbot.delete";  r.call = pb_rpc_delete;     RPCHandlerAdd(modinfo->handle, &r);
+		r.method = "pushbot.list";
+		r.call = pb_rpc_list;
+		RPCHandlerAdd(modinfo->handle, &r);
+		r.method = "pushbot.get";
+		r.call = pb_rpc_get;
+		RPCHandlerAdd(modinfo->handle, &r);
+		r.method = "pushbot.register";
+		r.call = pb_rpc_register;
+		RPCHandlerAdd(modinfo->handle, &r);
+		r.method = "pushbot.approve";
+		r.call = pb_rpc_approve;
+		RPCHandlerAdd(modinfo->handle, &r);
+		r.method = "pushbot.suspend";
+		r.call = pb_rpc_suspend;
+		RPCHandlerAdd(modinfo->handle, &r);
+		r.method = "pushbot.unsuspend";
+		r.call = pb_rpc_unsuspend;
+		RPCHandlerAdd(modinfo->handle, &r);
+		r.method = "pushbot.delete";
+		r.call = pb_rpc_delete;
+		RPCHandlerAdd(modinfo->handle, &r);
 	}
 
 	/* Cache the away-notify cap bit so we can broadcast bot
@@ -656,11 +673,13 @@ MOD_LOAD()
 {
 	CommandOverrideAdd(modinfo->handle, "BATCH", 0, pb_override_batch);
 
-	if (pb_open_db() < 0) {
+	if (pb_open_db() < 0)
+	{
 		config_error("[pushbot] cannot open database at %s", cfg.database_path);
 		return MOD_FAILED;
 	}
-	if (pb_init_schema() < 0) {
+	if (pb_init_schema() < 0)
+	{
 		config_error("[pushbot] schema init failed");
 		return MOD_FAILED;
 	}
@@ -691,7 +710,8 @@ MOD_UNLOAD()
 	 * the session, and the bot becomes a silent zombie until its
 	 * systemd unit gets bounced.  Sending a Close frame here forces
 	 * the bot's read loop to disconnect and reconnect cleanly. */
-	for (b = bots; b; b = b->next) {
+	for (b = bots; b; b = b->next)
+	{
 		if (b->session && b->session->client && !IsDead(b->session->client))
 			pb_close_ws(b->session->client, PB_CLOSE_GOING_AWAY,
 			            "pushbot module reloading");
@@ -703,13 +723,16 @@ MOD_UNLOAD()
 	 * leave the back-pointer pointing at freed memory we crash
 	 * during the framework's teardown, not in our code -- which is
 	 * exactly what the 17:55 /REHASH SEGV looked like. */
-	for (b = bots; b; b = b->next) {
-		if (b->session) {
+	for (b = bots; b; b = b->next)
+	{
+		if (b->session)
+		{
 			b->session->bot = NULL;
 			b->session = NULL;
 		}
 	}
-	for (b = bots; b; b = n) {
+	for (b = bots; b; b = n)
+	{
 		n = b->next;
 		pb_destroy_ghost(b, "pushbot module unloaded");
 		pb_free_bot(b);
@@ -719,7 +742,8 @@ MOD_UNLOAD()
 	while (workflows)
 		pb_workflow_free(workflows);
 
-	if (db) {
+	if (db)
+	{
 		sqlite3_close(db);
 		db = NULL;
 	}
@@ -735,50 +759,59 @@ static int pb_test_bot_block(ConfigFile *cf, ConfigEntry *bot_ce, int *errs)
 {
 	int errors = 0;
 	int has_token = 0;
-	if (!bot_ce->value || !*bot_ce->value) {
+	if (!bot_ce->value || !*bot_ce->value)
+	{
 		config_error("%s:%d: pushbot::bot block needs a nick",
 		             bot_ce->file->filename, bot_ce->line_number);
 		errors++;
 	}
-	for (ConfigEntry *cep = bot_ce->items; cep; cep = cep->next) {
-		if (!cep->name) continue;
-		if (!strcmp(cep->name, "token")) {
-			if (!cep->value || !*cep->value) {
+	for (ConfigEntry *cep = bot_ce->items; cep; cep = cep->next)
+	{
+		if (!cep->name)
+			continue;
+		if (!strcmp(cep->name, "token"))
+		{
+			if (!cep->value || !*cep->value)
+			{
 				config_error("%s:%d: pushbot::bot::token must have a value",
 				             cep->file->filename, cep->line_number);
 				errors++;
-			} else has_token = 1;
-		} else if (!strcmp(cep->name, "realname")
-		        || !strcmp(cep->name, "scope")
-		        || !strcmp(cep->name, "transport")
-		        || !strcmp(cep->name, "webhook-url")
-		        || !strcmp(cep->name, "webhook-secret")) {
-			if (!cep->value) {
+			} else
+				has_token = 1;
+		} else if (!strcmp(cep->name, "realname") || !strcmp(cep->name, "scope") || !strcmp(cep->name, "transport") || !strcmp(cep->name, "webhook-url") || !strcmp(cep->name, "webhook-secret"))
+		{
+			if (!cep->value)
+			{
 				config_error("%s:%d: pushbot::bot::%s needs a value",
 				             cep->file->filename, cep->line_number, cep->name);
 				errors++;
 			}
-		} else if (!strcmp(cep->name, "auto-join")) {
+		} else if (!strcmp(cep->name, "auto-join"))
+		{
 			/* Block of channel names; values inside are channels. */
-			for (ConfigEntry *ch = cep->items; ch; ch = ch->next) {
+			for (ConfigEntry *ch = cep->items; ch; ch = ch->next)
+			{
 				if (!ch->name ||
 				    (ch->name[0] != '#' && ch->name[0] != '&' &&
-				     ch->name[0] != '^' && ch->name[0] != '$')) {
+				     ch->name[0] != '^' && ch->name[0] != '$'))
+				{
 					config_error("%s:%d: pushbot::bot::auto-join entries must be channel names",
 					             ch->file->filename, ch->line_number);
 					errors++;
 				}
 			}
-		} else if (!strcmp(cep->name, "permissions")
-		        || !strcmp(cep->name, "triggers")) {
+		} else if (!strcmp(cep->name, "permissions") || !strcmp(cep->name, "triggers"))
+		{
 			/* Reserved for later phases; quietly accept structure. */
-		} else {
+		} else
+		{
 			config_error("%s:%d: unknown directive pushbot::bot::%s",
 			             cep->file->filename, cep->line_number, cep->name);
 			errors++;
 		}
 	}
-	if (!has_token) {
+	if (!has_token)
+	{
 		config_error("%s:%d: pushbot::bot %s missing token",
 		             bot_ce->file->filename, bot_ce->line_number,
 		             bot_ce->value ? bot_ce->value : "");
@@ -791,46 +824,59 @@ static int pb_test_bot_block(ConfigFile *cf, ConfigEntry *bot_ce, int *errs)
 static int pb_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 {
 	int errors = 0;
-	if (type != CONFIG_MAIN) return 0;
-	if (!ce || !ce->name || strcmp(ce->name, MYCONF)) return 0;
+	if (type != CONFIG_MAIN)
+		return 0;
+	if (!ce || !ce->name || strcmp(ce->name, MYCONF))
+		return 0;
 
-	for (ConfigEntry *cep = ce->items; cep; cep = cep->next) {
-		if (!cep->name) continue;
-		if (!strcmp(cep->name, "mode")) {
-			if (!cep->value
-			    || (strcmp(cep->value, "admin")
-			        && strcmp(cep->value, "approval")
-			        && strcmp(cep->value, "open"))) {
+	for (ConfigEntry *cep = ce->items; cep; cep = cep->next)
+	{
+		if (!cep->name)
+			continue;
+		if (!strcmp(cep->name, "mode"))
+		{
+			if (!cep->value || (strcmp(cep->value, "admin") && strcmp(cep->value, "approval") && strcmp(cep->value, "open")))
+			{
 				config_error("%s:%d: pushbot::mode must be admin|approval|open",
 				             cep->file->filename, cep->line_number);
 				errors++;
 			}
-		} else if (!strcmp(cep->name, "database")) {
-			if (!cep->value) {
+		} else if (!strcmp(cep->name, "database"))
+		{
+			if (!cep->value)
+			{
 				config_error("%s:%d: pushbot::database needs a value",
 				             cep->file->filename, cep->line_number);
 				errors++;
 			}
-		} else if (!strcmp(cep->name, "webhook-failure-suspend-after")) {
-			if (!cep->value || atoi(cep->value) <= 0) {
+		} else if (!strcmp(cep->name, "webhook-failure-suspend-after"))
+		{
+			if (!cep->value || atoi(cep->value) <= 0)
+			{
 				config_error("%s:%d: pushbot::webhook-failure-suspend-after needs positive seconds",
 				             cep->file->filename, cep->line_number);
 				errors++;
 			}
-		} else if (!strcmp(cep->name, "default-permissions")) {
+		} else if (!strcmp(cep->name, "default-permissions"))
+		{
 			/* Reserved for later phases. */
-		} else if (!strcmp(cep->name, "registration-secret")) {
-			if (!cep->value || !*cep->value) {
+		} else if (!strcmp(cep->name, "registration-secret"))
+		{
+			if (!cep->value || !*cep->value)
+			{
 				config_error("%s:%d: pushbot::registration-secret cannot be empty",
 				             cep->file->filename, cep->line_number);
 				errors++;
-			} else if (strlen(cep->value) < 16) {
+			} else if (strlen(cep->value) < 16)
+			{
 				config_warn("%s:%d: pushbot::registration-secret is shorter than 16 chars; use a longer secret",
-				             cep->file->filename, cep->line_number);
+				            cep->file->filename, cep->line_number);
 			}
-		} else if (!strcmp(cep->name, "bot")) {
+		} else if (!strcmp(cep->name, "bot"))
+		{
 			pb_test_bot_block(cf, cep, &errors);
-		} else {
+		} else
+		{
 			config_error("%s:%d: unknown directive pushbot::%s",
 			             cep->file->filename, cep->line_number, cep->name);
 			errors++;
@@ -846,17 +892,28 @@ static void pb_parse_bot_block(ConfigEntry *bot_ce)
 	safe_strdup(b->nick, bot_ce->value);
 	b->scope = PB_SCOPE_CHANNEL;
 	b->transport = PB_TRANSPORT_GATEWAY;
-	for (ConfigEntry *cep = bot_ce->items; cep; cep = cep->next) {
-		if (!cep->name) continue;
-		if (!strcmp(cep->name, "token")) safe_strdup(b->token, cep->value);
-		else if (!strcmp(cep->name, "realname")) safe_strdup(b->realname, cep->value);
-		else if (!strcmp(cep->name, "scope")) b->scope = pb_parse_scope(cep->value);
-		else if (!strcmp(cep->name, "transport")) b->transport = pb_parse_transport(cep->value);
-		else if (!strcmp(cep->name, "webhook-url")) safe_strdup(b->webhook_url, cep->value);
-		else if (!strcmp(cep->name, "webhook-secret")) safe_strdup(b->webhook_secret, cep->value);
-		else if (!strcmp(cep->name, "prefix")) safe_strdup(b->prefix, cep->value);
-		else if (!strcmp(cep->name, "auto-join")) {
-			for (ConfigEntry *ch = cep->items; ch; ch = ch->next) {
+	for (ConfigEntry *cep = bot_ce->items; cep; cep = cep->next)
+	{
+		if (!cep->name)
+			continue;
+		if (!strcmp(cep->name, "token"))
+			safe_strdup(b->token, cep->value);
+		else if (!strcmp(cep->name, "realname"))
+			safe_strdup(b->realname, cep->value);
+		else if (!strcmp(cep->name, "scope"))
+			b->scope = pb_parse_scope(cep->value);
+		else if (!strcmp(cep->name, "transport"))
+			b->transport = pb_parse_transport(cep->value);
+		else if (!strcmp(cep->name, "webhook-url"))
+			safe_strdup(b->webhook_url, cep->value);
+		else if (!strcmp(cep->name, "webhook-secret"))
+			safe_strdup(b->webhook_secret, cep->value);
+		else if (!strcmp(cep->name, "prefix"))
+			safe_strdup(b->prefix, cep->value);
+		else if (!strcmp(cep->name, "auto-join"))
+		{
+			for (ConfigEntry *ch = cep->items; ch; ch = ch->next)
+			{
 				if (ch->name &&
 				    (ch->name[0] == '#' || ch->name[0] == '&' ||
 				     ch->name[0] == '^' || ch->name[0] == '$'))
@@ -864,36 +921,48 @@ static void pb_parse_bot_block(ConfigEntry *bot_ce)
 			}
 		}
 	}
-	if (!b->realname) safe_strdup(b->realname, b->nick);
+	if (!b->realname)
+		safe_strdup(b->realname, b->nick);
 	b->next = cfg.pending_bots;
-	if (cfg.pending_bots) cfg.pending_bots->prev = b;
+	if (cfg.pending_bots)
+		cfg.pending_bots->prev = b;
 	cfg.pending_bots = b;
 }
 
 static int pb_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 {
-	if (type != CONFIG_MAIN) return 0;
-	if (!ce || !ce->name || strcmp(ce->name, MYCONF)) return 0;
+	if (type != CONFIG_MAIN)
+		return 0;
+	if (!ce || !ce->name || strcmp(ce->name, MYCONF))
+		return 0;
 
 	/* On /REHASH this may be called again; drop any previously-collected
 	 * pending bots so we re-derive the set from the new config. */
-	while (cfg.pending_bots) {
+	while (cfg.pending_bots)
+	{
 		PbConfigBot *next = cfg.pending_bots->next;
 		pb_free_pending_bot(cfg.pending_bots);
 		cfg.pending_bots = next;
 	}
 
-	for (ConfigEntry *cep = ce->items; cep; cep = cep->next) {
-		if (!cep->name) continue;
-		if (!strcmp(cep->name, "mode")) {
+	for (ConfigEntry *cep = ce->items; cep; cep = cep->next)
+	{
+		if (!cep->name)
+			continue;
+		if (!strcmp(cep->name, "mode"))
+		{
 			safe_strdup(cfg.registration_mode, cep->value);
-		} else if (!strcmp(cep->name, "database")) {
+		} else if (!strcmp(cep->name, "database"))
+		{
 			safe_strdup(cfg.database_path, cep->value);
-		} else if (!strcmp(cep->name, "webhook-failure-suspend-after")) {
+		} else if (!strcmp(cep->name, "webhook-failure-suspend-after"))
+		{
 			cfg.webhook_failure_suspend_after = atoi(cep->value);
-		} else if (!strcmp(cep->name, "registration-secret")) {
+		} else if (!strcmp(cep->name, "registration-secret"))
+		{
 			safe_strdup(cfg.registration_secret, cep->value);
-		} else if (!strcmp(cep->name, "bot")) {
+		} else if (!strcmp(cep->name, "bot"))
+		{
 			pb_parse_bot_block(cep);
 		}
 	}
@@ -902,7 +971,8 @@ static int pb_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 
 static void pb_free_pending_bot(PbConfigBot *b)
 {
-	if (!b) return;
+	if (!b)
+		return;
 	safe_free(b->nick);
 	safe_free(b->realname);
 	safe_free(b->token);
@@ -915,7 +985,8 @@ static void pb_free_pending_bot(PbConfigBot *b)
 
 static void pb_free_config(void)
 {
-	while (cfg.pending_bots) {
+	while (cfg.pending_bots)
+	{
 		PbConfigBot *next = cfg.pending_bots->next;
 		pb_free_pending_bot(cfg.pending_bots);
 		cfg.pending_bots = next;
@@ -934,12 +1005,17 @@ static int pb_open_db(void)
 	safe_strdup(abspath, cfg.database_path);
 	convert_to_absolute_path(&abspath, PERMDATADIR);
 	int rv = sqlite3_open(abspath, &db);
-	if (rv != SQLITE_OK) {
+	if (rv != SQLITE_OK)
+	{
 		unreal_log(ULOG_ERROR, "pushbot", "DB_OPEN", NULL,
 		           "Could not open pushbot DB at $path: $err",
 		           log_data_string("path", abspath),
 		           log_data_string("err", db ? sqlite3_errmsg(db) : "(no handle)"));
-		if (db) { sqlite3_close(db); db = NULL; }
+		if (db)
+		{
+			sqlite3_close(db);
+			db = NULL;
+		}
 		safe_free(abspath);
 		return -1;
 	}
@@ -952,49 +1028,50 @@ static int pb_open_db(void)
 static int pb_init_schema(void)
 {
 	static const char *schema =
-		"CREATE TABLE IF NOT EXISTS pushbots ("
-		"  bot_id TEXT PRIMARY KEY, nick TEXT UNIQUE NOT NULL,"
-		"  account TEXT UNIQUE NOT NULL, realname TEXT NOT NULL,"
-		"  scope TEXT NOT NULL CHECK(scope IN ('channel','server')),"
-		"  token_hash TEXT NOT NULL, webhook_url TEXT, webhook_secret_hash TEXT,"
-		"  transport TEXT NOT NULL CHECK(transport IN ('gateway','webhook','both')),"
-		"  status TEXT NOT NULL CHECK(status IN ('pending','active','suspended','deleted')),"
-		"  triggers TEXT NOT NULL DEFAULT '{}',"
-		"  permissions TEXT NOT NULL DEFAULT '{}',"
-		"  created_at INTEGER NOT NULL,"
-		"  created_by TEXT NOT NULL,"
-		"  approved_by TEXT, approved_at INTEGER, last_seen INTEGER"
-		");"
-		"CREATE TABLE IF NOT EXISTS pushbot_channels ("
-		"  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
-		"  channel TEXT NOT NULL, PRIMARY KEY(bot_id, channel)"
-		");"
-		"CREATE TABLE IF NOT EXISTS pushbot_commands ("
-		"  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
-		"  name TEXT NOT NULL, description TEXT NOT NULL,"
-		"  visibility TEXT NOT NULL CHECK(visibility IN ('public','private')),"
-		"  scopes TEXT NOT NULL, options TEXT NOT NULL,"
-		"  requires TEXT, version INTEGER NOT NULL DEFAULT 1,"
-		"  PRIMARY KEY(bot_id, name)"
-		");"
-		"CREATE TABLE IF NOT EXISTS pushbot_requests ("
-		"  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-		"  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
-		"  channel TEXT NOT NULL, requested_by TEXT NOT NULL,"
-		"  message TEXT,"
-		"  status TEXT NOT NULL CHECK(status IN ('pending','approved','denied','expired')),"
-		"  resolved_by TEXT, resolved_at INTEGER, deny_reason TEXT,"
-		"  created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL"
-		");"
-		"CREATE TABLE IF NOT EXISTS pushbot_dead_letters ("
-		"  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-		"  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
-		"  event_type TEXT NOT NULL, payload TEXT NOT NULL,"
-		"  error TEXT, failed_at INTEGER NOT NULL"
-		");";
+	    "CREATE TABLE IF NOT EXISTS pushbots ("
+	    "  bot_id TEXT PRIMARY KEY, nick TEXT UNIQUE NOT NULL,"
+	    "  account TEXT UNIQUE NOT NULL, realname TEXT NOT NULL,"
+	    "  scope TEXT NOT NULL CHECK(scope IN ('channel','server')),"
+	    "  token_hash TEXT NOT NULL, webhook_url TEXT, webhook_secret_hash TEXT,"
+	    "  transport TEXT NOT NULL CHECK(transport IN ('gateway','webhook','both')),"
+	    "  status TEXT NOT NULL CHECK(status IN ('pending','active','suspended','deleted')),"
+	    "  triggers TEXT NOT NULL DEFAULT '{}',"
+	    "  permissions TEXT NOT NULL DEFAULT '{}',"
+	    "  created_at INTEGER NOT NULL,"
+	    "  created_by TEXT NOT NULL,"
+	    "  approved_by TEXT, approved_at INTEGER, last_seen INTEGER"
+	    ");"
+	    "CREATE TABLE IF NOT EXISTS pushbot_channels ("
+	    "  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
+	    "  channel TEXT NOT NULL, PRIMARY KEY(bot_id, channel)"
+	    ");"
+	    "CREATE TABLE IF NOT EXISTS pushbot_commands ("
+	    "  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
+	    "  name TEXT NOT NULL, description TEXT NOT NULL,"
+	    "  visibility TEXT NOT NULL CHECK(visibility IN ('public','private')),"
+	    "  scopes TEXT NOT NULL, options TEXT NOT NULL,"
+	    "  requires TEXT, version INTEGER NOT NULL DEFAULT 1,"
+	    "  PRIMARY KEY(bot_id, name)"
+	    ");"
+	    "CREATE TABLE IF NOT EXISTS pushbot_requests ("
+	    "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+	    "  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
+	    "  channel TEXT NOT NULL, requested_by TEXT NOT NULL,"
+	    "  message TEXT,"
+	    "  status TEXT NOT NULL CHECK(status IN ('pending','approved','denied','expired')),"
+	    "  resolved_by TEXT, resolved_at INTEGER, deny_reason TEXT,"
+	    "  created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL"
+	    ");"
+	    "CREATE TABLE IF NOT EXISTS pushbot_dead_letters ("
+	    "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+	    "  bot_id TEXT NOT NULL REFERENCES pushbots(bot_id) ON DELETE CASCADE,"
+	    "  event_type TEXT NOT NULL, payload TEXT NOT NULL,"
+	    "  error TEXT, failed_at INTEGER NOT NULL"
+	    ");";
 	char *err = NULL;
 	int rv = sqlite3_exec(db, schema, NULL, NULL, &err);
-	if (rv != SQLITE_OK) {
+	if (rv != SQLITE_OK)
+	{
 		unreal_log(ULOG_ERROR, "pushbot", "DB_SCHEMA", NULL,
 		           "Schema init failed: $err",
 		           log_data_string("err", err ? err : "?"));
@@ -1014,12 +1091,18 @@ static int pb_init_schema(void)
  * with a constant-time bearer-comparison. */
 static void pb_token_hash(const char *plaintext, char *out, size_t outlen)
 {
-	if (outlen < 65) { if (outlen) out[0] = '\0'; return; }
+	if (outlen < 65)
+	{
+		if (outlen)
+			out[0] = '\0';
+		return;
+	}
 	unsigned char digest[32];
 	sha256hash_binary((char *)digest, (char *)plaintext, strlen(plaintext));
 	static const char *hex = "0123456789abcdef";
-	for (int i = 0; i < 32; i++) {
-		out[i * 2]     = hex[(digest[i] >> 4) & 0xf];
+	for (int i = 0; i < 32; i++)
+	{
+		out[i * 2] = hex[(digest[i] >> 4) & 0xf];
 		out[i * 2 + 1] = hex[digest[i] & 0xf];
 	}
 	out[64] = '\0';
@@ -1028,16 +1111,16 @@ static void pb_token_hash(const char *plaintext, char *out, size_t outlen)
 static int pb_upsert_bot_row(const char *bot_id, PbConfigBot *b)
 {
 	const char *sql =
-		"INSERT INTO pushbots ("
-		"  bot_id, nick, account, realname, scope, token_hash,"
-		"  webhook_url, transport, status, created_at, created_by"
-		") VALUES (?,?,?,?,?,?,?,?,'active',?,?)"
-		" ON CONFLICT(bot_id) DO UPDATE SET"
-		"  nick=excluded.nick, realname=excluded.realname,"
-		"  scope=excluded.scope, token_hash=excluded.token_hash,"
-		"  webhook_url=excluded.webhook_url,"
-		"  transport=excluded.transport,"
-		"  status=CASE WHEN pushbots.status='suspended' THEN 'suspended' ELSE 'active' END";
+	    "INSERT INTO pushbots ("
+	    "  bot_id, nick, account, realname, scope, token_hash,"
+	    "  webhook_url, transport, status, created_at, created_by"
+	    ") VALUES (?,?,?,?,?,?,?,?,'active',?,?)"
+	    " ON CONFLICT(bot_id) DO UPDATE SET"
+	    "  nick=excluded.nick, realname=excluded.realname,"
+	    "  scope=excluded.scope, token_hash=excluded.token_hash,"
+	    "  webhook_url=excluded.webhook_url,"
+	    "  transport=excluded.transport,"
+	    "  status=CASE WHEN pushbots.status='suspended' THEN 'suspended' ELSE 'active' END";
 
 	char hash[65];
 	pb_token_hash(b->token, hash, sizeof(hash));
@@ -1064,24 +1147,27 @@ static int pb_upsert_bot_row(const char *bot_id, PbConfigBot *b)
 static int pb_load_active_bots_from_db(void)
 {
 	const char *sql =
-		"SELECT bot_id, nick, account, realname, scope, transport,"
-		"       status, webhook_url"
-		"  FROM pushbots WHERE status IN ('active','suspended')";
+	    "SELECT bot_id, nick, account, realname, scope, transport,"
+	    "       status, webhook_url"
+	    "  FROM pushbots WHERE status IN ('active','suspended')";
 	sqlite3_stmt *st;
 	if (sqlite3_prepare_v2(db, sql, -1, &st, NULL) != SQLITE_OK)
 		return -1;
 	int loaded = 0;
-	while (sqlite3_step(st) == SQLITE_ROW) {
-		const char *bot_id   = (const char *)sqlite3_column_text(st, 0);
-		const char *nick     = (const char *)sqlite3_column_text(st, 1);
-		const char *account  = (const char *)sqlite3_column_text(st, 2);
+	while (sqlite3_step(st) == SQLITE_ROW)
+	{
+		const char *bot_id = (const char *)sqlite3_column_text(st, 0);
+		const char *nick = (const char *)sqlite3_column_text(st, 1);
+		const char *account = (const char *)sqlite3_column_text(st, 2);
 		const char *realname = (const char *)sqlite3_column_text(st, 3);
-		const char *scope    = (const char *)sqlite3_column_text(st, 4);
-		const char *transp   = (const char *)sqlite3_column_text(st, 5);
-		const char *status   = (const char *)sqlite3_column_text(st, 6);
-		const char *whurl    = (const char *)sqlite3_column_text(st, 7);
-		if (!bot_id || !nick) continue;
-		if (pb_find_bot_by_nick(nick)) continue;
+		const char *scope = (const char *)sqlite3_column_text(st, 4);
+		const char *transp = (const char *)sqlite3_column_text(st, 5);
+		const char *status = (const char *)sqlite3_column_text(st, 6);
+		const char *whurl = (const char *)sqlite3_column_text(st, 7);
+		if (!bot_id || !nick)
+			continue;
+		if (pb_find_bot_by_nick(nick))
+			continue;
 
 		PbBot *b = safe_alloc(sizeof(*b));
 		safe_strdup(b->bot_id, bot_id);
@@ -1091,7 +1177,8 @@ static int pb_load_active_bots_from_db(void)
 		b->scope = pb_parse_scope(scope);
 		b->transport = pb_parse_transport(transp);
 		b->status = !strcmp(status, "suspended") ? PB_STATUS_SUSPENDED : PB_STATUS_ACTIVE;
-		if (whurl) safe_strdup(b->webhook_url, whurl);
+		if (whurl)
+			safe_strdup(b->webhook_url, whurl);
 		AddListItem(b, bots);
 		loaded++;
 	}
@@ -1105,16 +1192,20 @@ static int pb_load_active_bots_from_db(void)
 
 static int pb_apply_pending_bots(void)
 {
-	for (PbConfigBot *pc = cfg.pending_bots; pc; pc = pc->next) {
+	for (PbConfigBot *pc = cfg.pending_bots; pc; pc = pc->next)
+	{
 		char bot_id[16];
 		PbBot *existing = pb_find_bot_by_nick(pc->nick);
-		if (existing) {
+		if (existing)
+		{
 			strlcpy(bot_id, existing->bot_id, sizeof(bot_id));
-		} else {
+		} else
+		{
 			pb_generate_id(bot_id, sizeof(bot_id));
 		}
 
-		if (pb_upsert_bot_row(bot_id, pc) < 0) {
+		if (pb_upsert_bot_row(bot_id, pc) < 0)
+		{
 			unreal_log(ULOG_ERROR, "pushbot", "DB_UPSERT", NULL,
 			           "Failed to upsert bot $nick",
 			           log_data_string("nick", pc->nick));
@@ -1122,7 +1213,8 @@ static int pb_apply_pending_bots(void)
 		}
 
 		PbBot *b = existing;
-		if (!b) {
+		if (!b)
+		{
 			b = safe_alloc(sizeof(*b));
 			safe_strdup(b->bot_id, bot_id);
 			safe_strdup(b->nick, pc->nick);
@@ -1131,21 +1223,28 @@ static int pb_apply_pending_bots(void)
 			b->scope = pc->scope;
 			b->transport = pc->transport;
 			b->status = PB_STATUS_ACTIVE;
-			if (pc->webhook_url) safe_strdup(b->webhook_url, pc->webhook_url);
-			if (pc->webhook_secret) safe_strdup(b->webhook_secret, pc->webhook_secret);
-			if (pc->prefix) safe_strdup(b->prefix, pc->prefix);
+			if (pc->webhook_url)
+				safe_strdup(b->webhook_url, pc->webhook_url);
+			if (pc->webhook_secret)
+				safe_strdup(b->webhook_secret, pc->webhook_secret);
+			if (pc->prefix)
+				safe_strdup(b->prefix, pc->prefix);
 			AddListItem(b, bots);
-		} else {
+		} else
+		{
 			/* Update mutable fields from new config */
 			safe_strdup(b->realname, pc->realname ? pc->realname : pc->nick);
 			b->scope = pc->scope;
 			b->transport = pc->transport;
 			safe_free(b->webhook_url);
-			if (pc->webhook_url) safe_strdup(b->webhook_url, pc->webhook_url);
+			if (pc->webhook_url)
+				safe_strdup(b->webhook_url, pc->webhook_url);
 			safe_free(b->webhook_secret);
-			if (pc->webhook_secret) safe_strdup(b->webhook_secret, pc->webhook_secret);
+			if (pc->webhook_secret)
+				safe_strdup(b->webhook_secret, pc->webhook_secret);
 			safe_free(b->prefix);
-			if (pc->prefix) safe_strdup(b->prefix, pc->prefix);
+			if (pc->prefix)
+				safe_strdup(b->prefix, pc->prefix);
 			b->webhook_suspended = 0;  /* /REHASH clears suspension */
 			b->webhook_failures = 0;
 		}
@@ -1172,10 +1271,12 @@ static int pb_apply_pending_bots(void)
 
 static Client *pb_spawn_ghost(PbBot *b)
 {
-	if (!b || b->ghost) return b ? b->ghost : NULL;
+	if (!b || b->ghost)
+		return b ? b->ghost : NULL;
 
 	/* If a real user already holds the nick we can't proceed. */
-	if (find_user(b->nick, NULL)) {
+	if (find_user(b->nick, NULL))
+	{
 		unreal_log(ULOG_WARNING, "pushbot", "NICK_TAKEN", NULL,
 		           "Cannot materialise bot $nick: nick is in use by a real user",
 		           log_data_string("nick", b->nick));
@@ -1212,11 +1313,15 @@ static Client *pb_spawn_ghost(PbBot *b)
 
 	long bot_bit = find_user_mode('B');
 	long invis_bit = find_user_mode('i');
-	if (bot_bit) ghost->umodes |= bot_bit;
-	if (invis_bit) ghost->umodes |= invis_bit;
-	if (b->scope == PB_SCOPE_SERVER) {
+	if (bot_bit)
+		ghost->umodes |= bot_bit;
+	if (invis_bit)
+		ghost->umodes |= invis_bit;
+	if (b->scope == PB_SCOPE_SERVER)
+	{
 		long service_bit = find_user_mode('S');
-		if (service_bit) ghost->umodes |= service_bit;
+		if (service_bit)
+			ghost->umodes |= service_bit;
 	}
 	SetUser(ghost);
 
@@ -1245,7 +1350,8 @@ static Client *pb_spawn_ghost(PbBot *b)
 
 static void pb_destroy_ghost(PbBot *b, const char *reason)
 {
-	if (!b || !b->ghost) return;
+	if (!b || !b->ghost)
+		return;
 	Client *ghost = b->ghost;
 	b->ghost = NULL;
 
@@ -1254,7 +1360,8 @@ static void pb_destroy_ghost(PbBot *b, const char *reason)
 		remove_user_from_channel_withmb(ghost, mp->channel, mp, 1);
 
 	moddata_free_client(ghost);
-	if (*ghost->id) {
+	if (*ghost->id)
+	{
 		del_from_id_hash_table(ghost->id, ghost);
 		*ghost->id = '\0';
 	}
@@ -1278,17 +1385,26 @@ static void pb_destroy_ghost(PbBot *b, const char *reason)
 
 static int pb_autojoin(PbBot *b)
 {
-	if (!b || !b->ghost) return 0;
+	if (!b || !b->ghost)
+		return 0;
 	int joined = 0;
-	for (NameList *n = b->auto_join; n; n = n->next) {
+	for (NameList *n = b->auto_join; n; n = n->next)
+	{
 		Channel *ch = find_channel(n->name);
-		if (!ch) ch = make_channel(n->name);
-		if (!ch) continue;
+		if (!ch)
+			ch = make_channel(n->name);
+		if (!ch)
+			continue;
 		Membership *m;
 		int already = 0;
 		for (m = b->ghost->user->channel; m; m = m->next)
-			if (m->channel == ch) { already = 1; break; }
-		if (already) continue;
+			if (m->channel == ch)
+			{
+				already = 1;
+				break;
+			}
+		if (already)
+			continue;
 		add_user_to_channel(ch, b->ghost, "");
 		joined++;
 	}
@@ -1302,15 +1418,18 @@ static int pb_autojoin(PbBot *b)
 static PbBot *pb_find_bot_by_nick(const char *nick)
 {
 	for (PbBot *b = bots; b; b = b->next)
-		if (!strcasecmp(b->nick, nick)) return b;
+		if (!strcasecmp(b->nick, nick))
+			return b;
 	return NULL;
 }
 
 static void pb_free_bot(PbBot *b)
 {
-	if (!b) return;
+	if (!b)
+		return;
 	pb_workflow_drop_for_bot(b);
-	while (b->queue_head) {
+	while (b->queue_head)
+	{
 		PbQueuedEvent *e = b->queue_head;
 		safe_free(e->json);
 		DelListItem(e, b->queue_head);
@@ -1325,7 +1444,8 @@ static void pb_free_bot(PbBot *b)
 	safe_free(b->webhook_secret);
 	safe_free(b->config_token);
 	safe_free(b->prefix);
-	if (b->commands) json_decref(b->commands);
+	if (b->commands)
+		json_decref(b->commands);
 	free_entire_name_list(b->auto_join);
 	DelListItem(b, bots);
 	safe_free(b);
@@ -1343,28 +1463,40 @@ static PbScope pb_parse_scope(const char *s)
 
 static const char *pb_transport_str(PbTransport t)
 {
-	switch (t) {
-	case PB_TRANSPORT_WEBHOOK: return "webhook";
-	case PB_TRANSPORT_BOTH:    return "both";
-	default:                   return "gateway";
+	switch (t)
+	{
+		case PB_TRANSPORT_WEBHOOK:
+			return "webhook";
+		case PB_TRANSPORT_BOTH:
+			return "both";
+		default:
+			return "gateway";
 	}
 }
 
 static PbTransport pb_parse_transport(const char *s)
 {
-	if (!s) return PB_TRANSPORT_GATEWAY;
-	if (!strcasecmp(s, "webhook")) return PB_TRANSPORT_WEBHOOK;
-	if (!strcasecmp(s, "both"))    return PB_TRANSPORT_BOTH;
+	if (!s)
+		return PB_TRANSPORT_GATEWAY;
+	if (!strcasecmp(s, "webhook"))
+		return PB_TRANSPORT_WEBHOOK;
+	if (!strcasecmp(s, "both"))
+		return PB_TRANSPORT_BOTH;
 	return PB_TRANSPORT_GATEWAY;
 }
 
 static const char *pb_status_str(PbStatus s)
 {
-	switch (s) {
-	case PB_STATUS_PENDING:   return "pending";
-	case PB_STATUS_SUSPENDED: return "suspended";
-	case PB_STATUS_DELETED:   return "deleted";
-	default:                  return "active";
+	switch (s)
+	{
+		case PB_STATUS_PENDING:
+			return "pending";
+		case PB_STATUS_SUSPENDED:
+			return "suspended";
+		case PB_STATUS_DELETED:
+			return "deleted";
+		default:
+			return "active";
 	}
 }
 
@@ -1384,7 +1516,8 @@ static void pb_generate_id(char *out, size_t outlen)
 static void cmd_pushbot_list(Client *client)
 {
 	int count = 0;
-	for (PbBot *b = bots; b; b = b->next) {
+	for (PbBot *b = bots; b; b = b->next)
+	{
 		sendnotice(client, "%-16s  %-8s  %-9s  %-10s  ghost:%s",
 		           b->nick,
 		           pb_scope_str(b->scope),
@@ -1399,7 +1532,8 @@ static void cmd_pushbot_list(Client *client)
 static void cmd_pushbot_info(Client *client, const char *nick)
 {
 	PbBot *b = pb_find_bot_by_nick(nick);
-	if (!b) {
+	if (!b)
+	{
 		sendnotice(client, "No such bot: %s", nick);
 		return;
 	}
@@ -1413,13 +1547,16 @@ static void cmd_pushbot_info(Client *client, const char *nick)
 	sendnotice(client, "  source:   %s", b->from_config ? "config" : "self/db");
 	if (b->webhook_url)
 		sendnotice(client, "  webhook:  %s", b->webhook_url);
-	if (b->ghost) {
+	if (b->ghost)
+	{
 		int chs = 0;
-		for (Membership *m = b->ghost->user->channel; m; m = m->next) chs++;
+		for (Membership *m = b->ghost->user->channel; m; m = m->next)
+			chs++;
 		sendnotice(client, "  ghost:    up, %d channel(s)", chs);
 		for (Membership *m = b->ghost->user->channel; m; m = m->next)
 			sendnotice(client, "    - %s", m->channel->name);
-	} else {
+	} else
+	{
 		sendnotice(client, "  ghost:    down");
 	}
 }
@@ -1427,38 +1564,50 @@ static void cmd_pushbot_info(Client *client, const char *nick)
 static void cmd_pushbot_setstatus(Client *client, const char *nick, PbStatus new_status, const char *verb)
 {
 	PbBot *b = pb_find_bot_by_nick(nick);
-	if (!b) { sendnotice(client, "No such bot: %s", nick); return; }
-	if (b->from_config) {
+	if (!b)
+	{
+		sendnotice(client, "No such bot: %s", nick);
+		return;
+	}
+	if (b->from_config)
+	{
 		sendnotice(client, "Bot %s is config-defined; edit obbyircd.conf + /REHASH", nick);
 		return;
 	}
-	if (b->status == new_status) {
+	if (b->status == new_status)
+	{
 		sendnotice(client, "Bot %s is already %s", nick, verb);
 		return;
 	}
 	PbStatus old = b->status;
 	b->status = new_status;
 
-	if (new_status == PB_STATUS_ACTIVE && !b->ghost) {
+	if (new_status == PB_STATUS_ACTIVE && !b->ghost)
+	{
 		pb_spawn_ghost(b);
 	}
-	if (new_status != PB_STATUS_ACTIVE && b->ghost) {
+	if (new_status != PB_STATUS_ACTIVE && b->ghost)
+	{
 		Client *g = b->ghost;
 		b->ghost = NULL;
 		exit_client(g, NULL, "Bot deactivated by operator");
 	}
-	if (new_status == PB_STATUS_DELETED) {
+	if (new_status == PB_STATUS_DELETED)
+	{
 		sqlite3_stmt *st = NULL;
-		if (sqlite3_prepare_v2(db, "UPDATE pushbots SET status='deleted' WHERE bot_id=?", -1, &st, NULL) == SQLITE_OK) {
+		if (sqlite3_prepare_v2(db, "UPDATE pushbots SET status='deleted' WHERE bot_id=?", -1, &st, NULL) == SQLITE_OK)
+		{
 			sqlite3_bind_text(st, 1, b->bot_id, -1, SQLITE_STATIC);
 			sqlite3_step(st);
 			sqlite3_finalize(st);
 		}
-	} else {
-		const char *str = new_status == PB_STATUS_ACTIVE ? "active" :
-		                  new_status == PB_STATUS_SUSPENDED ? "suspended" : "pending";
+	} else
+	{
+		const char *str = new_status == PB_STATUS_ACTIVE ? "active" : new_status == PB_STATUS_SUSPENDED ? "suspended"
+		                                                                                                : "pending";
 		sqlite3_stmt *st = NULL;
-		if (sqlite3_prepare_v2(db, "UPDATE pushbots SET status=? WHERE bot_id=?", -1, &st, NULL) == SQLITE_OK) {
+		if (sqlite3_prepare_v2(db, "UPDATE pushbots SET status=? WHERE bot_id=?", -1, &st, NULL) == SQLITE_OK)
+		{
 			sqlite3_bind_text(st, 1, str, -1, SQLITE_STATIC);
 			sqlite3_bind_text(st, 2, b->bot_id, -1, SQLITE_STATIC);
 			sqlite3_step(st);
@@ -1466,7 +1615,9 @@ static void cmd_pushbot_setstatus(Client *client, const char *nick, PbStatus new
 		}
 	}
 	sendnotice(client, "Bot %s status: %s -> %s", nick,
-	           old == PB_STATUS_ACTIVE ? "active" : old == PB_STATUS_PENDING ? "pending" : old == PB_STATUS_SUSPENDED ? "suspended" : "deleted",
+	           old == PB_STATUS_ACTIVE ? "active" : old == PB_STATUS_PENDING ? "pending"
+	                                            : old == PB_STATUS_SUSPENDED ? "suspended"
+	                                                                         : "deleted",
 	           verb);
 	unreal_log(ULOG_INFO, "pushbot", "ADMIN", client,
 	           "Operator $opnick: $verb bot $bot",
@@ -1478,47 +1629,73 @@ static void cmd_pushbot_setstatus(Client *client, const char *nick, PbStatus new
 
 CMD_FUNC(cmd_pushbot)
 {
-	if (!MyConnect(client) || !IsUser(client)) return;
+	if (!MyConnect(client) || !IsUser(client))
+		return;
 
-	if (!ValidatePermissionsForPath("server:pushbot", client, NULL, NULL, NULL)) {
+	if (!ValidatePermissionsForPath("server:pushbot", client, NULL, NULL, NULL))
+	{
 		sendnumeric(client, ERR_NOPRIVILEGES);
 		return;
 	}
-	if (parc < 2) {
+	if (parc < 2)
+	{
 		sendnotice(client, "Usage: PUSHBOT LIST | INFO <nick> | APPROVE <nick> | SUSPEND <nick> | UNSUSPEND <nick> | DELETE <nick>");
 		return;
 	}
 
 	const char *sub = parv[1];
-	if (!strcasecmp(sub, "LIST")) {
+	if (!strcasecmp(sub, "LIST"))
+	{
 		cmd_pushbot_list(client);
 		return;
 	}
-	if (!strcasecmp(sub, "INFO")) {
-		if (parc < 3) {
+	if (!strcasecmp(sub, "INFO"))
+	{
+		if (parc < 3)
+		{
 			sendnotice(client, "Usage: PUSHBOT INFO <nick>");
 			return;
 		}
 		cmd_pushbot_info(client, parv[2]);
 		return;
 	}
-	if (!strcasecmp(sub, "APPROVE")) {
-		if (parc < 3) { sendnotice(client, "Usage: PUSHBOT APPROVE <nick>"); return; }
+	if (!strcasecmp(sub, "APPROVE"))
+	{
+		if (parc < 3)
+		{
+			sendnotice(client, "Usage: PUSHBOT APPROVE <nick>");
+			return;
+		}
 		cmd_pushbot_setstatus(client, parv[2], PB_STATUS_ACTIVE, "active");
 		return;
 	}
-	if (!strcasecmp(sub, "SUSPEND")) {
-		if (parc < 3) { sendnotice(client, "Usage: PUSHBOT SUSPEND <nick>"); return; }
+	if (!strcasecmp(sub, "SUSPEND"))
+	{
+		if (parc < 3)
+		{
+			sendnotice(client, "Usage: PUSHBOT SUSPEND <nick>");
+			return;
+		}
 		cmd_pushbot_setstatus(client, parv[2], PB_STATUS_SUSPENDED, "suspended");
 		return;
 	}
-	if (!strcasecmp(sub, "UNSUSPEND")) {
-		if (parc < 3) { sendnotice(client, "Usage: PUSHBOT UNSUSPEND <nick>"); return; }
+	if (!strcasecmp(sub, "UNSUSPEND"))
+	{
+		if (parc < 3)
+		{
+			sendnotice(client, "Usage: PUSHBOT UNSUSPEND <nick>");
+			return;
+		}
 		cmd_pushbot_setstatus(client, parv[2], PB_STATUS_ACTIVE, "active");
 		return;
 	}
-	if (!strcasecmp(sub, "DELETE")) {
-		if (parc < 3) { sendnotice(client, "Usage: PUSHBOT DELETE <nick>"); return; }
+	if (!strcasecmp(sub, "DELETE"))
+	{
+		if (parc < 3)
+		{
+			sendnotice(client, "Usage: PUSHBOT DELETE <nick>");
+			return;
+		}
 		cmd_pushbot_setstatus(client, parv[2], PB_STATUS_DELETED, "deleted");
 		return;
 	}
@@ -1559,8 +1736,10 @@ static int pb_config_test_listen(ConfigFile *cf, ConfigEntry *ce, int type, int 
 static int pb_config_run_ex_listen(ConfigFile *cf, ConfigEntry *ce, int type, void *ptr)
 {
 	ConfigItem_listen *l;
-	if (type != CONFIG_LISTEN_OPTIONS) return 0;
-	if (!ce || !ce->name || strcmp(ce->name, "pushbot")) return 0;
+	if (type != CONFIG_LISTEN_OPTIONS)
+		return 0;
+	if (!ce || !ce->name || strcmp(ce->name, "pushbot"))
+		return 0;
 	l = (ConfigItem_listen *)ptr;
 	l->options |= LISTENER_NO_CHECK_CONNECT_FLOOD;
 	l->options |= LISTENER_NO_CHECK_ZLINED;
@@ -1580,8 +1759,10 @@ static int pb_is_pushbot_listener(ConfigItem_listen *l)
 
 static int pb_config_listener(ConfigItem_listen *l)
 {
-	if (!pb_is_pushbot_listener(l)) return 0;
-	if (l->socket_type == SOCKET_TYPE_UNIX) {
+	if (!pb_is_pushbot_listener(l))
+		return 0;
+	if (l->socket_type == SOCKET_TYPE_UNIX)
+	{
 		/* Not supported -- pushbot wants real TCP+TLS for external bots. */
 		config_warn("[pushbot] Unix-socket pushbot listeners are not supported (yet).");
 		return 0;
@@ -1619,11 +1800,13 @@ static void pb_client_handshake(Client *client)
  * watchdog (pb_heartbeat_check) is allowed to kill it. */
 static int pb_pre_handshake_timeout(Client *client, const char **comment)
 {
-	if (!client || !client->local || !client->local->listener) return HOOK_CONTINUE;
-	if (!pb_is_pushbot_listener(client->local->listener)) return HOOK_CONTINUE;
+	if (!client || !client->local || !client->local->listener)
+		return HOOK_CONTINUE;
+	if (!pb_is_pushbot_listener(client->local->listener))
+		return HOOK_CONTINUE;
 	WebSocketUser *wsu = pb_websocket_md
-	    ? (WebSocketUser *)moddata_client(client, pb_websocket_md).ptr
-	    : NULL;
+	                         ? (WebSocketUser *)moddata_client(client, pb_websocket_md).ptr
+	                         : NULL;
 	if (wsu && wsu->handshake_completed)
 		return HOOK_ALLOW;  /* WS bot is alive; don't time it out */
 	return HOOK_CONTINUE;
@@ -1631,15 +1814,19 @@ static int pb_pre_handshake_timeout(Client *client, const char **comment)
 
 static int pb_check_bearer(const char *auth, char *token_out, size_t tlen)
 {
-	if (!auth) return 0;
-	while (*auth == ' ') auth++;
-	if (strncasecmp(auth, "Bearer ", 7)) return 0;
+	if (!auth)
+		return 0;
+	while (*auth == ' ')
+		auth++;
+	if (strncasecmp(auth, "Bearer ", 7))
+		return 0;
 	auth += 7;
-	while (*auth == ' ') auth++;
+	while (*auth == ' ')
+		auth++;
 	strlcpy(token_out, auth, tlen);
 	/* Strip trailing whitespace just in case. */
 	size_t n = strlen(token_out);
-	while (n > 0 && (token_out[n-1] == ' ' || token_out[n-1] == '\r' || token_out[n-1] == '\t'))
+	while (n > 0 && (token_out[n - 1] == ' ' || token_out[n - 1] == '\r' || token_out[n - 1] == '\t'))
 		token_out[--n] = '\0';
 	return token_out[0] ? 1 : 0;
 }
@@ -1650,10 +1837,14 @@ static int pb_check_bearer(const char *auth, char *token_out, size_t tlen)
  * compare via the hash in a later phase. */
 static PbBot *pb_find_bot_by_token(const char *token)
 {
-	if (!token || !*token) return NULL;
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (!b->config_token) continue;
+	if (!token || !*token)
+		return NULL;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (!b->config_token)
+			continue;
 		if (!strcmp(b->config_token, token))
 			return b;
 	}
@@ -1664,7 +1855,8 @@ static int pb_handle_webrequest(Client *client, WebRequest *web)
 {
 	const char *auth = get_nvplist(web->headers, "Authorization");
 	char token[512];
-	if (!pb_check_bearer(auth, token, sizeof(token))) {
+	if (!pb_check_bearer(auth, token, sizeof(token)))
+	{
 		webserver_send_response(client, 401, "Bearer token required\n");
 		return 0;
 	}
@@ -1673,7 +1865,8 @@ static int pb_handle_webrequest(Client *client, WebRequest *web)
 	 * but against the configured registration-secret.  Both POST
 	 * (register) and GET (list pending requests, ircop-only via the
 	 * registration-secret) defer to the body handler. */
-	if (web->uri && !strcmp(web->uri, "/pushbot/v1/bots")) {
+	if (web->uri && !strcmp(web->uri, "/pushbot/v1/bots"))
+	{
 		/* For POST we MUST read the body even on auth failure --
 		 * sending a response + close while the client is still
 		 * streaming POST data triggers TCP RST and clients see
@@ -1682,15 +1875,18 @@ static int pb_handle_webrequest(Client *client, WebRequest *web)
 		 * first.  For GET (no body), reply now. */
 		if (web->method == HTTP_METHOD_POST)
 			return 1;  /* wait for body, then validate + respond */
-		if (!cfg.registration_secret) {
+		if (!cfg.registration_secret)
+		{
 			webserver_send_response(client, 403, "self-registration disabled\n");
 			return 0;
 		}
-		if (strcmp(token, cfg.registration_secret)) {
+		if (strcmp(token, cfg.registration_secret))
+		{
 			webserver_send_response(client, 401, "invalid registration secret\n");
 			return 0;
 		}
-		if (web->method == HTTP_METHOD_GET) {
+		if (web->method == HTTP_METHOD_GET)
+		{
 			pb_rest_list_bots(client, web);
 			return 0;
 		}
@@ -1703,17 +1899,20 @@ static int pb_handle_webrequest(Client *client, WebRequest *web)
 	 * for now (we'll create our session below). */
 
 	if (!strcmp(web->uri, PB_GATEWAY_PATH) &&
-	    get_nvplist(web->headers, "Sec-WebSocket-Key")) {
+	    get_nvplist(web->headers, "Sec-WebSocket-Key"))
+	{
 		/* WebSocket upgrade path. */
-		if (!pb_websocket_md) {
+		if (!pb_websocket_md)
+		{
 			webserver_send_response(client, 405,
-			    "WebSocket support not loaded (websocket_common module missing).\n");
+			                        "WebSocket support not loaded (websocket_common module missing).\n");
 			return 0;
 		}
 		/* Look up bot by token BEFORE upgrading -- saves us a roundtrip
 		 * on bad creds. */
 		PbBot *b = pb_find_bot_by_token(token);
-		if (!b) {
+		if (!b)
+		{
 			webserver_send_response(client, 401, "Invalid bearer token\n");
 			return 0;
 		}
@@ -1724,7 +1923,8 @@ static int pb_handle_webrequest(Client *client, WebRequest *web)
 		((WebSocketUser *)moddata_client(client, pb_websocket_md).ptr)->type = WEBSOCKET_TYPE_TEXT;
 
 		const char *ws_key = get_nvplist(web->headers, "Sec-WebSocket-Key");
-		if (strchr(ws_key, ':')) {
+		if (strchr(ws_key, ':'))
+		{
 			webserver_send_response(client, 400, "Invalid Sec-WebSocket-Key\n");
 			return 0;
 		}
@@ -1751,14 +1951,16 @@ static int pb_handle_webrequest(Client *client, WebRequest *web)
 
 	/* REST routes -- bot already resolved via Bearer token. */
 	PbBot *rest_bot = pb_find_bot_by_token(token);
-	if (!rest_bot) {
+	if (!rest_bot)
+	{
 		webserver_send_response(client, 401, "Invalid bearer token\n");
 		return 0;
 	}
 	/* For methods that carry a body (POST), defer until the body has
 	 * arrived: webserver will keep calling pb_handle_webrequest_data
 	 * with chunks, and we dispatch to pb_handle_rest once complete. */
-	if (web->method == HTTP_METHOD_POST || web->method == HTTP_METHOD_PUT) {
+	if (web->method == HTTP_METHOD_POST || web->method == HTTP_METHOD_PUT)
+	{
 		return 1;
 	}
 	return pb_handle_rest(client, web, rest_bot);
@@ -1793,25 +1995,30 @@ static int pb_handle_webrequest_data(Client *client, WebRequest *web, const char
 	 * once complete, the existing pb_handle_rest path doesn't run
 	 * again (we already returned 1 from handle_request).  Web body
 	 * data comes through here for POST endpoints. */
-	if (!webserver_handle_body(client, web, buf, len)) {
+	if (!webserver_handle_body(client, web, buf, len))
+	{
 		webserver_send_response(client, 400, "Error reading body\n");
 		return 0;
 	}
-	if (web->request_body_complete) {
+	if (web->request_body_complete)
+	{
 		/* re-resolve bot by token (cheap; ensures we don't trust
 		 * stale state across requests on the same connection) */
 		const char *auth = get_nvplist(web->headers, "Authorization");
 		char token[512];
-		if (!pb_check_bearer(auth, token, sizeof(token))) {
+		if (!pb_check_bearer(auth, token, sizeof(token)))
+		{
 			webserver_send_response(client, 401, "Bearer required\n");
 			return 0;
 		}
 		/* Phase 8: self-registration uses the registration-secret,
 		 * not a bot bearer token. */
 		if (web->uri && !strcmp(web->uri, "/pushbot/v1/bots") &&
-		    web->method == HTTP_METHOD_POST) {
+		    web->method == HTTP_METHOD_POST)
+		{
 			if (!cfg.registration_secret ||
-			    strcmp(token, cfg.registration_secret)) {
+			    strcmp(token, cfg.registration_secret))
+			{
 				webserver_send_response(client, 401, "invalid registration secret\n");
 				return 0;
 			}
@@ -1819,7 +2026,8 @@ static int pb_handle_webrequest_data(Client *client, WebRequest *web, const char
 			return 1;
 		}
 		PbBot *b = pb_find_bot_by_token(token);
-		if (!b) {
+		if (!b)
+		{
 			webserver_send_response(client, 401, "Invalid token\n");
 			return 0;
 		}
@@ -1840,7 +2048,8 @@ static int pb_packet_in_websocket(Client *client, char *buf, int len)
 {
 	/* Each call is one fully-reassembled WS frame.  We expect text
 	 * frames carrying a single JSON object per spec §4.2. */
-	if (len <= 0) return 0;
+	if (len <= 0)
+		return 0;
 	pb_handle_ws_message(client, buf, len);
 	return 0;
 }
@@ -1848,10 +2057,12 @@ static int pb_packet_in_websocket(Client *client, char *buf, int len)
 static void pb_send_op(Client *client, json_t *frame)
 {
 	char *body = json_dumps(frame, JSON_COMPACT);
-	if (!body) return;
+	if (!body)
+		return;
 	int len = strlen(body);
 	char *out = body;
-	if (websocket_create_packet(WSOP_TEXT, &out, &len) < 0) {
+	if (websocket_create_packet(WSOP_TEXT, &out, &len) < 0)
+	{
 		free(body);
 		return;
 	}
@@ -1874,32 +2085,40 @@ static void pb_send_hello(Client *client)
 /* Drop everything in the queue with seq <= ack. */
 static void pb_queue_ack(PbBot *b, long long ack)
 {
-	if (!b) return;
+	if (!b)
+		return;
 	PbQueuedEvent *e = b->queue_head;
-	while (e && e->seq <= ack) {
+	while (e && e->seq <= ack)
+	{
 		PbQueuedEvent *next = e->next;
 		safe_free(e->json);
 		DelListItem(e, b->queue_head);
-		if (e == b->queue_tail) b->queue_tail = NULL;
+		if (e == b->queue_tail)
+			b->queue_tail = NULL;
 		safe_free(e);
 		b->queue_count--;
 		e = next;
 	}
-	if (ack > b->last_acked_seq) b->last_acked_seq = ack;
+	if (ack > b->last_acked_seq)
+		b->last_acked_seq = ack;
 }
 
 /* Walk the queue and drop entries past their TTL. */
 static void pb_queue_expire(PbBot *b)
 {
-	if (!b) return;
+	if (!b)
+		return;
 	time_t now = TStime();
 	PbQueuedEvent *e = b->queue_head;
-	while (e) {
+	while (e)
+	{
 		PbQueuedEvent *next = e->next;
-		if (e->expires_at && e->expires_at < now) {
+		if (e->expires_at && e->expires_at < now)
+		{
 			safe_free(e->json);
 			DelListItem(e, b->queue_head);
-			if (e == b->queue_tail) b->queue_tail = NULL;
+			if (e == b->queue_tail)
+				b->queue_tail = NULL;
 			safe_free(e);
 			b->queue_count--;
 		}
@@ -1912,8 +2131,10 @@ static void pb_queue_expire(PbBot *b)
  * already has the JSON). */
 static int pb_queue_push(PbBot *b, long long seq, const char *json)
 {
-	if (!b || !json) return -1;
-	if (b->queue_count >= PB_QUEUE_MAX) {
+	if (!b || !json)
+		return -1;
+	if (b->queue_count >= PB_QUEUE_MAX)
+	{
 		unreal_log(ULOG_WARNING, "pushbot", "QUEUE_OVERFLOW", NULL,
 		           "Bot $nick queue overflowed; disconnecting",
 		           log_data_string("nick", b->nick));
@@ -1937,7 +2158,12 @@ static int pb_queue_push(PbBot *b, long long seq, const char *json)
  * later phases (CHANMSG handler, slash-command dispatch, etc.). */
 static void pb_dispatch_event(PbBot *b, const char *event_name, json_t *data)
 {
-	if (!b) { if (data) json_decref(data); return; }
+	if (!b)
+	{
+		if (data)
+			json_decref(data);
+		return;
+	}
 
 	long long seq = ++b->next_seq;
 	json_t *frame = json_object();
@@ -1948,7 +2174,8 @@ static void pb_dispatch_event(PbBot *b, const char *event_name, json_t *data)
 
 	char *body = json_dumps(frame, JSON_COMPACT);
 	json_decref(frame);
-	if (!body) return;
+	if (!body)
+		return;
 
 	pb_queue_push(b, seq, body);
 
@@ -1956,10 +2183,12 @@ static void pb_dispatch_event(PbBot *b, const char *event_name, json_t *data)
 	if (b->session && b->session->client &&
 	    !IsDead(b->session->client) && b->session->client->local &&
 	    b->session->identified &&
-	    (b->transport == PB_TRANSPORT_GATEWAY || b->transport == PB_TRANSPORT_BOTH)) {
+	    (b->transport == PB_TRANSPORT_GATEWAY || b->transport == PB_TRANSPORT_BOTH))
+	{
 		int len = strlen(body);
 		char *out = body;
-		if (websocket_create_packet(WSOP_TEXT, &out, &len) >= 0) {
+		if (websocket_create_packet(WSOP_TEXT, &out, &len) >= 0)
+		{
 			dbuf_put(&b->session->client->local->sendQ, out, len);
 			send_queued(b->session->client);
 		}
@@ -1978,7 +2207,12 @@ static void pb_dispatch_event(PbBot *b, const char *event_name, json_t *data)
 static void pb_send_dispatch(Client *client, const char *event_name, json_t *data)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot) { if (data) json_decref(data); return; }
+	if (!s || !s->bot)
+	{
+		if (data)
+			json_decref(data);
+		return;
+	}
 	pb_dispatch_event(s->bot, event_name, data);
 }
 
@@ -1986,33 +2220,55 @@ static void pb_handle_ws_message(Client *client, char *msg, int len)
 {
 	json_error_t err;
 	json_t *frame = json_loadb(msg, len, 0, &err);
-	if (!frame || !json_is_object(frame)) {
+	if (!frame || !json_is_object(frame))
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION, "Frame is not a JSON object");
-		if (frame) json_decref(frame);
+		if (frame)
+			json_decref(frame);
 		return;
 	}
 	json_t *opj = json_object_get(frame, "op");
-	if (!json_is_integer(opj)) {
+	if (!json_is_integer(opj))
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION, "Frame missing op");
 		json_decref(frame);
 		return;
 	}
 	int op = (int)json_integer_value(opj);
-	switch (op) {
-	case PB_OP_IDENTIFY:   pb_handle_identify(client, frame); break;
-	case PB_OP_HEARTBEAT:  pb_handle_heartbeat(client, frame); break;
-	case PB_OP_RESUME:   pb_handle_resume(client, frame); break;
-	case PB_OP_COMMAND_REGISTER:     pb_handle_command_register(client, frame); break;
-	case PB_OP_INTERACTION_RESPONSE: pb_handle_interaction_response(client, frame); break;
-	case PB_OP_INTERACTION_DEFER:    pb_handle_interaction_defer(client, frame); break;
-	case PB_OP_WORKFLOW_EVENT:       pb_handle_workflow_event(client, frame); break;
-	case PB_OP_SEND_MESSAGE:         pb_handle_send_message(client, frame); break;
-	case PB_OP_SEND_TAGMSG:          pb_handle_send_tagmsg(client, frame); break;
-	default:
-		unreal_log(ULOG_DEBUG, "pushbot", "WS_UNKNOWN_OP", client,
-		           "Received unknown opcode $op",
-		           log_data_integer("op", op));
-		break;
+	switch (op)
+	{
+		case PB_OP_IDENTIFY:
+			pb_handle_identify(client, frame);
+			break;
+		case PB_OP_HEARTBEAT:
+			pb_handle_heartbeat(client, frame);
+			break;
+		case PB_OP_RESUME:
+			pb_handle_resume(client, frame);
+			break;
+		case PB_OP_COMMAND_REGISTER:
+			pb_handle_command_register(client, frame);
+			break;
+		case PB_OP_INTERACTION_RESPONSE:
+			pb_handle_interaction_response(client, frame);
+			break;
+		case PB_OP_INTERACTION_DEFER:
+			pb_handle_interaction_defer(client, frame);
+			break;
+		case PB_OP_WORKFLOW_EVENT:
+			pb_handle_workflow_event(client, frame);
+			break;
+		case PB_OP_SEND_MESSAGE:
+			pb_handle_send_message(client, frame);
+			break;
+		case PB_OP_SEND_TAGMSG:
+			pb_handle_send_tagmsg(client, frame);
+			break;
+		default:
+			unreal_log(ULOG_DEBUG, "pushbot", "WS_UNKNOWN_OP", client,
+			           "Received unknown opcode $op",
+			           log_data_integer("op", op));
+			break;
 	}
 	json_decref(frame);
 }
@@ -2020,13 +2276,15 @@ static void pb_handle_ws_message(Client *client, char *msg, int len)
 static void pb_handle_identify(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot) {
+	if (!s || !s->bot)
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "No session context");
 		return;
 	}
 
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) {
+	if (!json_is_object(d))
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "IDENTIFY.d must be an object");
 		return;
 	}
@@ -2034,7 +2292,8 @@ static void pb_handle_identify(Client *client, json_t *frame)
 	json_t *tokj = json_object_get(d, "token");
 	if (!json_is_string(tokj) ||
 	    !s->bot->config_token ||
-	    strcmp(json_string_value(tokj), s->bot->config_token)) {
+	    strcmp(json_string_value(tokj), s->bot->config_token))
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED,
 		            "IDENTIFY token mismatch");
 		return;
@@ -2057,14 +2316,16 @@ static void pb_handle_identify(Client *client, json_t *frame)
 	/* Also drop any previously-registered command schema so a fresh
 	 * IDENTIFY isn't serving the old session's commands until the new
 	 * session sends its own COMMAND_REGISTER. */
-	if (s->bot->commands) {
+	if (s->bot->commands)
+	{
 		json_decref(s->bot->commands);
 		s->bot->commands = NULL;
 	}
 
 	/* IDENTIFY (vs RESUME) explicitly starts a fresh session.  Any
 	 * previous resume window is closed and queued events tossed. */
-	while (s->bot->queue_head) {
+	while (s->bot->queue_head)
+	{
 		PbQueuedEvent *e = s->bot->queue_head;
 		safe_free(e->json);
 		DelListItem(e, s->bot->queue_head);
@@ -2088,7 +2349,8 @@ static void pb_handle_identify(Client *client, json_t *frame)
 
 	/* Update the ghost's away to "online" (drop the away flag) and
 	 * broadcast the change so away-notify clients see the bot return. */
-	if (s->bot->ghost && s->bot->ghost->user->away) {
+	if (s->bot->ghost && s->bot->ghost->user->away)
+	{
 		safe_free(s->bot->ghost->user->away);
 		s->bot->ghost->user->away = NULL;
 		pb_broadcast_away(s->bot->ghost);
@@ -2100,7 +2362,8 @@ static void pb_handle_identify(Client *client, json_t *frame)
 	json_object_set_new(ready_d, "bot_nick", json_string(s->bot->nick));
 	json_object_set_new(ready_d, "scope", json_string(pb_scope_str(s->bot->scope)));
 	json_t *channels = json_array();
-	if (s->bot->ghost) {
+	if (s->bot->ghost)
+	{
 		for (Membership *m = s->bot->ghost->user->channel; m; m = m->next)
 			json_array_append_new(channels, json_string(m->channel->name));
 	}
@@ -2116,7 +2379,8 @@ static void pb_handle_identify(Client *client, json_t *frame)
 static void pb_handle_heartbeat(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s) return;
+	if (!s)
+		return;
 	/* d carries the last seq the bot has seen; we use it to release
 	 * everything in the queue at or below that watermark. */
 	json_t *d = json_object_get(frame, "d");
@@ -2134,21 +2398,24 @@ static void pb_handle_heartbeat(Client *client, json_t *frame)
 static void pb_handle_resume(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot) {
+	if (!s || !s->bot)
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION, "No session context for resume");
 		return;
 	}
 	PbBot *b = s->bot;
 
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) {
+	if (!json_is_object(d))
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION, "RESUME.d must be object");
 		return;
 	}
 	json_t *sidj = json_object_get(d, "session_id");
 	json_t *seqj = json_object_get(d, "seq");
 	json_t *tokj = json_object_get(d, "token");
-	if (!json_is_string(sidj) || !json_is_integer(seqj) || !json_is_string(tokj)) {
+	if (!json_is_string(sidj) || !json_is_integer(seqj) || !json_is_string(tokj))
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION,
 		            "RESUME requires session_id, seq, token");
 		return;
@@ -2158,23 +2425,27 @@ static void pb_handle_resume(Client *client, json_t *frame)
 	const char *tok = json_string_value(tokj);
 
 	/* Validate everything before touching state. */
-	if (!b->config_token || strcmp(tok, b->config_token)) {
+	if (!b->config_token || strcmp(tok, b->config_token))
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "RESUME token mismatch");
 		return;
 	}
-	if (!b->resume_session_id || strcmp(sid, b->resume_session_id)) {
+	if (!b->resume_session_id || strcmp(sid, b->resume_session_id))
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION, "Unknown session_id");
 		return;
 	}
 	pb_queue_expire(b);
 	/* If the queue is empty AND seq < next_seq, we lost events that
 	 * fell off the TTL window.  Reject; bot must IDENTIFY fresh. */
-	if (b->queue_count == 0 && seq < b->next_seq) {
+	if (b->queue_count == 0 && seq < b->next_seq)
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION,
 		            "Resume window expired -- IDENTIFY fresh");
 		return;
 	}
-	if (seq > b->next_seq) {
+	if (seq > b->next_seq)
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION,
 		            "seq ahead of server -- IDENTIFY fresh");
 		return;
@@ -2189,10 +2460,12 @@ static void pb_handle_resume(Client *client, json_t *frame)
 	s->identified = 1;
 	s->last_heartbeat = TStime();
 
-	for (PbQueuedEvent *e = b->queue_head; e; e = e->next) {
+	for (PbQueuedEvent *e = b->queue_head; e; e = e->next)
+	{
 		int len = strlen(e->json);
 		char *out = e->json;
-		if (websocket_create_packet(WSOP_TEXT, &out, &len) >= 0) {
+		if (websocket_create_packet(WSOP_TEXT, &out, &len) >= 0)
+		{
 			dbuf_put(&client->local->sendQ, out, len);
 		}
 	}
@@ -2217,13 +2490,16 @@ static void pb_close_ws(Client *client, int code, const char *reason)
 	 * byte order optionally followed by a UTF-8 reason. */
 	char buf[256];
 	int rlen = reason ? strlen(reason) : 0;
-	if (rlen > 250) rlen = 250;
+	if (rlen > 250)
+		rlen = 250;
 	buf[0] = (code >> 8) & 0xff;
 	buf[1] = code & 0xff;
-	if (rlen) memcpy(buf + 2, reason, rlen);
+	if (rlen)
+		memcpy(buf + 2, reason, rlen);
 	char *payload = buf;
 	int total = 2 + rlen;
-	if (websocket_create_packet(0x08 /* WSOP_CLOSE */, &payload, &total) >= 0) {
+	if (websocket_create_packet(0x08 /* WSOP_CLOSE */, &payload, &total) >= 0)
+	{
 		dbuf_put(&client->local->sendQ, payload, total);
 		send_queued(client);
 	}
@@ -2232,9 +2508,11 @@ static void pb_close_ws(Client *client, int code, const char *reason)
 
 static void pb_session_free(PbSession *s)
 {
-	if (!s) return;
+	if (!s)
+		return;
 	PbBot *online_bot = NULL;
-	if (s->bot && s->bot->session == s) {
+	if (s->bot && s->bot->session == s)
+	{
 		PbBot *b = s->bot;
 		online_bot = b;
 		b->session = NULL;
@@ -2242,20 +2520,27 @@ static void pb_session_free(PbSession *s)
 		 * around for PB_RESUME_TTL_SEC.  pb_heartbeat_check garbage-
 		 * collects expired windows. */
 		b->resume_expires_at = TStime() + PB_RESUME_TTL_SEC;
-		if (b->ghost && !b->ghost->user->away) {
+		if (b->ghost && !b->ghost->user->away)
+		{
 			safe_strdup(b->ghost->user->away, "bot offline");
 			b->ghost->user->away_since = TStime();
 			pb_broadcast_away(b->ghost);
 		}
 	}
-	if (s->heartbeat_ev) { EventDel(s->heartbeat_ev); s->heartbeat_ev = NULL; }
+	if (s->heartbeat_ev)
+	{
+		EventDel(s->heartbeat_ev);
+		s->heartbeat_ev = NULL;
+	}
 	safe_free(s);
-	if (online_bot) pb_broadcast_bot_event(online_bot, "update");
+	if (online_bot)
+		pb_broadcast_bot_event(online_bot, "update");
 }
 
 static void pb_moddata_session_free(ModData *md)
 {
-	if (!md || !md->ptr) return;
+	if (!md || !md->ptr)
+		return;
 	pb_session_free((PbSession *)md->ptr);
 	md->ptr = NULL;
 }
@@ -2263,14 +2548,17 @@ static void pb_moddata_session_free(ModData *md)
 EVENT(pb_heartbeat_check)
 {
 	time_t now = TStime();
-	for (PbBot *b = bots; b; b = b->next) {
+	for (PbBot *b = bots; b; b = b->next)
+	{
 		/* Live session: check heartbeat.  Guard against half-dead
 		 * clients -- moddata free may not have run yet between
 		 * dead_socket() and the actual teardown, so b->session can
 		 * still point to an IsDead client that we MUST NOT touch. */
 		PbSession *s = b->session;
-		if (s && s->client && !IsDead(s->client) && s->client->local && s->identified) {
-			if ((now - s->last_heartbeat) * 1000 > PB_HEARTBEAT_GRACE_MS) {
+		if (s && s->client && !IsDead(s->client) && s->client->local && s->identified)
+		{
+			if ((now - s->last_heartbeat) * 1000 > PB_HEARTBEAT_GRACE_MS)
+			{
 				unreal_log(ULOG_INFO, "pushbot", "HEARTBEAT_TIMEOUT", NULL,
 				           "Bot $nick gateway timed out, closing",
 				           log_data_string("nick", b->nick));
@@ -2280,18 +2568,21 @@ EVENT(pb_heartbeat_check)
 
 		/* Detached resume window: expire queue + clear session id
 		 * if the bot didn't come back in time. */
-		if (!b->session && b->resume_expires_at && b->resume_expires_at < now) {
+		if (!b->session && b->resume_expires_at && b->resume_expires_at < now)
+		{
 			pb_queue_expire(b);
 			/* If everything's gone or expired, drop the resume id
 			 * so the next IDENTIFY is treated as fresh. */
-			if (b->queue_count == 0) {
+			if (b->queue_count == 0)
+			{
 				safe_free(b->resume_session_id);
 				b->resume_session_id = NULL;
 				b->next_seq = 0;
 				b->last_acked_seq = 0;
 				b->resume_expires_at = 0;
 			}
-		} else if (!b->session && b->queue_head) {
+		} else if (!b->session && b->queue_head)
+		{
 			/* Still inside the window -- just expire individual
 			 * entries that timed out. */
 			pb_queue_expire(b);
@@ -2309,10 +2600,13 @@ EVENT(pb_heartbeat_check)
  * the JSON parse?) happens later in pb_route_botcmd_*. */
 static int pb_mtag_botcmd_is_ok(Client *c, const char *n, const char *v)
 {
-	if (!v || !*v) return 0;
+	if (!v || !*v)
+		return 0;
 	int len = strlen(v);
-	if (len > 4096) return 0;
-	for (int i = 0; i < len; i++) {
+	if (len > 4096)
+		return 0;
+	for (int i = 0; i < len; i++)
+	{
 		char ch = v[i];
 		if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
 		      (ch >= '0' && ch <= '9') || ch == '+' || ch == '/' || ch == '=' ||
@@ -2342,14 +2636,17 @@ static int pb_mtag_botcmds_changed_is_ok(Client *c, const char *n, const char *v
 static json_t *pb_command_to_spec(json_t *cmd)
 {
 	json_t *out = json_object();
-	const char *pass[] = { "name", "description", "options", "requires", NULL };
-	for (int i = 0; pass[i]; i++) {
+	const char *pass[] = {"name", "description", "options", "requires", NULL};
+	for (int i = 0; pass[i]; i++)
+	{
 		json_t *v = json_object_get(cmd, pass[i]);
-		if (v) json_object_set(out, pass[i], v);
+		if (v)
+			json_object_set(out, pass[i], v);
 	}
 
 	json_t *ctx = json_object_get(cmd, "contexts");
-	if (json_is_array(ctx)) {
+	if (json_is_array(ctx))
+	{
 		json_object_set(out, "contexts", ctx);
 		return out;
 	}
@@ -2357,19 +2654,27 @@ static json_t *pb_command_to_spec(json_t *cmd)
 	/* Derive contexts from the legacy visibility + scopes pair. */
 	const char *vis = "public";
 	json_t *vj = json_object_get(cmd, "visibility");
-	if (json_is_string(vj)) vis = json_string_value(vj);
+	if (json_is_string(vj))
+		vis = json_string_value(vj);
 	int priv = !strcasecmp(vis, "private");
 
 	int has_channel = 0, has_dm = 0;
 	json_t *scopes = json_object_get(cmd, "scopes");
-	if (json_is_array(scopes)) {
-		size_t i; json_t *s;
-		json_array_foreach(scopes, i, s) {
-			if (!json_is_string(s)) continue;
-			if (!strcasecmp(json_string_value(s), "channel")) has_channel = 1;
-			else if (!strcasecmp(json_string_value(s), "dm")) has_dm = 1;
+	if (json_is_array(scopes))
+	{
+		size_t i;
+		json_t *s;
+		json_array_foreach(scopes, i, s)
+		{
+			if (!json_is_string(s))
+				continue;
+			if (!strcasecmp(json_string_value(s), "channel"))
+				has_channel = 1;
+			else if (!strcasecmp(json_string_value(s), "dm"))
+				has_dm = 1;
 		}
-	} else {
+	} else
+	{
 		has_channel = 1;  /* no scopes => channel by default */
 	}
 
@@ -2390,10 +2695,12 @@ static json_t *pb_command_to_spec(json_t *cmd)
 static json_t *pb_commands_to_spec_array(json_t *commands)
 {
 	json_t *out = json_array();
-	if (commands) {
-		size_t i; json_t *c;
+	if (commands)
+	{
+		size_t i;
+		json_t *c;
 		json_array_foreach(commands, i, c)
-			json_array_append_new(out, pb_command_to_spec(c));
+		    json_array_append_new(out, pb_command_to_spec(c));
 	}
 	return out;
 }
@@ -2402,14 +2709,16 @@ static json_t *pb_commands_to_spec_array(json_t *commands)
  * schema, base64-encoded, addressed back to the querying client. */
 static void pb_send_botcmds_to(Client *client, PbBot *b)
 {
-	if (!client || !b || !b->ghost) return;
+	if (!client || !b || !b->ghost)
+		return;
 	json_t *body = json_object();
 	if (b->prefix)
 		json_object_set_new(body, "prefix", json_string(b->prefix));
 	json_object_set_new(body, "commands", pb_commands_to_spec_array(b->commands));
 	char *json_str = json_dumps(body, JSON_COMPACT);
 	json_decref(body);
-	if (!json_str) return;
+	if (!json_str)
+		return;
 	int jlen = strlen(json_str);
 	int b64_max = ((jlen + 2) / 3) * 4 + 1;
 	char *b64 = safe_alloc(b64_max);
@@ -2433,10 +2742,13 @@ static int pb_mtag_bottools_is_ok(Client *c, const char *n, const char *v)
 {
 	/* Same shape as pb_mtag_botcmd_is_ok: just sanity-check the base64
 	 * envelope. Actual JSON validation happens when we decode. */
-	if (!v || !*v) return 0;
+	if (!v || !*v)
+		return 0;
 	int len = strlen(v);
-	if (len > 4094) return 0;
-	for (const char *p = v; *p; p++) {
+	if (len > 4094)
+		return 0;
+	for (const char *p = v; *p; p++)
+	{
 		if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
 		      (*p >= '0' && *p <= '9') ||
 		      *p == '+' || *p == '/' || *p == '='))
@@ -2447,7 +2759,8 @@ static int pb_mtag_bottools_is_ok(Client *c, const char *n, const char *v)
 
 static PbWorkflow *pb_workflow_find(const char *wid)
 {
-	if (!wid || !*wid) return NULL;
+	if (!wid || !*wid)
+		return NULL;
 	for (PbWorkflow *w = workflows; w; w = w->next)
 		if (w->wid && !strcmp(w->wid, wid))
 			return w;
@@ -2456,20 +2769,26 @@ static PbWorkflow *pb_workflow_find(const char *wid)
 
 static PbWorkflow *pb_workflow_find_by_sid(const char *sid)
 {
-	if (!sid || !*sid) return NULL;
-	for (PbWorkflow *w = workflows; w; w = w->next) {
+	if (!sid || !*sid)
+		return NULL;
+	for (PbWorkflow *w = workflows; w; w = w->next)
+	{
 		for (NameList *n = w->sids; n; n = n->next)
-			if (!strcmp(n->name, sid)) return w;
+			if (!strcmp(n->name, sid))
+				return w;
 	}
 	return NULL;
 }
 
 static PbWorkflow *pb_workflow_touch(PbBot *bot, const char *wid, const char *target)
 {
-	if (!bot || !wid || !*wid) return NULL;
+	if (!bot || !wid || !*wid)
+		return NULL;
 	PbWorkflow *w = pb_workflow_find(wid);
-	if (w) {
-		if (w->bot != bot) return NULL;   /* foreign wid -- refuse */
+	if (w)
+	{
+		if (w->bot != bot)
+			return NULL;   /* foreign wid -- refuse */
 		w->expires_at = TStime() + PB_WORKFLOW_TTL_SEC;
 		if (target && (!w->target || strcmp(w->target, target)))
 			safe_strdup(w->target, target);
@@ -2479,7 +2798,8 @@ static PbWorkflow *pb_workflow_touch(PbBot *bot, const char *wid, const char *ta
 	w = safe_alloc(sizeof(*w));
 	safe_strdup(w->wid, wid);
 	w->bot = bot;
-	if (target && *target) safe_strdup(w->target, target);
+	if (target && *target)
+		safe_strdup(w->target, target);
 	w->expires_at = TStime() + PB_WORKFLOW_TTL_SEC;
 	AddListItem(w, workflows);
 	return w;
@@ -2487,14 +2807,17 @@ static PbWorkflow *pb_workflow_touch(PbBot *bot, const char *wid, const char *ta
 
 static void pb_workflow_remember_sid(PbWorkflow *w, const char *sid)
 {
-	if (!w || !sid || !*sid) return;
-	if (find_name_list(w->sids, sid)) return;
+	if (!w || !sid || !*sid)
+		return;
+	if (find_name_list(w->sids, sid))
+		return;
 	add_name_list(w->sids, sid);
 }
 
 static void pb_workflow_terminate(PbWorkflow *w)
 {
-	if (!w) return;
+	if (!w)
+		return;
 	/* Keep the entry alive for a short grace window so any in-flight
 	 * action TAGMSG still resolves; the GC takes it from there. */
 	w->terminal = 1;
@@ -2503,7 +2826,8 @@ static void pb_workflow_terminate(PbWorkflow *w)
 
 static void pb_workflow_free(PbWorkflow *w)
 {
-	if (!w) return;
+	if (!w)
+		return;
 	DelListItem(w, workflows);
 	safe_free(w->wid);
 	safe_free(w->target);
@@ -2514,9 +2838,11 @@ static void pb_workflow_free(PbWorkflow *w)
 static void pb_workflow_drop_for_bot(PbBot *bot)
 {
 	PbWorkflow *w = workflows;
-	while (w) {
+	while (w)
+	{
 		PbWorkflow *next = w->next;
-		if (w->bot == bot) pb_workflow_free(w);
+		if (w->bot == bot)
+			pb_workflow_free(w);
 		w = next;
 	}
 }
@@ -2525,7 +2851,8 @@ EVENT(pb_workflow_gc)
 {
 	time_t now = TStime();
 	PbWorkflow *w = workflows;
-	while (w) {
+	while (w)
+	{
 		PbWorkflow *next = w->next;
 		if (w->expires_at && now > w->expires_at)
 			pb_workflow_free(w);
@@ -2545,15 +2872,19 @@ static int pb_workflow_send_tag(PbBot *bot, const char *target,
 	/* If the payload won't fit under the tag limit, try truncating
 	 * `content` (per draft/bot-tools §value-encoding). */
 	char *json_str = json_dumps(payload_obj, JSON_COMPACT);
-	if (!json_str) return 0;
-	if ((int)strlen(json_str) > PB_WORKFLOW_JSON_BUDGET) {
+	if (!json_str)
+		return 0;
+	if ((int)strlen(json_str) > PB_WORKFLOW_JSON_BUDGET)
+	{
 		json_t *content = json_object_get(payload_obj, "content");
-		if (content && json_is_string(content)) {
+		if (content && json_is_string(content))
+		{
 			const char *s = json_string_value(content);
 			int overshoot = strlen(json_str) - PB_WORKFLOW_JSON_BUDGET;
 			int slen = strlen(s);
 			int keep = slen - overshoot - 32;
-			if (keep < 0) keep = 0;
+			if (keep < 0)
+				keep = 0;
 			char *truncated = safe_alloc(keep + 2);
 			memcpy(truncated, s, keep);
 			truncated[keep] = '\0';
@@ -2562,11 +2893,13 @@ static int pb_workflow_send_tag(PbBot *bot, const char *target,
 			safe_free(truncated);
 			free(json_str);
 			json_str = json_dumps(payload_obj, JSON_COMPACT);
-			if (!json_str) return 0;
+			if (!json_str)
+				return 0;
 		}
 		/* If it's still too big (or content wasn't a string), give up
 		 * gracefully: log and emit nothing rather than a broken tag. */
-		if ((int)strlen(json_str) > PB_WORKFLOW_JSON_BUDGET) {
+		if ((int)strlen(json_str) > PB_WORKFLOW_JSON_BUDGET)
+		{
 			unreal_log(ULOG_WARNING, "pushbot", "WF_OVERSIZE", NULL,
 			           "Bot $nick workflow payload too big to send "
 			           "(size=$size, budget=$budget); drop",
@@ -2588,12 +2921,13 @@ static int pb_workflow_send_tag(PbBot *bot, const char *target,
 	safe_strdup(tag->name, "+draft/bot-tools");
 	safe_strdup(tag->value, b64);
 
-	Channel *ch = (*target == '#' || *target == '&' || *target == '^') ?
-	              find_channel(target) : NULL;
-	if (ch) {
+	Channel *ch = (*target == '#' || *target == '&' || *target == '^') ? find_channel(target) : NULL;
+	if (ch)
+	{
 		sendto_channel(ch, bot->ghost, NULL, NULL, 0, SEND_ALL, tag,
 		               ":%s TAGMSG %s", bot->ghost->name, ch->name);
-	} else {
+	} else
+	{
 		Client *to = find_user(target, NULL);
 		if (to)
 			sendto_one(to, tag, ":%s TAGMSG %s",
@@ -2614,16 +2948,19 @@ static int pb_workflow_send_tag(PbBot *bot, const char *target,
 static void pb_handle_workflow_event(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot || !s->identified) {
+	if (!s || !s->bot || !s->identified)
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "Not authenticated");
 		return;
 	}
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) return;
+	if (!json_is_object(d))
+		return;
 
 	json_t *targetj = json_object_get(d, "target");
 	json_t *payload = json_object_get(d, "payload");
-	if (!json_is_string(targetj) || !json_is_object(payload)) return;
+	if (!json_is_string(targetj) || !json_is_object(payload))
+		return;
 
 	pb_core_workflow_event(s->bot, json_string_value(targetj), payload);
 }
@@ -2637,31 +2974,40 @@ static void pb_handle_workflow_event(Client *client, json_t *frame)
 static int pb_route_bottools_action(Client *invoker, Client *target_user,
                                     Channel *target_chan, const char *bot_tools_b64)
 {
-	if (!invoker || !bot_tools_b64 || !*bot_tools_b64) return 0;
+	if (!invoker || !bot_tools_b64 || !*bot_tools_b64)
+		return 0;
 
 	int blen = strlen(bot_tools_b64);
 	int max_decoded = (blen / 4) * 3 + 4;
 	unsigned char *decoded = safe_alloc(max_decoded);
 	int dlen = b64_decode(bot_tools_b64, decoded, max_decoded);
-	if (dlen <= 0) { safe_free(decoded); return 0; }
+	if (dlen <= 0)
+	{
+		safe_free(decoded);
+		return 0;
+	}
 
 	json_error_t je;
 	json_t *obj = json_loadb((const char *)decoded, dlen, 0, &je);
 	safe_free(decoded);
-	if (!obj || !json_is_object(obj)) {
-		if (obj) json_decref(obj);
+	if (!obj || !json_is_object(obj))
+	{
+		if (obj)
+			json_decref(obj);
 		return 0;
 	}
 
 	json_t *msgj = json_object_get(obj, "msg");
-	if (!json_is_string(msgj) || strcmp(json_string_value(msgj), "action")) {
+	if (!json_is_string(msgj) || strcmp(json_string_value(msgj), "action"))
+	{
 		json_decref(obj);
 		return 0;
 	}
 
 	json_t *actionj = json_object_get(obj, "action");
 	json_t *targetj = json_object_get(obj, "target");
-	if (!json_is_string(actionj) || !json_is_string(targetj)) {
+	if (!json_is_string(actionj) || !json_is_string(targetj))
+	{
 		json_decref(obj);
 		return 0;
 	}
@@ -2673,8 +3019,10 @@ static int pb_route_bottools_action(Client *invoker, Client *target_user,
 	PbWorkflow *w = NULL;
 	if (!strcmp(action, "approve") || !strcmp(action, "reject"))
 		w = pb_workflow_find_by_sid(target);
-	if (!w) w = pb_workflow_find(target);
-	if (!w || !w->bot) {
+	if (!w)
+		w = pb_workflow_find(target);
+	if (!w || !w->bot)
+	{
 		json_decref(obj);
 		return 0;
 	}
@@ -2682,7 +3030,8 @@ static int pb_route_bottools_action(Client *invoker, Client *target_user,
 	/* If the TAGMSG was sent to a channel (rare for actions; the spec
 	 * says actions go to the bot's nick), make sure the bot is at
 	 * least in that channel before forwarding the signal. */
-	if (target_chan && !pb_bot_is_in_channel(w->bot, target_chan)) {
+	if (target_chan && !pb_bot_is_in_channel(w->bot, target_chan))
+	{
 		json_decref(obj);
 		return 0;
 	}
@@ -2693,7 +3042,8 @@ static int pb_route_bottools_action(Client *invoker, Client *target_user,
 	json_object_set_new(d, "action", json_string(action));
 	json_object_set_new(d, "target", json_string(target));
 	json_t *contentj = json_object_get(obj, "content");
-	if (contentj) json_object_set(d, "content", contentj);
+	if (contentj)
+		json_object_set(d, "content", contentj);
 	json_object_set_new(d, "from", pb_json_client(invoker));
 
 	pb_dispatch_event(w->bot, "WORKFLOW_ACTION", d);
@@ -2706,18 +3056,20 @@ static int pb_route_bottools_action(Client *invoker, Client *target_user,
 static void pb_mtag_forward(Client *sender, MessageTag *recv_mtags,
                             MessageTag **mtag_list, const char *signature)
 {
-	if (!IsUser(sender)) return;
+	if (!IsUser(sender))
+		return;
 	static const char *names[] = {
-		"+draft/bot-cmd", "+draft/bot-cmds-query",
-		"+draft/bot-cmds", "+draft/bot-cmds-changed",
-		"+draft/bot-tools",
-		"+draft/invoked-by",
-		"batch",
-		NULL
-	};
-	for (int i = 0; names[i]; i++) {
+	    "+draft/bot-cmd", "+draft/bot-cmds-query",
+	    "+draft/bot-cmds", "+draft/bot-cmds-changed",
+	    "+draft/bot-tools",
+	    "+draft/invoked-by",
+	    "batch",
+	    NULL};
+	for (int i = 0; names[i]; i++)
+	{
 		MessageTag *m = find_mtag(recv_mtags, names[i]);
-		if (!m) continue;
+		if (!m)
+			continue;
 		MessageTag *dup = duplicate_mtag(m);
 		AddListItem(dup, *mtag_list);
 	}
@@ -2851,7 +3203,8 @@ CMD_OVERRIDE_FUNC(pb_override_batch)
 
 static PbInteraction *pb_interaction_find(const char *id)
 {
-	if (!id) return NULL;
+	if (!id)
+		return NULL;
 	for (PbInteraction *it = interactions; it; it = it->next)
 		if (it->id && !strcmp(it->id, id))
 			return it;
@@ -2868,9 +3221,12 @@ static PbInteraction *pb_interaction_new(PbBot *bot, Client *invoker,
 	snprintf(idbuf, sizeof(idbuf), "iact.%lx.%lx",
 	         (unsigned long)TStime(), (unsigned long)rand());
 	safe_strdup(it->id, idbuf);
-	if (invoker && invoker->name[0]) safe_strdup(it->invoker_nick, invoker->name);
-	if (channel) safe_strdup(it->channel, channel);
-	if (msgid) safe_strdup(it->invoker_msgid, msgid);
+	if (invoker && invoker->name[0])
+		safe_strdup(it->invoker_nick, invoker->name);
+	if (channel)
+		safe_strdup(it->channel, channel);
+	if (msgid)
+		safe_strdup(it->invoker_msgid, msgid);
 	it->bot = bot;
 	it->expires_at = TStime() + PB_INTERACTION_TIMEOUT_SEC;
 	AddListItem(it, interactions);
@@ -2879,7 +3235,8 @@ static PbInteraction *pb_interaction_new(PbBot *bot, Client *invoker,
 
 static void pb_interaction_free(PbInteraction *it)
 {
-	if (!it) return;
+	if (!it)
+		return;
 	DelListItem(it, interactions);
 	safe_free(it->id);
 	safe_free(it->invoker_nick);
@@ -2898,7 +3255,8 @@ static MessageTag *pb_make_reply_tags(const char *reply_msgid,
                                       const char *invoked_by_b64)
 {
 	MessageTag *head = NULL, *tail = NULL;
-	if (reply_msgid && *reply_msgid) {
+	if (reply_msgid && *reply_msgid)
+	{
 		/* Only +draft/reply, NOT also +reply: obsidian client treats
 		 * each as a separate reply annotation and renders the message
 		 * twice when both are present. Matches fluffilloo. */
@@ -2906,15 +3264,18 @@ static MessageTag *pb_make_reply_tags(const char *reply_msgid,
 		safe_strdup(m->name, "+draft/reply");
 		safe_strdup(m->value, reply_msgid);
 		AddListItem(m, head);
-		if (!tail) tail = m;
+		if (!tail)
+			tail = m;
 	}
-	if (channel_ctx && *channel_ctx) {
+	if (channel_ctx && *channel_ctx)
+	{
 		MessageTag *m = safe_alloc(sizeof(*m));
 		safe_strdup(m->name, "+draft/channel-context");
 		safe_strdup(m->value, channel_ctx);
 		AddListItem(m, head);
 	}
-	if (invoked_by_b64 && *invoked_by_b64) {
+	if (invoked_by_b64 && *invoked_by_b64)
+	{
 		MessageTag *m = safe_alloc(sizeof(*m));
 		safe_strdup(m->name, "+draft/invoked-by");
 		safe_strdup(m->value, invoked_by_b64);
@@ -2928,21 +3289,25 @@ static MessageTag *pb_make_reply_tags(const char *reply_msgid,
  * strict and would reject them otherwise). */
 static char *pb_b64_decode_alloc(const char *b64, int *outlen)
 {
-	if (!b64) return NULL;
+	if (!b64)
+		return NULL;
 	int n = strlen(b64);
 	int pad = (4 - (n % 4)) % 4;
 	char *padded = safe_alloc(n + pad + 1);
 	memcpy(padded, b64, n);
-	for (int i = 0; i < pad; i++) padded[n + i] = '=';
+	for (int i = 0; i < pad; i++)
+		padded[n + i] = '=';
 	padded[n + pad] = '\0';
 	char *buf = safe_alloc(n + pad + 1);
 	int got = b64_decode(padded, (unsigned char *)buf, n + pad + 1);
 	safe_free(padded);
-	if (got <= 0) {
+	if (got <= 0)
+	{
 		safe_free(buf);
 		return NULL;
 	}
-	if (outlen) *outlen = got;
+	if (outlen)
+		*outlen = got;
 	return buf;
 }
 
@@ -2954,15 +3319,18 @@ static void pb_send_botcmd_error(Client *invoker, const char *from,
                                  const char *channel, const char *msgid,
                                  const char *code, const char *human)
 {
-	if (!invoker || !from || !code) return;
+	if (!invoker || !from || !code)
+		return;
 	MessageTag *tags = NULL, *m;
-	if (msgid && *msgid) {
+	if (msgid && *msgid)
+	{
 		m = safe_alloc(sizeof(*m));
 		safe_strdup(m->name, "+reply");
 		safe_strdup(m->value, msgid);
 		AddListItem(m, tags);
 	}
-	if (channel && *channel) {
+	if (channel && *channel)
+	{
 		m = safe_alloc(sizeof(*m));
 		safe_strdup(m->name, "+draft/channel-context");
 		safe_strdup(m->value, channel);
@@ -2980,9 +3348,12 @@ static void pb_send_botcmd_error(Client *invoker, const char *from,
 /* Find a registered command definition by name (case-insensitive). */
 static json_t *pb_find_command_def(PbBot *b, const char *name)
 {
-	if (!b || !b->commands || !name) return NULL;
-	size_t i; json_t *c;
-	json_array_foreach(b->commands, i, c) {
+	if (!b || !b->commands || !name)
+		return NULL;
+	size_t i;
+	json_t *c;
+	json_array_foreach(b->commands, i, c)
+	{
 		json_t *n = json_object_get(c, "name");
 		if (json_is_string(n) && !strcasecmp(json_string_value(n), name))
 			return c;
@@ -2993,25 +3364,38 @@ static json_t *pb_find_command_def(PbBot *b, const char *name)
 /* draft/bot-cmds min-channel-rank ladder: voice=1 .. owner=5. */
 static int pb_rank_level(const char *name)
 {
-	if (!name) return 0;
-	if (!strcasecmp(name, "voice"))  return 1;
-	if (!strcasecmp(name, "halfop")) return 2;
-	if (!strcasecmp(name, "op"))     return 3;
-	if (!strcasecmp(name, "admin"))  return 4;
-	if (!strcasecmp(name, "owner"))  return 5;
+	if (!name)
+		return 0;
+	if (!strcasecmp(name, "voice"))
+		return 1;
+	if (!strcasecmp(name, "halfop"))
+		return 2;
+	if (!strcasecmp(name, "op"))
+		return 3;
+	if (!strcasecmp(name, "admin"))
+		return 4;
+	if (!strcasecmp(name, "owner"))
+		return 5;
 	return 0;
 }
 static int pb_member_rank(Client *cli, Channel *ch)
 {
-	if (!cli || !cli->user || !ch) return 0;
+	if (!cli || !cli->user || !ch)
+		return 0;
 	Membership *mb = find_membership_link(cli->user->channel, ch);
-	if (!mb) return 0;
+	if (!mb)
+		return 0;
 	int r = 0;
-	if (strchr(mb->member_modes, 'v')) r = 1;
-	if (strchr(mb->member_modes, 'h')) r = 2;
-	if (strchr(mb->member_modes, 'o')) r = 3;
-	if (strchr(mb->member_modes, 'a')) r = 4;
-	if (strchr(mb->member_modes, 'q')) r = 5;
+	if (strchr(mb->member_modes, 'v'))
+		r = 1;
+	if (strchr(mb->member_modes, 'h'))
+		r = 2;
+	if (strchr(mb->member_modes, 'o'))
+		r = 3;
+	if (strchr(mb->member_modes, 'a'))
+		r = 4;
+	if (strchr(mb->member_modes, 'q'))
+		r = 5;
 	return r;
 }
 
@@ -3023,53 +3407,77 @@ static const char *pb_validate_invocation(PbBot *bot, const char *cmd_name,
 {
 	static char buf[160];
 	json_t *def = pb_find_command_def(bot, cmd_name);
-	if (!def) { *human = "No such command."; return "INVALID_COMMAND"; }
+	if (!def)
+	{
+		*human = "No such command.";
+		return "INVALID_COMMAND";
+	}
 
 	json_t *opts = json_object_get(def, "options");
-	if (json_is_array(opts)) {
-		size_t i; json_t *o;
-		json_array_foreach(opts, i, o) {
+	if (json_is_array(opts))
+	{
+		size_t i;
+		json_t *o;
+		json_array_foreach(opts, i, o)
+		{
 			json_t *nmj = json_object_get(o, "name");
-			if (!json_is_string(nmj)) continue;
+			if (!json_is_string(nmj))
+				continue;
 			const char *oname = json_string_value(nmj);
 			json_t *val = options ? json_object_get(options, oname) : NULL;
-			if (json_is_true(json_object_get(o, "required")) && !val) {
+			if (json_is_true(json_object_get(o, "required")) && !val)
+			{
 				snprintf(buf, sizeof buf, "Missing required option: %s", oname);
-				*human = buf; return "INVALID_OPTIONS";
+				*human = buf;
+				return "INVALID_OPTIONS";
 			}
 			json_t *choices = json_object_get(o, "choices");
-			if (val && json_is_array(choices) && json_array_size(choices) > 0) {
+			if (val && json_is_array(choices) && json_array_size(choices) > 0)
+			{
 				const char *vs = json_is_string(val) ? json_string_value(val) : NULL;
-				int ok = 0; size_t k; json_t *cj;
-				json_array_foreach(choices, k, cj)
-					if (json_is_string(cj) && vs &&
-					    !strcmp(json_string_value(cj), vs)) { ok = 1; break; }
-				if (!ok) {
+				int ok = 0;
+				size_t k;
+				json_t *cj;
+				json_array_foreach(choices, k, cj) if (json_is_string(cj) && vs &&
+				                                       !strcmp(json_string_value(cj), vs))
+				{
+					ok = 1;
+					break;
+				}
+				if (!ok)
+				{
 					snprintf(buf, sizeof buf, "Invalid value for option: %s", oname);
-					*human = buf; return "INVALID_OPTIONS";
+					*human = buf;
+					return "INVALID_OPTIONS";
 				}
 			}
 		}
 	}
 
 	json_t *req = json_object_get(def, "requires");
-	if (json_is_object(req)) {
-		if (json_is_true(json_object_get(req, "tls")) && !IsSecure(invoker)) {
+	if (json_is_object(req))
+	{
+		if (json_is_true(json_object_get(req, "tls")) && !IsSecure(invoker))
+		{
 			*human = "This command requires a secure (TLS) connection.";
 			return "NOT_PERMITTED";
 		}
-		if (json_is_true(json_object_get(req, "account")) && !IsLoggedIn(invoker)) {
+		if (json_is_true(json_object_get(req, "account")) && !IsLoggedIn(invoker))
+		{
 			*human = "This command requires you to be logged in to an account.";
 			return "NOT_PERMITTED";
 		}
 		json_t *mr = json_object_get(req, "min-channel-rank");
-		if (json_is_string(mr) && ch) {
+		if (json_is_string(mr) && ch)
+		{
 			int need = pb_rank_level(json_string_value(mr));
-			if (need && pb_member_rank(invoker, ch) < need) {
+			if (need && pb_member_rank(invoker, ch) < need)
+			{
 				snprintf(buf, sizeof buf,
 				         "This command requires channel rank: %s",
 				         json_string_value(mr));
-				*human = buf; return "NOT_PERMITTED";
+				*human = buf;
+				return "NOT_PERMITTED";
 			}
 		}
 	}
@@ -3082,8 +3490,10 @@ static void pb_dispatch_command(PbBot *bot, Client *invoker,
                                 const char *channel, const char *invoker_msgid,
                                 int invoked_public, json_t *cmd_json)
 {
-	if (!bot || !invoker || !cmd_json) {
-		if (cmd_json) json_decref(cmd_json);
+	if (!bot || !invoker || !cmd_json)
+	{
+		if (cmd_json)
+			json_decref(cmd_json);
 		return;
 	}
 
@@ -3092,13 +3502,15 @@ static void pb_dispatch_command(PbBot *bot, Client *invoker,
 	{
 		const char *vname = NULL;
 		json_t *vnm = json_object_get(cmd_json, "name");
-		if (json_is_string(vnm)) vname = json_string_value(vnm);
+		if (json_is_string(vnm))
+			vname = json_string_value(vnm);
 		json_t *vopts = json_object_get(cmd_json, "options");
 		Channel *vch = channel ? find_channel(channel) : NULL;
 		const char *human = NULL;
 		const char *code = pb_validate_invocation(bot, vname ? vname : "",
 		                                          vopts, invoker, vch, &human);
-		if (code) {
+		if (code)
+		{
 			pb_send_botcmd_error(invoker,
 			                     bot->ghost ? bot->ghost->name : me.name,
 			                     channel, invoker_msgid, code, human);
@@ -3108,7 +3520,8 @@ static void pb_dispatch_command(PbBot *bot, Client *invoker,
 	}
 
 	if (!bot->session || !bot->session->identified ||
-	    !bot->session->client || IsDead(bot->session->client)) {
+	    !bot->session->client || IsDead(bot->session->client))
+	{
 		sendto_one(invoker, NULL, ":%s FAIL BOTCMD BOT_OFFLINE %s :Bot is offline",
 		           me.name, bot->nick ? bot->nick : "?");
 		json_decref(cmd_json);
@@ -3120,14 +3533,17 @@ static void pb_dispatch_command(PbBot *bot, Client *invoker,
 	json_t *d = json_object();
 	json_object_set_new(d, "id", json_string(it->id));
 	json_object_set_new(d, "invoker", pb_json_client(invoker));
-	if (channel) json_object_set_new(d, "channel", json_string(channel));
-	else         json_object_set_new(d, "channel", json_null());
+	if (channel)
+		json_object_set_new(d, "channel", json_string(channel));
+	else
+		json_object_set_new(d, "channel", json_null());
 	if (invoker_msgid)
 		json_object_set_new(d, "invoker_msgid", json_string(invoker_msgid));
 	/* cmd_json is { "name": ..., "options": {...} } */
 	const char *cmd_name = NULL;
 	json_t *nm = json_object_get(cmd_json, "name");
-	if (json_is_string(nm)) cmd_name = json_string_value(nm);
+	if (json_is_string(nm))
+		cmd_name = json_string_value(nm);
 	json_object_set_new(d, "name", json_string(cmd_name ? cmd_name : ""));
 	json_t *opts = json_object_get(cmd_json, "options");
 	json_object_set_new(d, "options", opts ? json_incref(opts) : json_object());
@@ -3139,13 +3555,14 @@ static void pb_dispatch_command(PbBot *bot, Client *invoker,
 	{
 		json_t *snap = json_object();
 		json_object_set_new(snap, "nick",
-		    json_string(invoker && invoker->name[0] ? invoker->name : ""));
+		                    json_string(invoker && invoker->name[0] ? invoker->name : ""));
 		json_object_set_new(snap, "name", json_string(cmd_name ? cmd_name : ""));
 		json_object_set_new(snap, "options",
-		    opts ? json_incref(opts) : json_object());
+		                    opts ? json_incref(opts) : json_object());
 		char *snap_str = json_dumps(snap, JSON_COMPACT);
 		json_decref(snap);
-		if (snap_str) {
+		if (snap_str)
+		{
 			int slen = strlen(snap_str);
 			int b64_max = ((slen + 2) / 3) * 4 + 1;
 			char *b64 = safe_alloc(b64_max);
@@ -3171,9 +3588,12 @@ static int pb_append_value(char *buf, int n, size_t cap, json_t *v)
 		snprintf(vbuf, sizeof vbuf, "%lld", (long long)json_integer_value(v));
 	else if (json_is_real(v))
 		snprintf(vbuf, sizeof vbuf, "%g", json_real_value(v));
-	else if (json_is_true(v)) strlcpy(vbuf, "true", sizeof vbuf);
-	else if (json_is_false(v)) strlcpy(vbuf, "false", sizeof vbuf);
-	else return n;
+	else if (json_is_true(v))
+		strlcpy(vbuf, "true", sizeof vbuf);
+	else if (json_is_false(v))
+		strlcpy(vbuf, "false", sizeof vbuf);
+	else
+		return n;
 	if (n < (int)cap)
 		n += snprintf(buf + n, cap - n, " %s", vbuf);
 	return n;
@@ -3187,35 +3607,48 @@ static int pb_append_value(char *buf, int n, size_t cap, json_t *v)
 static void pb_downgrade_invocation(Client *invoker, Channel *channel,
                                     PbBot *bot, json_t *cmd)
 {
-	if (!bot->prefix || !invoker || !invoker->user || !channel) return;
+	if (!bot->prefix || !invoker || !invoker->user || !channel)
+		return;
 	const char *name = NULL;
 	json_t *nmj = json_object_get(cmd, "name");
-	if (json_is_string(nmj)) name = json_string_value(nmj);
-	if (!name) return;
+	if (json_is_string(nmj))
+		name = json_string_value(nmj);
+	if (!name)
+		return;
 	json_t *options = json_object_get(cmd, "options");
 
 	char text[512];
 	int n = snprintf(text, sizeof text, "%s%s", bot->prefix, name);
 	json_t *def = pb_find_command_def(bot, name);
 	json_t *opts = def ? json_object_get(def, "options") : NULL;
-	if (json_is_array(opts) && json_is_object(options)) {
-		size_t i; json_t *o;
-		json_array_foreach(opts, i, o) {
+	if (json_is_array(opts) && json_is_object(options))
+	{
+		size_t i;
+		json_t *o;
+		json_array_foreach(opts, i, o)
+		{
 			json_t *onm = json_object_get(o, "name");
-			if (!json_is_string(onm)) continue;
+			if (!json_is_string(onm))
+				continue;
 			json_t *v = json_object_get(options, json_string_value(onm));
-			if (v) n = pb_append_value(text, n, sizeof text, v);
+			if (v)
+				n = pb_append_value(text, n, sizeof text, v);
 		}
 	}
 
 	const char *umask_user = invoker->user->username;
 	const char *umask_host = GetHost(invoker);
-	for (Member *mem = channel->members; mem; mem = mem->next) {
+	for (Member *mem = channel->members; mem; mem = mem->next)
+	{
 		Client *t = mem->client;
-		if (!MyUser(t)) continue;
-		if (t == invoker) continue;
-		if (CAP_BOT_CMDS && HasCapabilityFast(t, CAP_BOT_CMDS)) continue;
-		if (has_user_mode(t, 'B')) continue;
+		if (!MyUser(t))
+			continue;
+		if (t == invoker)
+			continue;
+		if (CAP_BOT_CMDS && HasCapabilityFast(t, CAP_BOT_CMDS))
+			continue;
+		if (has_user_mode(t, 'B'))
+			continue;
 		sendto_one(t, NULL, ":%s!%s@%s PRIVMSG %s :%s",
 		           invoker->name, umask_user, umask_host, channel->name, text);
 	}
@@ -3230,42 +3663,59 @@ static int pb_try_upgrade_legacy(PbBot *bot, Client *invoker,
                                  const char *channel, const char *msgid,
                                  const char *text)
 {
-	if (!bot->prefix || !text) return 0;
+	if (!bot->prefix || !text)
+		return 0;
 	size_t plen = strlen(bot->prefix);
-	if (strncmp(text, bot->prefix, plen) != 0) return 0;
+	if (strncmp(text, bot->prefix, plen) != 0)
+		return 0;
 	const char *rest = text + plen;
-	while (*rest == ' ') rest++;
-	if (!*rest) return 0;
+	while (*rest == ' ')
+		rest++;
+	if (!*rest)
+		return 0;
 
 	char name[64];
 	size_t i = 0;
-	while (rest[i] && rest[i] != ' ' && i < sizeof(name) - 1) { name[i] = rest[i]; i++; }
+	while (rest[i] && rest[i] != ' ' && i < sizeof(name) - 1)
+	{
+		name[i] = rest[i];
+		i++;
+	}
 	name[i] = '\0';
 	json_t *def = pb_find_command_def(bot, name);
-	if (!def) return 0;
+	if (!def)
+		return 0;
 
 	const char *args = rest + i;
-	while (*args == ' ') args++;
+	while (*args == ' ')
+		args++;
 
 	json_t *options = json_object();
 	json_t *opts = json_object_get(def, "options");
-	if (json_is_array(opts) && *args) {
+	if (json_is_array(opts) && *args)
+	{
 		size_t nopts = json_array_size(opts);
 		const char *p = args;
-		for (size_t k = 0; k < nopts && *p; k++) {
+		for (size_t k = 0; k < nopts && *p; k++)
+		{
 			json_t *o = json_array_get(opts, k);
 			json_t *onm = json_object_get(o, "name");
-			if (!json_is_string(onm)) continue;
+			if (!json_is_string(onm))
+				continue;
 			const char *oname = json_string_value(onm);
 			char val[256];
-			if (k == nopts - 1) {           /* last option soaks up the rest */
+			if (k == nopts - 1)
+			{           /* last option soaks up the rest */
 				strlcpy(val, p, sizeof val);
 				p += strlen(p);
-			} else {
+			} else
+			{
 				size_t j = 0;
-				while (*p && *p != ' ' && j < sizeof(val) - 1) val[j++] = *p++;
+				while (*p && *p != ' ' && j < sizeof(val) - 1)
+					val[j++] = *p++;
 				val[j] = '\0';
-				while (*p == ' ') p++;
+				while (*p == ' ')
+					p++;
 			}
 			json_t *otype = json_object_get(o, "type");
 			const char *ty = json_is_string(otype) ? json_string_value(otype) : "string";
@@ -3273,8 +3723,10 @@ static int pb_try_upgrade_legacy(PbBot *bot, Client *invoker,
 				json_object_set_new(options, oname, json_integer(atoll(val)));
 			else if (!strcmp(ty, "bool"))
 				json_object_set_new(options, oname,
-				    (!strcmp(val, "true") || !strcmp(val, "1") ||
-				     !strcmp(val, "yes")) ? json_true() : json_false());
+				                    (!strcmp(val, "true") || !strcmp(val, "1") ||
+				                     !strcmp(val, "yes"))
+				                        ? json_true()
+				                        : json_false());
 			else
 				json_object_set_new(options, oname, json_string(val));
 		}
@@ -3297,9 +3749,12 @@ static int pb_try_upgrade_legacy(PbBot *bot, Client *invoker,
 /* Look for a command by name in the bot's registered schema. */
 static int pb_bot_has_command(PbBot *b, const char *name)
 {
-	if (!b || !b->commands || !name) return 0;
-	size_t i; json_t *c;
-	json_array_foreach(b->commands, i, c) {
+	if (!b || !b->commands || !name)
+		return 0;
+	size_t i;
+	json_t *c;
+	json_array_foreach(b->commands, i, c)
+	{
 		json_t *cn = json_object_get(c, "name");
 		if (json_is_string(cn) && !strcmp(json_string_value(cn), name))
 			return 1;
@@ -3315,7 +3770,8 @@ static int pb_bot_has_command(PbBot *b, const char *name)
 static PbBot *pb_resolve_channel_botcmd(Channel *ch, json_t *cmd,
                                         const char *target_nick)
 {
-	if (target_nick && *target_nick) {
+	if (target_nick && *target_nick)
+	{
 		/* A named (disambiguated) bot must still be reachable from THIS channel:
 		 * server-scope bots are reachable everywhere, channel-scope bots only in
 		 * channels they are actually in.  Without this check a channel-scope bot
@@ -3329,20 +3785,31 @@ static PbBot *pb_resolve_channel_botcmd(Channel *ch, json_t *cmd,
 	}
 	const char *name = NULL;
 	json_t *nmj = json_object_get(cmd, "name");
-	if (json_is_string(nmj)) name = json_string_value(nmj);
-	if (!name) return NULL;
+	if (json_is_string(nmj))
+		name = json_string_value(nmj);
+	if (!name)
+		return NULL;
 	/* Pass 1: channel-scope bot in this channel. */
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (b->scope != PB_SCOPE_CHANNEL) continue;
-		if (!pb_bot_is_in_channel(b, ch)) continue;
-		if (pb_bot_has_command(b, name)) return b;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (b->scope != PB_SCOPE_CHANNEL)
+			continue;
+		if (!pb_bot_is_in_channel(b, ch))
+			continue;
+		if (pb_bot_has_command(b, name))
+			return b;
 	}
 	/* Pass 2: server-wide bot (no channel-membership requirement). */
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (b->scope != PB_SCOPE_SERVER) continue;
-		if (pb_bot_has_command(b, name)) return b;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (b->scope != PB_SCOPE_SERVER)
+			continue;
+		if (pb_bot_has_command(b, name))
+			return b;
 	}
 	return NULL;
 }
@@ -3352,29 +3819,39 @@ static int pb_route_botcmd_channel(Client *invoker, Channel *channel,
 {
 	int plen = 0;
 	char *json_buf = pb_b64_decode_alloc(botcmd_b64, &plen);
-	if (!json_buf) {
+	if (!json_buf)
+	{
 		sendto_one(invoker, NULL, ":%s FAIL BOTCMD INVALID :bot-cmd: bad base64", me.name);
 		return 0;
 	}
 	json_error_t err;
 	json_t *cmd = json_loadb(json_buf, plen, 0, &err);
 	safe_free(json_buf);
-	if (!cmd || !json_is_object(cmd)) {
-		if (cmd) json_decref(cmd);
+	if (!cmd || !json_is_object(cmd))
+	{
+		if (cmd)
+			json_decref(cmd);
 		sendto_one(invoker, NULL, ":%s FAIL BOTCMD INVALID :bot-cmd: invalid JSON", me.name);
 		return 0;
 	}
 	const char *target_nick = NULL;
 	json_t *tj = json_object_get(cmd, "bot");       /* draft/bot-cmds disambiguation */
-	if (!json_is_string(tj)) tj = json_object_get(cmd, "target"); /* legacy fallback */
-	if (json_is_string(tj)) target_nick = json_string_value(tj);
+	if (!json_is_string(tj))
+		tj = json_object_get(cmd, "target"); /* legacy fallback */
+	if (json_is_string(tj))
+		target_nick = json_string_value(tj);
 
 	const char *msgid = NULL;
 	for (MessageTag *m = mtags; m; m = m->next)
-		if (m->name && !strcmp(m->name, "msgid")) { msgid = m->value; break; }
+		if (m->name && !strcmp(m->name, "msgid"))
+		{
+			msgid = m->value;
+			break;
+		}
 
 	PbBot *bot = pb_resolve_channel_botcmd(channel, cmd, target_nick);
-	if (!bot) {
+	if (!bot)
+	{
 		/* Not a pushbot-registered bot; let the TAGMSG flow to the
 		 * channel so a spec-compliant bot in it (draft/bot-cmds via
 		 * its own TAGMSG handler) can answer. */
@@ -3392,20 +3869,28 @@ static int pb_route_botcmd_user(Client *invoker, Client *to, MessageTag *mtags,
 {
 	PbBot *bot = NULL;
 	for (PbBot *b = bots; b; b = b->next)
-		if (b->ghost == to) { bot = b; break; }
-	if (!bot) return 0;  /* not a pushbot, leave for other handlers */
+		if (b->ghost == to)
+		{
+			bot = b;
+			break;
+		}
+	if (!bot)
+		return 0;  /* not a pushbot, leave for other handlers */
 
 	int plen = 0;
 	char *json_buf = pb_b64_decode_alloc(botcmd_b64, &plen);
-	if (!json_buf) {
+	if (!json_buf)
+	{
 		sendto_one(invoker, NULL, ":%s FAIL BOTCMD INVALID :bot-cmd: bad base64", me.name);
 		return 0;
 	}
 	json_error_t err;
 	json_t *cmd = json_loadb(json_buf, plen, 0, &err);
 	safe_free(json_buf);
-	if (!cmd || !json_is_object(cmd)) {
-		if (cmd) json_decref(cmd);
+	if (!cmd || !json_is_object(cmd))
+	{
+		if (cmd)
+			json_decref(cmd);
 		sendto_one(invoker, NULL, ":%s FAIL BOTCMD INVALID :bot-cmd: invalid JSON", me.name);
 		return 0;
 	}
@@ -3422,11 +3907,13 @@ static int pb_route_botcmd_user(Client *invoker, Client *to, MessageTag *mtags,
 	 * server-scope bots (helpbot, dicebot) are reachable from any
 	 * channel and never auto-join, so skip the bot-in-channel check
 	 * for them. */
-	if (channel_context && *channel_context) {
+	if (channel_context && *channel_context)
+	{
 		Channel *ch = find_channel(channel_context);
 		int bot_ok = (bot->scope == PB_SCOPE_SERVER) ||
 		             (ch && pb_bot_is_in_channel(bot, ch));
-		if (!ch || !find_membership_link(invoker->user->channel, ch) || !bot_ok) {
+		if (!ch || !find_membership_link(invoker->user->channel, ch) || !bot_ok)
+		{
 			sendto_one(invoker, NULL,
 			           ":%s FAIL BOTCMD INVALID_CHANNEL_CONTEXT %s :bot-cmd: invalid channel context",
 			           me.name, channel_context);
@@ -3437,7 +3924,11 @@ static int pb_route_botcmd_user(Client *invoker, Client *to, MessageTag *mtags,
 
 	const char *msgid = NULL;
 	for (MessageTag *m = mtags; m; m = m->next)
-		if (m->name && !strcmp(m->name, "msgid")) { msgid = m->value; break; }
+		if (m->name && !strcmp(m->name, "msgid"))
+		{
+			msgid = m->value;
+			break;
+		}
 
 	pb_dispatch_command(bot, invoker, channel_context, msgid, 0, cmd);  /* private/pm */
 	return 0;
@@ -3446,12 +3937,14 @@ static int pb_route_botcmd_user(Client *invoker, Client *to, MessageTag *mtags,
 static void pb_handle_command_register(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot || !s->identified) {
+	if (!s || !s->bot || !s->identified)
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "Not authenticated");
 		return;
 	}
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) {
+	if (!json_is_object(d))
+	{
 		pb_close_ws(client, PB_CLOSE_INVALID_SESSION, "COMMAND_REGISTER.d must be object");
 		return;
 	}
@@ -3462,10 +3955,12 @@ static void pb_handle_command_register(Client *client, json_t *frame)
 
 static void pb_append_tags(MessageTag **head, MessageTag *extra)
 {
-	for (MessageTag *m = extra; m; m = m->next) {
+	for (MessageTag *m = extra; m; m = m->next)
+	{
 		MessageTag *cp = safe_alloc(sizeof(*cp));
 		safe_strdup(cp->name, m->name);
-		if (m->value) safe_strdup(cp->value, m->value);
+		if (m->value)
+			safe_strdup(cp->value, m->value);
 		AddListItem(cp, *head);
 	}
 }
@@ -3476,17 +3971,21 @@ static void pb_append_tags(MessageTag **head, MessageTag *extra)
 static int pb_split_lines(char *dup, char *lines[128])
 {
 	int n = strlen(dup);
-	while (n > 0 && (dup[n-1] == '\n' || dup[n-1] == '\r'))
+	while (n > 0 && (dup[n - 1] == '\n' || dup[n - 1] == '\r'))
 		dup[--n] = '\0';
 	int count = 0;
 	char *p = dup;
-	while (p && count < 128) {
+	while (p && count < 128)
+	{
 		char *nl = strchr(p, '\n');
-		if (nl) *nl = '\0';
+		if (nl)
+			*nl = '\0';
 		int len = strlen(p);
-		if (len > 0 && p[len-1] == '\r') p[len-1] = '\0';
+		if (len > 0 && p[len - 1] == '\r')
+			p[len - 1] = '\0';
 		lines[count++] = p;
-		if (!nl) break;
+		if (!nl)
+			break;
 		p = nl + 1;
 	}
 	return count;
@@ -3501,13 +4000,15 @@ static void pb_send_multiline(Channel *ch, Client *target, Client *ghost,
                               const char *verb, MessageTag *outer_tags,
                               const char *content)
 {
-	if (!ghost || !content) return;
+	if (!ghost || !content)
+		return;
 
 	char *dup = raw_strdup(content);
 	char *lines[128];
 	int n = pb_split_lines(dup, lines);
 
-	if (n <= 1) {
+	if (n <= 1)
+	{
 		const char *one = (n == 1) ? lines[0] : "";
 		/* new_message() injects msgid/time/account so the obsidian
 		 * client can dedupe; without msgid it renders the same
@@ -3516,11 +4017,13 @@ static void pb_send_multiline(Channel *ch, Client *target, Client *ghost,
 		MessageTag *mtags = NULL;
 		new_message(ghost, NULL, &mtags);
 		pb_append_tags(&mtags, outer_tags);
-		if (ch) {
+		if (ch)
+		{
 			sendto_channel(ch, ghost, NULL, NULL, 0, SEND_ALL, mtags,
 			               ":%s %s %s :%s",
 			               ghost->name, verb, ch->name, one);
-		} else if (target) {
+		} else if (target)
+		{
 			sendto_one(target, mtags, ":%s %s %s :%s",
 			           ghost->name, verb, target->name, one);
 		}
@@ -3529,35 +4032,40 @@ static void pb_send_multiline(Channel *ch, Client *target, Client *ghost,
 		return;
 	}
 
-	char batch_id[BATCHLEN+1];
+	char batch_id[BATCHLEN + 1];
 	generate_batch_id(batch_id);
 	const char *object = ch ? ch->name : (target ? target->name : "*");
 
 	MessageTag *open_mtags = NULL;
 	new_message(ghost, NULL, &open_mtags);
 	pb_append_tags(&open_mtags, outer_tags);
-	if (ch) {
+	if (ch)
+	{
 		sendto_channel(ch, ghost, NULL, NULL, 0, SEND_ALL, open_mtags,
 		               ":%s BATCH +%s draft/multiline %s",
 		               ghost->name, batch_id, object);
-	} else {
+	} else
+	{
 		sendto_one(target, open_mtags, ":%s BATCH +%s draft/multiline %s",
 		           ghost->name, batch_id, object);
 	}
 	free_message_tags(open_mtags);
 
-	for (int i = 0; i < n; i++) {
+	for (int i = 0; i < n; i++)
+	{
 		MessageTag *line_mtags = NULL;
 		new_message(ghost, NULL, &line_mtags);
 		MessageTag *bt = safe_alloc(sizeof(*bt));
 		safe_strdup(bt->name, "batch");
 		safe_strdup(bt->value, batch_id);
 		AddListItem(bt, line_mtags);
-		if (ch) {
+		if (ch)
+		{
 			sendto_channel(ch, ghost, NULL, NULL, 0, SEND_ALL, line_mtags,
 			               ":%s %s %s :%s",
 			               ghost->name, verb, ch->name, lines[i]);
-		} else {
+		} else
+		{
 			sendto_one(target, line_mtags, ":%s %s %s :%s",
 			           ghost->name, verb, target->name, lines[i]);
 		}
@@ -3566,10 +4074,12 @@ static void pb_send_multiline(Channel *ch, Client *target, Client *ghost,
 
 	MessageTag *close_mtags = NULL;
 	new_message(ghost, NULL, &close_mtags);
-	if (ch) {
+	if (ch)
+	{
 		sendto_channel(ch, ghost, NULL, NULL, 0, SEND_ALL, close_mtags,
 		               ":%s BATCH -%s", ghost->name, batch_id);
-	} else {
+	} else
+	{
 		sendto_one(target, close_mtags, ":%s BATCH -%s",
 		           ghost->name, batch_id);
 	}
@@ -3582,10 +4092,13 @@ static void pb_send_interaction_reply(PbInteraction *it, const char *content,
                                       const char *visibility, int ephemeral,
                                       MessageTag *extra_tags)
 {
-	if (!it || !content) return;
+	if (!it || !content)
+		return;
 	Client *target = find_user(it->invoker_nick, NULL);
-	if (!target) return;
-	if (!it->bot || !it->bot->ghost) return;
+	if (!target)
+		return;
+	if (!it->bot || !it->bot->ghost)
+		return;
 
 	int as_notice = ephemeral ? 1 : 0;
 	/* Privacy: only a publicly-invoked command may reply into the channel. A
@@ -3595,9 +4108,11 @@ static void pb_send_interaction_reply(PbInteraction *it, const char *content,
 	int public_visible = it->invoked_public &&
 	                     (visibility && !strcasecmp(visibility, "public"));
 
-	if (it->channel && public_visible) {
+	if (it->channel && public_visible)
+	{
 		Channel *ch = find_channel(it->channel);
-		if (!ch) return;
+		if (!ch)
+			return;
 		MessageTag *tags = pb_make_reply_tags(it->invoker_msgid, NULL,
 		                                      it->invoker_cmd_b64);
 		pb_append_tags(&tags, extra_tags);
@@ -3617,24 +4132,30 @@ static void pb_send_interaction_reply(PbInteraction *it, const char *content,
 static void pb_handle_interaction_response(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot || !s->identified) {
+	if (!s || !s->bot || !s->identified)
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "Not authenticated");
 		return;
 	}
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) return;
+	if (!json_is_object(d))
+		return;
 	json_t *idj = json_object_get(d, "id");
-	if (!json_is_string(idj)) return;
+	if (!json_is_string(idj))
+		return;
 
 	const char *content = "";
 	const char *vis = "public";
 	int ephemeral = 0;
 	json_t *cj = json_object_get(d, "content");
-	if (json_is_string(cj)) content = json_string_value(cj);
+	if (json_is_string(cj))
+		content = json_string_value(cj);
 	json_t *vj = json_object_get(d, "visibility");
-	if (json_is_string(vj)) vis = json_string_value(vj);
+	if (json_is_string(vj))
+		vis = json_string_value(vj);
 	json_t *ej = json_object_get(d, "ephemeral");
-	if (json_is_boolean(ej)) ephemeral = json_is_true(ej) ? 1 : 0;
+	if (json_is_boolean(ej))
+		ephemeral = json_is_true(ej) ? 1 : 0;
 
 	MessageTag *extra = pb_build_tags(json_object_get(d, "tags"));
 	PbCoreResult r = pb_core_interaction_respond(s->bot,
@@ -3652,11 +4173,14 @@ static void pb_handle_interaction_response(Client *client, json_t *frame)
 static void pb_handle_interaction_defer(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot || !s->identified) return;
+	if (!s || !s->bot || !s->identified)
+		return;
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) return;
+	if (!json_is_object(d))
+		return;
 	json_t *idj = json_object_get(d, "id");
-	if (!json_is_string(idj)) return;
+	if (!json_is_string(idj))
+		return;
 	pb_core_interaction_defer(s->bot, json_string_value(idj), 0);
 }
 
@@ -3668,37 +4192,47 @@ static void pb_handle_interaction_defer(Client *client, json_t *frame)
 static void pb_handle_send_message(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot || !s->identified) {
+	if (!s || !s->bot || !s->identified)
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "Not authenticated");
 		return;
 	}
-	if (!s->bot->ghost) return;
+	if (!s->bot->ghost)
+		return;
 
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) return;
+	if (!json_is_object(d))
+		return;
 
 	json_t *tj = json_object_get(d, "target");
 	json_t *cj = json_object_get(d, "content");
-	if (!json_is_string(tj) || !json_is_string(cj)) return;
+	if (!json_is_string(tj) || !json_is_string(cj))
+		return;
 	const char *target = json_string_value(tj);
 	const char *content = json_string_value(cj);
-	if (!target || !*target || !content) return;
+	if (!target || !*target || !content)
+		return;
 
 	int as_notice = 0;
 	json_t *nj = json_object_get(d, "is_notice");
-	if (json_is_true(nj)) as_notice = 1;
+	if (json_is_true(nj))
+		as_notice = 1;
 
 	const char *verb = as_notice ? "NOTICE" : "PRIVMSG";
 
 	/* Optional client-only tags to attach to the outgoing message. */
 	MessageTag *tags = NULL;
 	json_t *tagj = json_object_get(d, "tags");
-	if (json_is_object(tagj)) {
+	if (json_is_object(tagj))
+	{
 		const char *key;
 		json_t *val;
-		json_object_foreach(tagj, key, val) {
-			if (!key || key[0] != '+') continue;
-			if (!json_is_string(val)) continue;
+		json_object_foreach(tagj, key, val)
+		{
+			if (!key || key[0] != '+')
+				continue;
+			if (!json_is_string(val))
+				continue;
 			MessageTag *m = safe_alloc(sizeof(*m));
 			safe_strdup(m->name, key);
 			safe_strdup(m->value, json_string_value(val));
@@ -3707,13 +4241,23 @@ static void pb_handle_send_message(Client *client, json_t *frame)
 	}
 
 	if (target[0] == '#' || target[0] == '&' ||
-	    target[0] == '^' || target[0] == '$') {
+	    target[0] == '^' || target[0] == '$')
+	{
 		Channel *ch = find_channel(target);
-		if (!ch) { free_message_tags(tags); return; }
+		if (!ch)
+		{
+			free_message_tags(tags);
+			return;
+		}
 		pb_send_multiline(ch, NULL, s->bot->ghost, verb, tags, content);
-	} else {
+	} else
+	{
 		Client *to = find_user(target, NULL);
-		if (!to) { free_message_tags(tags); return; }
+		if (!to)
+		{
+			free_message_tags(tags);
+			return;
+		}
 		pb_send_multiline(NULL, to, s->bot->ghost, verb, tags, content);
 	}
 	free_message_tags(tags);
@@ -3723,33 +4267,42 @@ static void pb_handle_send_message(Client *client, json_t *frame)
 static void pb_handle_send_tagmsg(Client *client, json_t *frame)
 {
 	PbSession *s = PB_SESS(client);
-	if (!s || !s->bot || !s->identified) {
+	if (!s || !s->bot || !s->identified)
+	{
 		pb_close_ws(client, PB_CLOSE_AUTH_FAILED, "Not authenticated");
 		return;
 	}
-	if (!s->bot->ghost) return;
+	if (!s->bot->ghost)
+		return;
 
 	json_t *d = json_object_get(frame, "d");
-	if (!json_is_object(d)) return;
+	if (!json_is_object(d))
+		return;
 
 	json_t *tj = json_object_get(d, "target");
 	json_t *tagj = json_object_get(d, "tags");
-	if (!json_is_string(tj) || !json_is_object(tagj)) return;
+	if (!json_is_string(tj) || !json_is_object(tagj))
+		return;
 	const char *target = json_string_value(tj);
-	if (!target || !*target) return;
+	if (!target || !*target)
+		return;
 
 	MessageTag *head = NULL;
 	const char *key;
 	json_t *val;
-	json_object_foreach(tagj, key, val) {
-		if (!key || key[0] != '+') continue;
-		if (!json_is_string(val)) continue;
+	json_object_foreach(tagj, key, val)
+	{
+		if (!key || key[0] != '+')
+			continue;
+		if (!json_is_string(val))
+			continue;
 		MessageTag *m = safe_alloc(sizeof(*m));
 		safe_strdup(m->name, key);
 		safe_strdup(m->value, json_string_value(val));
 		AddListItem(m, head);
 	}
-	if (!head) return;
+	if (!head)
+		return;
 
 	MessageTag *mtags = NULL;
 	new_message(s->bot->ghost, NULL, &mtags);
@@ -3757,15 +4310,25 @@ static void pb_handle_send_tagmsg(Client *client, json_t *frame)
 	free_message_tags(head);
 
 	if (target[0] == '#' || target[0] == '&' ||
-	    target[0] == '^' || target[0] == '$') {
+	    target[0] == '^' || target[0] == '$')
+	{
 		Channel *ch = find_channel(target);
-		if (!ch) { free_message_tags(mtags); return; }
+		if (!ch)
+		{
+			free_message_tags(mtags);
+			return;
+		}
 		sendto_channel(ch, s->bot->ghost, NULL, NULL, 0, SEND_ALL, mtags,
 		               ":%s TAGMSG %s",
 		               s->bot->ghost->name, ch->name);
-	} else {
+	} else
+	{
 		Client *to = find_user(target, NULL);
-		if (!to) { free_message_tags(mtags); return; }
+		if (!to)
+		{
+			free_message_tags(mtags);
+			return;
+		}
 		sendto_one(to, mtags, ":%s TAGMSG %s",
 		           s->bot->ghost->name, to->name);
 	}
@@ -3776,12 +4339,15 @@ EVENT(pb_interaction_timeout_check)
 {
 	time_t now = TStime();
 	PbInteraction *next;
-	for (PbInteraction *it = interactions; it; it = next) {
+	for (PbInteraction *it = interactions; it; it = next)
+	{
 		next = it->next;
-		if (it->expires_at >= now) continue;
+		if (it->expires_at >= now)
+			continue;
 		/* Time out: send a FAIL standard-reply to invoker. */
 		Client *target = find_user(it->invoker_nick, NULL);
-		if (target) {
+		if (target)
+		{
 			sendto_one(target, NULL, ":%s FAIL BOTCMD TIMEOUT %s :bot timed out",
 			           me.name, it->bot && it->bot->nick ? it->bot->nick : "?");
 		}
@@ -3804,9 +4370,12 @@ static int pb_mtag_invoked_by_is_ok(Client *c, const char *n, const char *v)
 	/* Bots emit this on their channel replies to attribute the
 	 * triggering slash invocation. Accept from any registered
 	 * client; payload shape is validated downstream by clients. */
-	if (IsServer(c)) return 1;
-	if (!has_user_mode(c, 'B')) return 0;
-	if (!v || !*v) return 0;
+	if (IsServer(c))
+		return 1;
+	if (!has_user_mode(c, 'B'))
+		return 0;
+	if (!v || !*v)
+		return 0;
 	return 1;
 }
 
@@ -3816,9 +4385,12 @@ static int pb_mtag_invoked_by_is_ok(Client *c, const char *n, const char *v)
  * useful. */
 static int pb_bot_visible_to(PbBot *b, Client *client)
 {
-	if (!b) return 0;
-	if (b->status == PB_STATUS_DELETED) return IsOper(client);
-	if (b->status == PB_STATUS_ACTIVE) return 1;
+	if (!b)
+		return 0;
+	if (b->status == PB_STATUS_DELETED)
+		return IsOper(client);
+	if (b->status == PB_STATUS_ACTIVE)
+		return 1;
 	/* PENDING and SUSPENDED -> oper-only */
 	return IsOper(client);
 }
@@ -3829,24 +4401,27 @@ static int pb_bot_visible_to(PbBot *b, Client *client)
 static json_t *pb_bot_to_burst_json(PbBot *b, int for_oper, const char *event)
 {
 	json_t *j = json_object();
-	if (event) json_object_set_new(j, "event", json_string(event));
+	if (event)
+		json_object_set_new(j, "event", json_string(event));
 	json_object_set_new(j, "bot_id", json_string(b->bot_id ? b->bot_id : ""));
 	json_object_set_new(j, "nick", json_string(b->nick ? b->nick : ""));
 	json_object_set_new(j, "realname", json_string(b->realname ? b->realname : ""));
 	json_object_set_new(j, "scope", json_string(pb_scope_str(b->scope)));
 	json_object_set_new(j, "transport", json_string(pb_transport_str(b->transport)));
 	const char *status_str =
-	    b->status == PB_STATUS_ACTIVE ? "active" :
-	    b->status == PB_STATUS_PENDING ? "pending" :
-	    b->status == PB_STATUS_SUSPENDED ? "suspended" : "deleted";
+	    b->status == PB_STATUS_ACTIVE ? "active" : b->status == PB_STATUS_PENDING ? "pending"
+	                                           : b->status == PB_STATUS_SUSPENDED ? "suspended"
+	                                                                              : "deleted";
 	json_object_set_new(j, "status", json_string(status_str));
 	json_object_set_new(j, "online",
-	    json_boolean(b->session && b->session->identified));
+	                    json_boolean(b->session && b->session->identified));
 	json_object_set_new(j, "from_config", json_boolean(b->from_config));
 
 	json_t *chans = json_array();
-	if (b->ghost) {
-		for (Membership *m = b->ghost->user->channel; m; m = m->next) {
+	if (b->ghost)
+	{
+		for (Membership *m = b->ghost->user->channel; m; m = m->next)
+		{
 			if (m->channel && m->channel->name[0])
 				json_array_append_new(chans, json_string(m->channel->name));
 		}
@@ -3858,9 +4433,10 @@ static json_t *pb_bot_to_burst_json(PbBot *b, int for_oper, const char *event)
 	 * private command privately instead of broadcasting it to the channel. */
 	json_object_set_new(j, "commands", pb_commands_to_spec_array(b->commands));
 
-	if (for_oper) {
+	if (for_oper)
+	{
 		json_object_set_new(j, "webhook_url",
-		    json_string(b->webhook_url ? b->webhook_url : ""));
+		                    json_string(b->webhook_url ? b->webhook_url : ""));
 		json_object_set_new(j, "webhook_suspended", json_boolean(b->webhook_suspended));
 		json_object_set_new(j, "webhook_failures", json_integer(b->webhook_failures));
 	}
@@ -3872,18 +4448,21 @@ static void pb_send_bot_info(Client *client, const char *batch_ref,
                              json_t *body)
 {
 	char *json_str = json_dumps(body, JSON_COMPACT);
-	if (!json_str) return;
+	if (!json_str)
+		return;
 	int jlen = strlen(json_str);
 	int b64_max = ((jlen + 2) / 3) * 4 + 1;
 	char *b64 = safe_alloc(b64_max);
 	b64_encode(json_str, jlen, b64, b64_max);
 	free(json_str);
 
-	if (batch_ref) {
+	if (batch_ref)
+	{
 		sendto_one(client, NULL,
 		           "@batch=%s;" PB_BOT_INFO_TAG "=%s :%s TAGMSG %s",
 		           batch_ref, b64, me.name, client->name);
-	} else {
+	} else
+	{
 		sendto_one(client, NULL,
 		           "@" PB_BOT_INFO_TAG "=%s :%s TAGMSG %s",
 		           b64, me.name, client->name);
@@ -3901,8 +4480,10 @@ static void pb_send_bot_info(Client *client, const char *batch_ref,
  * manage bots in channels they haven't joined. */
 static void pb_send_bot_burst(Client *client)
 {
-	if (!HasCapabilityFast(client, CAP_CHANBOTS)) return;
-	if (!MyUser(client) || !client->name[0] || !*client->name) return;
+	if (!HasCapabilityFast(client, CAP_CHANBOTS))
+		return;
+	if (!MyUser(client) || !client->name[0] || !*client->name)
+		return;
 
 	char ref[BATCHLEN + 1];
 	gen_random_alnum(ref, BATCHLEN);
@@ -3910,17 +4491,24 @@ static void pb_send_bot_burst(Client *client)
 	int for_oper = IsOper(client) ? 1 : 0;
 
 	int n = 0;
-	for (PbBot *b = bots; b; b = b->next) {
-		if (!pb_bot_visible_to(b, client)) continue;
-		if (!for_oper && b->scope != PB_SCOPE_SERVER) continue;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (!pb_bot_visible_to(b, client))
+			continue;
+		if (!for_oper && b->scope != PB_SCOPE_SERVER)
+			continue;
 		n++;
 	}
-	if (n == 0) return;  /* nothing to send */
+	if (n == 0)
+		return;  /* nothing to send */
 
 	sendto_one(client, NULL, ":%s BATCH +%s " PB_CAP_NAME, me.name, ref);
-	for (PbBot *b = bots; b; b = b->next) {
-		if (!pb_bot_visible_to(b, client)) continue;
-		if (!for_oper && b->scope != PB_SCOPE_SERVER) continue;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (!pb_bot_visible_to(b, client))
+			continue;
+		if (!for_oper && b->scope != PB_SCOPE_SERVER)
+			continue;
 		json_t *body = pb_bot_to_burst_json(b, for_oper, "add");
 		pb_send_bot_info(client, ref, body);
 		json_decref(body);
@@ -3933,13 +4521,19 @@ static void pb_send_bot_burst(Client *client)
  * wrapper since the count is typically 0..2). */
 static void pb_announce_channel_bots(Client *client, Channel *ch)
 {
-	if (!client || !ch) return;
-	if (!HasCapabilityFast(client, CAP_CHANBOTS)) return;
+	if (!client || !ch)
+		return;
+	if (!HasCapabilityFast(client, CAP_CHANBOTS))
+		return;
 	int for_oper = IsOper(client) ? 1 : 0;
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->scope != PB_SCOPE_CHANNEL) continue;
-		if (!pb_bot_visible_to(b, client)) continue;
-		if (!pb_bot_is_in_channel(b, ch)) continue;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->scope != PB_SCOPE_CHANNEL)
+			continue;
+		if (!pb_bot_visible_to(b, client))
+			continue;
+		if (!pb_bot_is_in_channel(b, ch))
+			continue;
 		json_t *body = pb_bot_to_burst_json(b, for_oper, "add");
 		pb_send_bot_info(client, NULL, body);
 		json_decref(body);
@@ -3951,13 +4545,19 @@ static void pb_announce_channel_bots(Client *client, Channel *ch)
  * remove. */
 static void pb_broadcast_bot_event(PbBot *b, const char *event)
 {
-	if (!b || !event) return;
+	if (!b || !event)
+		return;
 	Client *c;
-	list_for_each_entry(c, &lclient_list, lclient_node) {
-		if (!HasCapabilityFast(c, CAP_CHANBOTS)) continue;
-		if (!MyUser(c) || !IsUser(c)) continue;
-		if (!c->name[0] || !*c->name) continue;
-		if (strcmp(event, "remove") != 0 && !pb_bot_visible_to(b, c)) continue;
+	list_for_each_entry(c, &lclient_list, lclient_node)
+	{
+		if (!HasCapabilityFast(c, CAP_CHANBOTS))
+			continue;
+		if (!MyUser(c) || !IsUser(c))
+			continue;
+		if (!c->name[0] || !*c->name)
+			continue;
+		if (strcmp(event, "remove") != 0 && !pb_bot_visible_to(b, c))
+			continue;
 		json_t *body = pb_bot_to_burst_json(b, IsOper(c), event);
 		pb_send_bot_info(c, NULL, body);
 		json_decref(body);
@@ -3975,7 +4575,9 @@ static int pb_hook_oper_change(Client *client, int add,
 {
 	/* Re-send the burst: opers see suspended/pending bots that
 	 * non-opers don't, and unoper means they should stop seeing them. */
-	(void)oper_block; (void)operclass; (void)add;
+	(void)oper_block;
+	(void)operclass;
+	(void)add;
 	pb_send_bot_burst(client);
 	return 0;
 }
@@ -3988,11 +4590,12 @@ static int pb_hook_oper_change(Client *client, int add,
 static void pb_hexenc(const unsigned char *in, int n, char *out)
 {
 	static const char hex[] = "0123456789abcdef";
-	for (int i = 0; i < n; i++) {
-		out[2*i]     = hex[(in[i] >> 4) & 0xf];
-		out[2*i + 1] = hex[in[i] & 0xf];
+	for (int i = 0; i < n; i++)
+	{
+		out[2 * i] = hex[(in[i] >> 4) & 0xf];
+		out[2 * i + 1] = hex[in[i] & 0xf];
 	}
-	out[2*n] = '\0';
+	out[2 * n] = '\0';
 }
 
 /* Compute HMAC-SHA256(secret, body) and hex-encode it. */
@@ -4018,7 +4621,8 @@ typedef struct PbWebhookCtx {
 
 static void pb_webhook_ctx_free(PbWebhookCtx *c)
 {
-	if (!c) return;
+	if (!c)
+		return;
 	safe_free(c->bot_id);
 	safe_free(c->event_name);
 	safe_free(c->body);
@@ -4028,7 +4632,8 @@ static void pb_webhook_ctx_free(PbWebhookCtx *c)
 /* Look up a bot by bot_id (used by the response callback). */
 static PbBot *pb_find_bot_by_id(const char *id)
 {
-	if (!id) return NULL;
+	if (!id)
+		return NULL;
 	for (PbBot *b = bots; b; b = b->next)
 		if (b->bot_id && !strcmp(b->bot_id, id))
 			return b;
@@ -4037,7 +4642,8 @@ static PbBot *pb_find_bot_by_id(const char *id)
 
 static void pb_webhook_fire(PbBot *b, PbWebhookCtx *ctx)
 {
-	if (!b || !b->webhook_url) {
+	if (!b || !b->webhook_url)
+	{
 		pb_webhook_ctx_free(ctx);
 		return;
 	}
@@ -4045,7 +4651,7 @@ static void pb_webhook_fire(PbBot *b, PbWebhookCtx *ctx)
 	safe_strdup(req->url, b->webhook_url);
 	req->http_method = HTTP_METHOD_POST;
 	safe_strdup(req->body, ctx->body);
-	req->connect_timeout  = 5;
+	req->connect_timeout = 5;
 	req->transfer_timeout = 10;
 	req->max_redirects = 0;
 	safe_strdup(req->apicallback, "pb_webhook_response");
@@ -4056,7 +4662,8 @@ static void pb_webhook_fire(PbBot *b, PbWebhookCtx *ctx)
 	add_nvplist(&req->headers, 0, "X-PushBot-Bot", b->nick ? b->nick : "");
 
 	/* Sign with HMAC-SHA256 if the bot has a secret. */
-	if (b->webhook_secret && *b->webhook_secret) {
+	if (b->webhook_secret && *b->webhook_secret)
+	{
 		char sig[16 + 64 + 1];
 		char hex[65];
 		pb_hmac_sha256_hex(b->webhook_secret, ctx->body, hex);
@@ -4069,7 +4676,8 @@ static void pb_webhook_fire(PbBot *b, PbWebhookCtx *ctx)
 
 static void pb_webhook_dispatch(PbBot *b, const char *event_name, const char *body_json)
 {
-	if (!b || !body_json) return;
+	if (!b || !body_json)
+		return;
 	PbWebhookCtx *ctx = safe_alloc(sizeof(*ctx));
 	safe_strdup(ctx->bot_id, b->bot_id);
 	safe_strdup(ctx->event_name, event_name ? event_name : "");
@@ -4087,7 +4695,8 @@ static void pb_webhook_retry_fire(void *data)
 {
 	PbWebhookCtx *ctx = data;
 	PbBot *b = pb_find_bot_by_id(ctx ? ctx->bot_id : NULL);
-	if (!b || !b->webhook_url || b->webhook_suspended) {
+	if (!b || !b->webhook_url || b->webhook_suspended)
+	{
 		pb_webhook_ctx_free(ctx);
 		return;
 	}
@@ -4096,7 +4705,8 @@ static void pb_webhook_retry_fire(void *data)
 
 static void pb_webhook_schedule_retry(PbWebhookCtx *ctx, int delay_ms)
 {
-	if (!ctx) return;
+	if (!ctx)
+		return;
 	char name[64];
 	snprintf(name, sizeof(name), "pb_webhook_retry_%lx",
 	         (unsigned long)(uintptr_t)ctx);
@@ -4107,19 +4717,23 @@ static void pb_webhook_response(OutgoingWebRequest *req, OutgoingWebResponse *re
 {
 	PbWebhookCtx *ctx = resp && resp->ptr ? resp->ptr : NULL;
 	PbBot *b = pb_find_bot_by_id(ctx ? ctx->bot_id : NULL);
-	if (!ctx) return;
+	if (!ctx)
+		return;
 
 	int code = resp && !resp->errorbuf ? 200 : 0;
 	/* OutgoingWebResponse doesn't carry a direct HTTP status code in
 	 * the public struct, so we treat "no errorbuf" as success. */
-	if (resp && resp->errorbuf) code = 0;
+	if (resp && resp->errorbuf)
+		code = 0;
 
-	if (!b) {
+	if (!b)
+	{
 		/* Bot gone; just drop. */
 		pb_webhook_ctx_free(ctx);
 		return;
 	}
-	if (code >= 200 && code < 300) {
+	if (code >= 200 && code < 300)
+	{
 		b->webhook_failures = 0;
 		unreal_log(ULOG_DEBUG, "pushbot", "WEBHOOK_OK", NULL,
 		           "Webhook delivered for $nick event=$ev",
@@ -4132,15 +4746,19 @@ static void pb_webhook_response(OutgoingWebRequest *req, OutgoingWebResponse *re
 		 * back. The iid for the action is the same as the iid we
 		 * delivered in the request body's `d.id`. */
 		if (resp && resp->memory && resp->memory_len > 0 &&
-		    ctx->event_name && !strcmp(ctx->event_name, "COMMAND_INVOKE")) {
+		    ctx->event_name && !strcmp(ctx->event_name, "COMMAND_INVOKE"))
+		{
 			const char *iid = NULL;
 			json_error_t je;
 			/* Recover the iid from the body we sent. */
 			json_t *sent = ctx->body
-			    ? json_loads(ctx->body, 0, &je) : NULL;
-			if (sent) {
+			                   ? json_loads(ctx->body, 0, &je)
+			                   : NULL;
+			if (sent)
+			{
 				json_t *dj = json_object_get(sent, "d");
-				if (json_is_object(dj)) {
+				if (json_is_object(dj))
+				{
 					json_t *idj = json_object_get(dj, "id");
 					if (json_is_string(idj))
 						iid = json_string_value(idj);
@@ -4151,8 +4769,10 @@ static void pb_webhook_response(OutgoingWebRequest *req, OutgoingWebResponse *re
 			                            0, &je);
 			if (action && json_is_object(action) && iid)
 				pb_webhook_dispatch_inline_action(b, iid, action);
-			if (action) json_decref(action);
-			if (sent) json_decref(sent);
+			if (action)
+				json_decref(action);
+			if (sent)
+				json_decref(sent);
 		}
 
 		pb_webhook_ctx_free(ctx);
@@ -4167,8 +4787,10 @@ static void pb_webhook_response(OutgoingWebRequest *req, OutgoingWebResponse *re
 	           log_data_string("err", (resp && resp->errorbuf) ? resp->errorbuf : "?"));
 
 	int suspend_after = cfg.webhook_failure_suspend_after > 0
-	                    ? cfg.webhook_failure_suspend_after : 20;
-	if (b->webhook_failures >= suspend_after) {
+	                        ? cfg.webhook_failure_suspend_after
+	                        : 20;
+	if (b->webhook_failures >= suspend_after)
+	{
 		b->webhook_suspended = 1;
 		unreal_log(ULOG_WARNING, "pushbot", "WEBHOOK_SUSPENDED", NULL,
 		           "Bot $nick webhook suspended after $n consecutive failures",
@@ -4179,8 +4801,9 @@ static void pb_webhook_response(OutgoingWebRequest *req, OutgoingWebResponse *re
 	}
 
 	/* Backoff schedule: 1s, 5s, 30s, 60s, then dead-letter. */
-	static const int backoff_ms[] = { 1000, 5000, 30000, 60000 };
-	if (ctx->attempt >= (int)(sizeof(backoff_ms)/sizeof(backoff_ms[0]))) {
+	static const int backoff_ms[] = {1000, 5000, 30000, 60000};
+	if (ctx->attempt >= (int)(sizeof(backoff_ms) / sizeof(backoff_ms[0])))
+	{
 		unreal_log(ULOG_INFO, "pushbot", "WEBHOOK_DEAD_LETTER", NULL,
 		           "Bot $nick event $ev dropped after all retries",
 		           log_data_string("nick", b->nick),
@@ -4203,28 +4826,32 @@ static void pb_webhook_response(OutgoingWebRequest *req, OutgoingWebResponse *re
 static json_t *pb_json_client(Client *c)
 {
 	json_t *j = json_object();
-	if (!c) return j;
+	if (!c)
+		return j;
 	json_object_set_new(j, "nick", json_string(c->name[0] ? c->name : ""));
 	json_object_set_new(j, "id", json_string(c->id[0] ? c->id : ""));
-	if (c->user) {
+	if (c->user)
+	{
 		json_object_set_new(j, "account",
-		    json_string(c->user->account[0] && strcmp(c->user->account, "0")
-		                ? c->user->account : ""));
+		                    json_string(c->user->account[0] && strcmp(c->user->account, "0")
+		                                    ? c->user->account
+		                                    : ""));
 		json_object_set_new(j, "ident",
-		    json_string(c->user->username[0] ? c->user->username : ""));
-		const char *vhost = c->user->virthost ? c->user->virthost
-		                  : c->user->cloakedhost[0] ? c->user->cloakedhost : "";
+		                    json_string(c->user->username[0] ? c->user->username : ""));
+		const char *vhost = c->user->virthost         ? c->user->virthost
+		                    : c->user->cloakedhost[0] ? c->user->cloakedhost
+		                                              : "";
 		json_object_set_new(j, "host", json_string(vhost));
 		long bot_bit = find_user_mode('B');
 		json_object_set_new(j, "is_bot",
-		    json_boolean(bot_bit && (c->umodes & bot_bit) ? 1 : 0));
+		                    json_boolean(bot_bit && (c->umodes & bot_bit) ? 1 : 0));
 		char umb[64];
 		get_usermode_string_r(c, umb, sizeof(umb));
 		json_object_set_new(j, "umodes", json_string(umb));
 		json_object_set_new(j, "is_oper", json_boolean(IsOper(c) ? 1 : 0));
 		json_object_set_new(j, "is_secure", json_boolean(IsSecure(c) ? 1 : 0));
 		json_object_set_new(j, "is_logged_in",
-		    json_boolean(IsLoggedIn(c) ? 1 : 0));
+		                    json_boolean(IsLoggedIn(c) ? 1 : 0));
 	}
 	return j;
 }
@@ -4232,20 +4859,24 @@ static json_t *pb_json_client(Client *c)
 static json_t *pb_json_channel(Channel *ch)
 {
 	json_t *j = json_object();
-	if (!ch) return j;
+	if (!ch)
+		return j;
 	json_object_set_new(j, "name", json_string(ch->name[0] ? ch->name : ""));
 	json_object_set_new(j, "topic", json_string(ch->topic ? ch->topic : ""));
 	int count = 0;
-	for (Member *m = ch->members; m; m = m->next) count++;
+	for (Member *m = ch->members; m; m = m->next)
+		count++;
 	json_object_set_new(j, "users_count", json_integer(count));
 	return j;
 }
 
 static int pb_bot_is_in_channel(PbBot *b, Channel *ch)
 {
-	if (!b || !b->ghost || !ch) return 0;
+	if (!b || !b->ghost || !ch)
+		return 0;
 	for (Membership *m = b->ghost->user->channel; m; m = m->next)
-		if (m->channel == ch) return 1;
+		if (m->channel == ch)
+			return 1;
 	return 0;
 }
 
@@ -4253,7 +4884,8 @@ static int pb_skip_sender(Client *client, PbBot *b)
 {
 	/* Don't deliver the bot's own messages back to itself -- the
 	 * obvious feedback-loop prevention. */
-	if (!client || !b || !b->ghost) return 0;
+	if (!client || !b || !b->ghost)
+		return 0;
 	return (client == b->ghost) ? 1 : 0;
 }
 
@@ -4263,7 +4895,8 @@ static int pb_skip_sender(Client *client, PbBot *b)
  * iterating bots that can't currently receive anything. */
 static int pb_bot_deliverable(PbBot *b)
 {
-	if (!b || b->status != PB_STATUS_ACTIVE) return 0;
+	if (!b || b->status != PB_STATUS_ACTIVE)
+		return 0;
 	if (b->session && b->session->identified &&
 	    b->session->client && !IsDead(b->session->client) &&
 	    (b->transport == PB_TRANSPORT_GATEWAY || b->transport == PB_TRANSPORT_BOTH))
@@ -4280,33 +4913,47 @@ static int pb_hook_chanmsg(Client *client, Channel *channel, int sendflags,
                            const char *member_modes, const char *target,
                            MessageTag *mtags, const char *text, SendType sendtype)
 {
-	if (!channel || !text) return 0;
+	if (!channel || !text)
+		return 0;
 
 	/* Phase 5: a TAGMSG carrying +draft/bot-cmd is a slash-command
 	 * invocation, not a regular event.  Route it to COMMAND_INVOKE
 	 * instead of MESSAGE_CREATE. */
-	if (sendtype == SEND_TYPE_TAGMSG) {
+	if (sendtype == SEND_TYPE_TAGMSG)
+	{
 		const char *botcmd_b64 = NULL;
 		for (MessageTag *m = mtags; m; m = m->next)
-			if (m->name && !strcmp(m->name, "+draft/bot-cmd")) {
-				botcmd_b64 = m->value; break;
+			if (m->name && !strcmp(m->name, "+draft/bot-cmd"))
+			{
+				botcmd_b64 = m->value;
+				break;
 			}
 		if (botcmd_b64)
 			return pb_route_botcmd_channel(client, channel, mtags, botcmd_b64);
 	}
 
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (!pb_bot_deliverable(b)) continue;
-		if (!pb_bot_is_in_channel(b, channel)) continue;
-		if (pb_skip_sender(client, b)) continue;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (!pb_bot_deliverable(b))
+			continue;
+		if (!pb_bot_is_in_channel(b, channel))
+			continue;
+		if (pb_skip_sender(client, b))
+			continue;
 
 		/* Legacy compat: upgrade a plain "<prefix><cmd> args" PRIVMSG into a
 		 * structured invocation for this bot, in place of MESSAGE_CREATE. */
-		if (sendtype == SEND_TYPE_PRIVMSG) {
+		if (sendtype == SEND_TYPE_PRIVMSG)
+		{
 			const char *umsgid = NULL;
 			for (MessageTag *m = mtags; m; m = m->next)
-				if (m->name && !strcmp(m->name, "msgid")) { umsgid = m->value; break; }
+				if (m->name && !strcmp(m->name, "msgid"))
+				{
+					umsgid = m->value;
+					break;
+				}
 			if (pb_try_upgrade_legacy(b, client, channel->name, umsgid, text))
 				continue;
 		}
@@ -4314,18 +4961,23 @@ static int pb_hook_chanmsg(Client *client, Channel *channel, int sendflags,
 		json_t *d = json_object();
 		const char *msgid = NULL;
 		for (MessageTag *m = mtags; m; m = m->next)
-			if (m->name && !strcmp(m->name, "msgid")) { msgid = m->value; break; }
+			if (m->name && !strcmp(m->name, "msgid"))
+			{
+				msgid = m->value;
+				break;
+			}
 		json_object_set_new(d, "msgid", json_string(msgid ? msgid : ""));
 		json_object_set_new(d, "channel", pb_json_channel(channel));
 		json_object_set_new(d, "author", pb_json_client(client));
 		json_object_set_new(d, "content", json_string(text));
 		json_object_set_new(d, "is_notice",
-		    json_boolean(sendtype == SEND_TYPE_NOTICE ? 1 : 0));
+		                    json_boolean(sendtype == SEND_TYPE_NOTICE ? 1 : 0));
 		json_object_set_new(d, "is_tagmsg",
-		    json_boolean(sendtype == SEND_TYPE_TAGMSG ? 1 : 0));
+		                    json_boolean(sendtype == SEND_TYPE_TAGMSG ? 1 : 0));
 		/* mention_bot: does the message at-mention or contain the bot's nick? */
 		int mentioned = 0;
-		if (b->nick && strstr(text, b->nick)) mentioned = 1;
+		if (b->nick && strstr(text, b->nick))
+			mentioned = 1;
 		json_object_set_new(d, "mention_bot", json_boolean(mentioned));
 		pb_dispatch_event(b, "MESSAGE_CREATE", d);
 	}
@@ -4335,18 +4987,21 @@ static int pb_hook_chanmsg(Client *client, Channel *channel, int sendflags,
 static int pb_hook_usermsg(Client *client, Client *to, MessageTag *mtags,
                            const char *text, SendType sendtype)
 {
-	if (!to || !text) return 0;
+	if (!to || !text)
+		return 0;
 
 	/* Phase 5: a TAGMSG to a bot's ghost with +draft/bot-cmd is a
 	 * slash invocation in DM (or private-visibility channel context).
 	 * +draft/bot-cmds-query is the discovery counterpart.
 	 * +draft/bot-tools (msg=action) is a workflow control signal. */
-	if (sendtype == SEND_TYPE_TAGMSG) {
+	if (sendtype == SEND_TYPE_TAGMSG)
+	{
 		const char *botcmd_b64 = NULL;
 		const char *channel_ctx = NULL;
 		const char *bottools_b64 = NULL;
 		int is_query = 0;
-		for (MessageTag *m = mtags; m; m = m->next) {
+		for (MessageTag *m = mtags; m; m = m->next)
+		{
 			if (m->name && !strcmp(m->name, "+draft/bot-cmd"))
 				botcmd_b64 = m->value;
 			else if (m->name && !strcmp(m->name, "+draft/channel-context"))
@@ -4358,32 +5013,49 @@ static int pb_hook_usermsg(Client *client, Client *to, MessageTag *mtags,
 		}
 		if (botcmd_b64)
 			return pb_route_botcmd_user(client, to, mtags, botcmd_b64, channel_ctx);
-		if (bottools_b64) {
+		if (bottools_b64)
+		{
 			pb_route_bottools_action(client, to, NULL, bottools_b64);
 			/* fall through: bot still sees the TAGMSG as a generic
 			 * message-create if anything below catches it. */
 		}
-		if (is_query) {
+		if (is_query)
+		{
 			PbBot *b = NULL;
 			for (PbBot *bb = bots; bb; bb = bb->next)
-				if (bb->ghost == to) { b = bb; break; }
-			if (b) pb_send_botcmds_to(client, b);
+				if (bb->ghost == to)
+				{
+					b = bb;
+					break;
+				}
+			if (b)
+				pb_send_botcmds_to(client, b);
 			return 0;
 		}
 	}
 
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (!pb_bot_deliverable(b)) continue;
-		if (to != b->ghost) continue;     /* DM addressed at this bot only */
-		if (pb_skip_sender(client, b)) continue;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (!pb_bot_deliverable(b))
+			continue;
+		if (to != b->ghost)
+			continue;     /* DM addressed at this bot only */
+		if (pb_skip_sender(client, b))
+			continue;
 
 		/* Legacy compat: upgrade a plain "<prefix><cmd> args" DM into a
 		 * structured (pm-context) invocation, in place of MESSAGE_CREATE. */
-		if (sendtype == SEND_TYPE_PRIVMSG) {
+		if (sendtype == SEND_TYPE_PRIVMSG)
+		{
 			const char *umsgid = NULL;
 			for (MessageTag *m = mtags; m; m = m->next)
-				if (m->name && !strcmp(m->name, "msgid")) { umsgid = m->value; break; }
+				if (m->name && !strcmp(m->name, "msgid"))
+				{
+					umsgid = m->value;
+					break;
+				}
 			if (pb_try_upgrade_legacy(b, client, NULL, umsgid, text))
 				continue;
 		}
@@ -4391,15 +5063,19 @@ static int pb_hook_usermsg(Client *client, Client *to, MessageTag *mtags,
 		json_t *d = json_object();
 		const char *msgid = NULL;
 		for (MessageTag *m = mtags; m; m = m->next)
-			if (m->name && !strcmp(m->name, "msgid")) { msgid = m->value; break; }
+			if (m->name && !strcmp(m->name, "msgid"))
+			{
+				msgid = m->value;
+				break;
+			}
 		json_object_set_new(d, "msgid", json_string(msgid ? msgid : ""));
 		json_object_set_new(d, "channel", json_null());  /* DM */
 		json_object_set_new(d, "author", pb_json_client(client));
 		json_object_set_new(d, "content", json_string(text));
 		json_object_set_new(d, "is_notice",
-		    json_boolean(sendtype == SEND_TYPE_NOTICE ? 1 : 0));
+		                    json_boolean(sendtype == SEND_TYPE_NOTICE ? 1 : 0));
 		json_object_set_new(d, "is_tagmsg",
-		    json_boolean(sendtype == SEND_TYPE_TAGMSG ? 1 : 0));
+		                    json_boolean(sendtype == SEND_TYPE_TAGMSG ? 1 : 0));
 		json_object_set_new(d, "is_dm", json_true());
 		pb_dispatch_event(b, "MESSAGE_CREATE", d);
 	}
@@ -4408,16 +5084,22 @@ static int pb_hook_usermsg(Client *client, Client *to, MessageTag *mtags,
 
 static int pb_hook_local_join(Client *client, Channel *channel, MessageTag *mtags)
 {
-	if (!channel) return 0;
+	if (!channel)
+		return 0;
 	/* Channel-scope bots only enter the client's directory now -- the
 	 * connect burst sent server-scope bots only; this is the moment
 	 * the user shares a channel with each channel-scope bot in here. */
 	pb_announce_channel_bots(client, channel);
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (!pb_bot_deliverable(b)) continue;
-		if (!pb_bot_is_in_channel(b, channel)) continue;
-		if (pb_skip_sender(client, b)) continue;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (!pb_bot_deliverable(b))
+			continue;
+		if (!pb_bot_is_in_channel(b, channel))
+			continue;
+		if (pb_skip_sender(client, b))
+			continue;
 		json_t *d = json_object();
 		json_object_set_new(d, "client", pb_json_client(client));
 		json_object_set_new(d, "channel", pb_json_channel(channel));
@@ -4429,12 +5111,18 @@ static int pb_hook_local_join(Client *client, Channel *channel, MessageTag *mtag
 static int pb_hook_local_part(Client *client, Channel *channel, MessageTag *mtags,
                               const char *comment)
 {
-	if (!channel) return 0;
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (!pb_bot_deliverable(b)) continue;
-		if (!pb_bot_is_in_channel(b, channel)) continue;
-		if (pb_skip_sender(client, b)) continue;
+	if (!channel)
+		return 0;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (!pb_bot_deliverable(b))
+			continue;
+		if (!pb_bot_is_in_channel(b, channel))
+			continue;
+		if (pb_skip_sender(client, b))
+			continue;
 		json_t *d = json_object();
 		json_object_set_new(d, "client", pb_json_client(client));
 		json_object_set_new(d, "channel", pb_json_channel(channel));
@@ -4447,11 +5135,16 @@ static int pb_hook_local_part(Client *client, Channel *channel, MessageTag *mtag
 static int pb_hook_local_kick(Client *client, Client *victim, Channel *channel,
                               MessageTag *mtags, const char *comment)
 {
-	if (!channel) return 0;
-	for (PbBot *b = bots; b; b = b->next) {
-		if (b->status != PB_STATUS_ACTIVE) continue;
-		if (!pb_bot_deliverable(b)) continue;
-		if (!pb_bot_is_in_channel(b, channel)) continue;
+	if (!channel)
+		return 0;
+	for (PbBot *b = bots; b; b = b->next)
+	{
+		if (b->status != PB_STATUS_ACTIVE)
+			continue;
+		if (!pb_bot_deliverable(b))
+			continue;
+		if (!pb_bot_is_in_channel(b, channel))
+			continue;
 		json_t *d = json_object();
 		json_object_set_new(d, "client", pb_json_client(client));
 		json_object_set_new(d, "victim", pb_json_client(victim));
@@ -4487,7 +5180,8 @@ static int pb_hook_local_kick(Client *client, Client *victim, Channel *channel,
 static void pb_rest_send_json(Client *client, int status, json_t *body)
 {
 	char *json_str = body ? json_dumps(body, JSON_COMPACT) : strdup("{}");
-	if (!json_str) json_str = strdup("{}");
+	if (!json_str)
+		json_str = strdup("{}");
 	char hdr[512];
 	int blen = strlen(json_str);
 	snprintf(hdr, sizeof(hdr),
@@ -4501,7 +5195,8 @@ static void pb_rest_send_json(Client *client, int status, json_t *body)
 	dbuf_put(&client->local->sendQ, json_str, blen);
 	send_queued(client);
 	free(json_str);
-	if (body) json_decref(body);
+	if (body)
+		json_decref(body);
 	dead_socket(client, "REST response sent");
 }
 
@@ -4516,19 +5211,26 @@ static void pb_rest_send_error(Client *client, int status, const char *msg)
 static int pb_pct_decode(char *s)
 {
 	char *o = s;
-	for (char *p = s; *p; p++) {
-		if (*p == '%') {
-			if (!p[1] || !p[2]) return -1;
-			int hi = (p[1] >= '0' && p[1] <= '9') ? p[1] - '0'
-			       : (p[1] >= 'a' && p[1] <= 'f') ? p[1] - 'a' + 10
-			       : (p[1] >= 'A' && p[1] <= 'F') ? p[1] - 'A' + 10 : -1;
-			int lo = (p[2] >= '0' && p[2] <= '9') ? p[2] - '0'
-			       : (p[2] >= 'a' && p[2] <= 'f') ? p[2] - 'a' + 10
-			       : (p[2] >= 'A' && p[2] <= 'F') ? p[2] - 'A' + 10 : -1;
-			if (hi < 0 || lo < 0) return -1;
+	for (char *p = s; *p; p++)
+	{
+		if (*p == '%')
+		{
+			if (!p[1] || !p[2])
+				return -1;
+			int hi = (p[1] >= '0' && p[1] <= '9')   ? p[1] - '0'
+			         : (p[1] >= 'a' && p[1] <= 'f') ? p[1] - 'a' + 10
+			         : (p[1] >= 'A' && p[1] <= 'F') ? p[1] - 'A' + 10
+			                                        : -1;
+			int lo = (p[2] >= '0' && p[2] <= '9')   ? p[2] - '0'
+			         : (p[2] >= 'a' && p[2] <= 'f') ? p[2] - 'a' + 10
+			         : (p[2] >= 'A' && p[2] <= 'F') ? p[2] - 'A' + 10
+			                                        : -1;
+			if (hi < 0 || lo < 0)
+				return -1;
 			*o++ = (char)(hi * 16 + lo);
 			p += 2;
-		} else *o++ = *p;
+		} else
+			*o++ = *p;
 	}
 	*o = '\0';
 	return 0;
@@ -4538,7 +5240,8 @@ static int pb_pct_decode(char *s)
 static void pb_generate_token(char *out, size_t outlen)
 {
 	int n = outlen ? (int)outlen - 1 : 0;
-	if (n > 64) n = 64;
+	if (n > 64)
+		n = 64;
 	gen_random_alnum(out, n);
 	out[n] = '\0';
 }
@@ -4549,7 +5252,8 @@ static int pb_register_bot_internal(json_t *body, int active,
                                     char *bot_id_out, char *token_out)
 {
 	json_t *jnick = json_object_get(body, "nick");
-	if (!json_is_string(jnick)) return -1;
+	if (!json_is_string(jnick))
+		return -1;
 	const char *nick = json_string_value(jnick);
 	if (!*nick || pb_find_bot_by_nick(nick) || find_user(nick, NULL))
 		return -2;  /* nick clash */
@@ -4559,16 +5263,19 @@ static int pb_register_bot_internal(json_t *body, int active,
 	safe_strdup(tmp.nick, nick);
 	const char *rn = NULL;
 	json_t *jrn = json_object_get(body, "realname");
-	if (json_is_string(jrn)) rn = json_string_value(jrn);
+	if (json_is_string(jrn))
+		rn = json_string_value(jrn);
 	safe_strdup(tmp.realname, rn ? rn : nick);
 	json_t *jsc = json_object_get(body, "scope");
 	tmp.scope = pb_parse_scope(json_is_string(jsc) ? json_string_value(jsc) : "channel");
 	json_t *jtr = json_object_get(body, "transport");
 	tmp.transport = pb_parse_transport(json_is_string(jtr) ? json_string_value(jtr) : "gateway");
 	json_t *jwh = json_object_get(body, "webhook_url");
-	if (json_is_string(jwh)) safe_strdup(tmp.webhook_url, json_string_value(jwh));
+	if (json_is_string(jwh))
+		safe_strdup(tmp.webhook_url, json_string_value(jwh));
 	json_t *jws = json_object_get(body, "webhook_secret");
-	if (json_is_string(jws)) safe_strdup(tmp.webhook_secret, json_string_value(jws));
+	if (json_is_string(jws))
+		safe_strdup(tmp.webhook_secret, json_string_value(jws));
 
 	pb_generate_token(token_out, 41);
 	safe_strdup(tmp.token, token_out);
@@ -4576,9 +5283,13 @@ static int pb_register_bot_internal(json_t *body, int active,
 	pb_generate_id(bot_id, sizeof(bot_id));
 	strlcpy(bot_id_out, bot_id, 16);
 
-	if (pb_upsert_bot_row(bot_id, &tmp) < 0) {
-		safe_free(tmp.nick); safe_free(tmp.realname); safe_free(tmp.token);
-		safe_free(tmp.webhook_url); safe_free(tmp.webhook_secret);
+	if (pb_upsert_bot_row(bot_id, &tmp) < 0)
+	{
+		safe_free(tmp.nick);
+		safe_free(tmp.realname);
+		safe_free(tmp.token);
+		safe_free(tmp.webhook_url);
+		safe_free(tmp.webhook_secret);
 		return -3;
 	}
 
@@ -4590,43 +5301,67 @@ static int pb_register_bot_internal(json_t *body, int active,
 	b->scope = tmp.scope;
 	b->transport = tmp.transport;
 	b->status = active ? PB_STATUS_ACTIVE : PB_STATUS_PENDING;
-	if (tmp.webhook_url) safe_strdup(b->webhook_url, tmp.webhook_url);
-	if (tmp.webhook_secret) safe_strdup(b->webhook_secret, tmp.webhook_secret);
+	if (tmp.webhook_url)
+		safe_strdup(b->webhook_url, tmp.webhook_url);
+	if (tmp.webhook_secret)
+		safe_strdup(b->webhook_secret, tmp.webhook_secret);
 	safe_strdup(b->config_token, tmp.token);
 	AddListItem(b, bots);
-	if (active) pb_spawn_ghost(b);
+	if (active)
+		pb_spawn_ghost(b);
 
-	safe_free(tmp.nick); safe_free(tmp.realname); safe_free(tmp.token);
-	safe_free(tmp.webhook_url); safe_free(tmp.webhook_secret);
+	safe_free(tmp.nick);
+	safe_free(tmp.realname);
+	safe_free(tmp.token);
+	safe_free(tmp.webhook_url);
+	safe_free(tmp.webhook_secret);
 	return 0;
 }
 
 static void pb_rest_register_bot(Client *client, WebRequest *web)
 {
 	if (cfg.registration_mode &&
-	    !strcasecmp(cfg.registration_mode, "admin")) {
+	    !strcasecmp(cfg.registration_mode, "admin"))
+	{
 		pb_rest_send_error(client, 403, "registration mode=admin: config-only");
 		return;
 	}
-	if (!web->request_buffer) {
+	if (!web->request_buffer)
+	{
 		pb_rest_send_error(client, 400, "missing body");
 		return;
 	}
 	json_error_t err;
 	json_t *body = json_loads(web->request_buffer, 0, &err);
-	if (!body || !json_is_object(body)) {
-		if (body) json_decref(body);
+	if (!body || !json_is_object(body))
+	{
+		if (body)
+			json_decref(body);
 		pb_rest_send_error(client, 400, "body must be a JSON object");
 		return;
 	}
 	int active = (cfg.registration_mode &&
-	              !strcasecmp(cfg.registration_mode, "open")) ? 1 : 0;
+	              !strcasecmp(cfg.registration_mode, "open"))
+	                 ? 1
+	                 : 0;
 	char bot_id[16] = "", token[64] = "";
 	int rc = pb_register_bot_internal(body, active, bot_id, token);
 	json_decref(body);
-	if (rc == -1) { pb_rest_send_error(client, 400, "missing or invalid 'nick'"); return; }
-	if (rc == -2) { pb_rest_send_error(client, 409, "nick already in use"); return; }
-	if (rc < 0)   { pb_rest_send_error(client, 500, "create failed"); return; }
+	if (rc == -1)
+	{
+		pb_rest_send_error(client, 400, "missing or invalid 'nick'");
+		return;
+	}
+	if (rc == -2)
+	{
+		pb_rest_send_error(client, 409, "nick already in use");
+		return;
+	}
+	if (rc < 0)
+	{
+		pb_rest_send_error(client, 500, "create failed");
+		return;
+	}
 
 	json_t *resp = json_object();
 	json_object_set_new(resp, "bot_id", json_string(bot_id));
@@ -4644,16 +5379,17 @@ static void pb_rest_register_bot(Client *client, WebRequest *web)
 static void pb_rest_list_bots(Client *client, WebRequest *web)
 {
 	json_t *arr = json_array();
-	for (PbBot *b = bots; b; b = b->next) {
+	for (PbBot *b = bots; b; b = b->next)
+	{
 		json_t *o = json_object();
 		json_object_set_new(o, "bot_id", json_string(b->bot_id));
 		json_object_set_new(o, "nick", json_string(b->nick));
 		json_object_set_new(o, "scope", json_string(pb_scope_str(b->scope)));
 		json_object_set_new(o, "transport", json_string(pb_transport_str(b->transport)));
 		json_object_set_new(o, "status",
-		    json_string(b->status == PB_STATUS_ACTIVE ? "active" :
-		                b->status == PB_STATUS_PENDING ? "pending" :
-		                b->status == PB_STATUS_SUSPENDED ? "suspended" : "deleted"));
+		                    json_string(b->status == PB_STATUS_ACTIVE ? "active" : b->status == PB_STATUS_PENDING ? "pending"
+		                                                                       : b->status == PB_STATUS_SUSPENDED ? "suspended"
+		                                                                                                          : "deleted"));
 		json_object_set_new(o, "from_config", json_boolean(b->from_config));
 		json_array_append_new(arr, o);
 	}
@@ -4675,14 +5411,14 @@ static json_t *pb_bot_to_json(PbBot *b)
 	json_object_set_new(o, "scope", json_string(pb_scope_str(b->scope)));
 	json_object_set_new(o, "transport", json_string(pb_transport_str(b->transport)));
 	json_object_set_new(o, "status",
-	    json_string(b->status == PB_STATUS_ACTIVE ? "active" :
-	                b->status == PB_STATUS_PENDING ? "pending" :
-	                b->status == PB_STATUS_SUSPENDED ? "suspended" : "deleted"));
+	                    json_string(b->status == PB_STATUS_ACTIVE ? "active" : b->status == PB_STATUS_PENDING ? "pending"
+	                                                                       : b->status == PB_STATUS_SUSPENDED ? "suspended"
+	                                                                                                          : "deleted"));
 	json_object_set_new(o, "from_config", json_boolean(b->from_config));
 	json_object_set_new(o, "webhook_url",
-	    json_string(b->webhook_url ? b->webhook_url : ""));
+	                    json_string(b->webhook_url ? b->webhook_url : ""));
 	json_object_set_new(o, "online",
-	    json_boolean(b->session && b->session->identified));
+	                    json_boolean(b->session && b->session->identified));
 	json_object_set_new(o, "channels_count", json_integer(0));  /* TODO membership count */
 	return o;
 }
@@ -4703,7 +5439,8 @@ RPC_CALL_FUNC(pb_rpc_get)
 	const char *nick;
 	REQUIRE_PARAM_STRING("nick", nick);
 	PbBot *b = pb_find_bot_by_nick(nick);
-	if (!b) {
+	if (!b)
+	{
 		rpc_error(client, request, JSON_RPC_ERROR_NOT_FOUND, "No such bot");
 		return;
 	}
@@ -4714,22 +5451,27 @@ RPC_CALL_FUNC(pb_rpc_get)
 
 RPC_CALL_FUNC(pb_rpc_register)
 {
-	if (cfg.registration_mode && !strcasecmp(cfg.registration_mode, "admin")) {
+	if (cfg.registration_mode && !strcasecmp(cfg.registration_mode, "admin"))
+	{
 		rpc_error(client, request, JSON_RPC_ERROR_DENIED,
 		          "registration mode=admin: config-only");
 		return;
 	}
 	const char *nick;
 	REQUIRE_PARAM_STRING("nick", nick);
-	if (pb_find_bot_by_nick(nick) || find_user(nick, NULL)) {
+	if (pb_find_bot_by_nick(nick) || find_user(nick, NULL))
+	{
 		rpc_error(client, request, JSON_RPC_ERROR_ALREADY_EXISTS, "nick already in use");
 		return;
 	}
 	int active = (cfg.registration_mode &&
-	              !strcasecmp(cfg.registration_mode, "open")) ? 1 : 0;
+	              !strcasecmp(cfg.registration_mode, "open"))
+	                 ? 1
+	                 : 0;
 	char bot_id[16] = "", token[64] = "";
 	int rc = pb_register_bot_internal(params, active, bot_id, token);
-	if (rc < 0) {
+	if (rc < 0)
+	{
 		rpc_error(client, request, JSON_RPC_ERROR_INTERNAL_ERROR, "create failed");
 		return;
 	}
@@ -4747,19 +5489,24 @@ static void pb_rpc_status_change(Client *client, json_t *request, json_t *params
 	const char *nick;
 	REQUIRE_PARAM_STRING("nick", nick);
 	PbBot *b = pb_find_bot_by_nick(nick);
-	if (!b) {
+	if (!b)
+	{
 		rpc_error(client, request, JSON_RPC_ERROR_NOT_FOUND, "No such bot");
 		return;
 	}
-	if (b->from_config) {
+	if (b->from_config)
+	{
 		rpc_error(client, request, JSON_RPC_ERROR_DENIED,
 		          "config-defined bot; edit obbyircd.conf");
 		return;
 	}
 	b->status = new_status;
-	if (new_status == PB_STATUS_ACTIVE && !b->ghost) pb_spawn_ghost(b);
-	if (new_status != PB_STATUS_ACTIVE && b->ghost) {
-		Client *g = b->ghost; b->ghost = NULL;
+	if (new_status == PB_STATUS_ACTIVE && !b->ghost)
+		pb_spawn_ghost(b);
+	if (new_status != PB_STATUS_ACTIVE && b->ghost)
+	{
+		Client *g = b->ghost;
+		b->ghost = NULL;
 		exit_client(g, NULL, "Bot deactivated by RPC");
 	}
 	/* Persist to DB or the next restart will reload the row as
@@ -4767,13 +5514,13 @@ static void pb_rpc_status_change(Client *client, json_t *request, json_t *params
 	 * appear to work then come back. */
 	{
 		const char *str =
-		    new_status == PB_STATUS_ACTIVE ? "active" :
-		    new_status == PB_STATUS_SUSPENDED ? "suspended" :
-		    new_status == PB_STATUS_DELETED ? "deleted" : "pending";
+		    new_status == PB_STATUS_ACTIVE ? "active" : new_status == PB_STATUS_SUSPENDED ? "suspended"
+		                                            : new_status == PB_STATUS_DELETED     ? "deleted"
+		                                                                                  : "pending";
 		sqlite3_stmt *st = NULL;
 		if (sqlite3_prepare_v2(db,
-		    "UPDATE pushbots SET status=? WHERE bot_id=?",
-		    -1, &st, NULL) == SQLITE_OK)
+		                       "UPDATE pushbots SET status=? WHERE bot_id=?",
+		                       -1, &st, NULL) == SQLITE_OK)
 		{
 			sqlite3_bind_text(st, 1, str, -1, SQLITE_STATIC);
 			sqlite3_bind_text(st, 2, b->bot_id, -1, SQLITE_STATIC);
@@ -4789,10 +5536,22 @@ static void pb_rpc_status_change(Client *client, json_t *request, json_t *params
 	json_decref(result);
 }
 
-RPC_CALL_FUNC(pb_rpc_approve)   { pb_rpc_status_change(client, request, params, PB_STATUS_ACTIVE, "active"); }
-RPC_CALL_FUNC(pb_rpc_suspend)   { pb_rpc_status_change(client, request, params, PB_STATUS_SUSPENDED, "suspended"); }
-RPC_CALL_FUNC(pb_rpc_unsuspend) { pb_rpc_status_change(client, request, params, PB_STATUS_ACTIVE, "active"); }
-RPC_CALL_FUNC(pb_rpc_delete)    { pb_rpc_status_change(client, request, params, PB_STATUS_DELETED, "deleted"); }
+RPC_CALL_FUNC(pb_rpc_approve)
+{
+	pb_rpc_status_change(client, request, params, PB_STATUS_ACTIVE, "active");
+}
+RPC_CALL_FUNC(pb_rpc_suspend)
+{
+	pb_rpc_status_change(client, request, params, PB_STATUS_SUSPENDED, "suspended");
+}
+RPC_CALL_FUNC(pb_rpc_unsuspend)
+{
+	pb_rpc_status_change(client, request, params, PB_STATUS_ACTIVE, "active");
+}
+RPC_CALL_FUNC(pb_rpc_delete)
+{
+	pb_rpc_status_change(client, request, params, PB_STATUS_DELETED, "deleted");
+}
 
 /* ===================================================================
  * Shared cores: behaviours called by gateway op handlers, REST
@@ -4807,12 +5566,16 @@ RPC_CALL_FUNC(pb_rpc_delete)    { pb_rpc_status_change(client, request, params, 
 static MessageTag *pb_build_tags(json_t *tagj)
 {
 	MessageTag *out = NULL;
-	if (!json_is_object(tagj)) return NULL;
+	if (!json_is_object(tagj))
+		return NULL;
 	const char *key;
 	json_t *val;
-	json_object_foreach(tagj, key, val) {
-		if (!key || key[0] != '+') continue;
-		if (!json_is_string(val)) continue;
+	json_object_foreach(tagj, key, val)
+	{
+		if (!key || key[0] != '+')
+			continue;
+		if (!json_is_string(val))
+			continue;
 		MessageTag *m = safe_alloc(sizeof(*m));
 		safe_strdup(m->name, key);
 		safe_strdup(m->value, json_string_value(val));
@@ -4825,8 +5588,10 @@ static MessageTag *pb_build_tags(json_t *tagj)
  * REST POST /commands both funnel through here. */
 static PbCoreResult pb_core_register_commands(PbBot *b, json_t *cmds_array)
 {
-	if (!b || !json_is_array(cmds_array)) return PB_CORE_BAD_REQUEST;
-	if (b->commands) json_decref(b->commands);
+	if (!b || !json_is_array(cmds_array))
+		return PB_CORE_BAD_REQUEST;
+	if (b->commands)
+		json_decref(b->commands);
 	b->commands = json_incref(cmds_array);
 
 	json_t *ack_d = json_object();
@@ -4850,10 +5615,13 @@ static PbCoreResult pb_core_interaction_respond(PbBot *b, const char *iid,
                                                 int ephemeral,
                                                 MessageTag *extra_tags)
 {
-	if (!b || !iid) return PB_CORE_BAD_REQUEST;
+	if (!b || !iid)
+		return PB_CORE_BAD_REQUEST;
 	PbInteraction *it = pb_interaction_find(iid);
-	if (!it) return PB_CORE_NOT_FOUND;
-	if (it->bot != b) return PB_CORE_FORBIDDEN;
+	if (!it)
+		return PB_CORE_NOT_FOUND;
+	if (it->bot != b)
+		return PB_CORE_FORBIDDEN;
 	pb_send_interaction_reply(it, content ? content : "",
 	                          visibility ? visibility : "public",
 	                          ephemeral, extra_tags);
@@ -4866,10 +5634,13 @@ static PbCoreResult pb_core_interaction_respond(PbBot *b, const char *iid,
 static PbCoreResult pb_core_interaction_defer(PbBot *b, const char *iid,
                                               int seconds)
 {
-	if (!b || !iid) return PB_CORE_BAD_REQUEST;
+	if (!b || !iid)
+		return PB_CORE_BAD_REQUEST;
 	PbInteraction *it = pb_interaction_find(iid);
-	if (!it) return PB_CORE_NOT_FOUND;
-	if (it->bot != b) return PB_CORE_FORBIDDEN;
+	if (!it)
+		return PB_CORE_NOT_FOUND;
+	if (it->bot != b)
+		return PB_CORE_FORBIDDEN;
 	it->expires_at = TStime() + (seconds > 0 ? seconds : PB_INTERACTION_DEFER_SEC);
 	it->deferred = 1;
 	return PB_CORE_OK;
@@ -4887,23 +5658,31 @@ static PbCoreResult pb_core_workflow_event(PbBot *b, const char *target,
 	if (!b || !target || !*target || !json_is_object(payload))
 		return PB_CORE_BAD_REQUEST;
 	json_t *msgj = json_object_get(payload, "msg");
-	if (!json_is_string(msgj)) return PB_CORE_BAD_REQUEST;
+	if (!json_is_string(msgj))
+		return PB_CORE_BAD_REQUEST;
 	const char *msg = json_string_value(msgj);
 
 	const char *wid = NULL;
-	if (!strcmp(msg, "workflow")) {
+	if (!strcmp(msg, "workflow"))
+	{
 		json_t *idj = json_object_get(payload, "id");
-		if (json_is_string(idj)) wid = json_string_value(idj);
-	} else if (!strcmp(msg, "step")) {
+		if (json_is_string(idj))
+			wid = json_string_value(idj);
+	} else if (!strcmp(msg, "step"))
+	{
 		json_t *widj = json_object_get(payload, "wid");
-		if (json_is_string(widj)) wid = json_string_value(widj);
+		if (json_is_string(widj))
+			wid = json_string_value(widj);
 	}
 
-	if (!strcmp(msg, "workflow")) {
+	if (!strcmp(msg, "workflow"))
+	{
 		json_t *statej = json_object_get(payload, "state");
-		if (json_is_string(statej) && wid) {
+		if (json_is_string(statej) && wid)
+		{
 			PbWorkflow *w = pb_workflow_touch(b, wid, target);
-			if (w) {
+			if (w)
+			{
 				const char *state = json_string_value(statej);
 				if (!strcmp(state, "complete") ||
 				    !strcmp(state, "failed") ||
@@ -4914,31 +5693,42 @@ static PbCoreResult pb_core_workflow_event(PbBot *b, const char *target,
 				 * interaction (FIFO from interactions; LIFO
 				 * after AddListItem) so subsequent step events
 				 * on this wid keep that interaction alive. */
-				else if (!strcmp(state, "start")) {
-					for (PbInteraction *it = interactions; it; it = it->next) {
-						if (it->bot != b) continue;
-						if (it->workflow_id) continue;
+				else if (!strcmp(state, "start"))
+				{
+					for (PbInteraction *it = interactions; it; it = it->next)
+					{
+						if (it->bot != b)
+							continue;
+						if (it->workflow_id)
+							continue;
 						safe_strdup(it->workflow_id, wid);
 						break;
 					}
 				}
 			}
 		}
-	} else if (!strcmp(msg, "step")) {
+	} else if (!strcmp(msg, "step"))
+	{
 		json_t *sidj = json_object_get(payload, "sid");
-		if (wid && json_is_string(sidj)) {
+		if (wid && json_is_string(sidj))
+		{
 			PbWorkflow *w = pb_workflow_touch(b, wid, target);
-			if (w) pb_workflow_remember_sid(w, json_string_value(sidj));
+			if (w)
+				pb_workflow_remember_sid(w, json_string_value(sidj));
 		}
 	}
 
 	/* Workflow keep-alive: any interaction whose trigger was the
 	 * carrying workflow id gets its deadline pushed forward. The bot
 	 * can call respond() much later as long as steps keep arriving. */
-	if (wid) {
-		for (PbInteraction *it = interactions; it; it = it->next) {
-			if (it->bot != b) continue;
-			if (it->workflow_id && !strcmp(it->workflow_id, wid)) {
+	if (wid)
+	{
+		for (PbInteraction *it = interactions; it; it = it->next)
+		{
+			if (it->bot != b)
+				continue;
+			if (it->workflow_id && !strcmp(it->workflow_id, wid))
+			{
 				it->expires_at = TStime() + PB_INTERACTION_WORKFLOW_SEC;
 				it->deferred = 1;
 			}
@@ -4960,15 +5750,18 @@ static PbCoreResult pb_core_workflow_event(PbBot *b, const char *target,
  * NULL is returned. */
 static json_t *pb_rest_parse_object(Client *client, WebRequest *web)
 {
-	if (!web->request_buffer) {
+	if (!web->request_buffer)
+	{
 		pb_rest_send_error(client, 400, "missing body");
 		return NULL;
 	}
 	json_error_t err;
 	json_t *body = json_loads(web->request_buffer, 0, &err);
-	if (!body || !json_is_object(body)) {
+	if (!body || !json_is_object(body))
+	{
 		pb_rest_send_error(client, 400, "body must be a JSON object");
-		if (body) json_decref(body);
+		if (body)
+			json_decref(body);
 		return NULL;
 	}
 	return body;
@@ -4983,20 +5776,31 @@ static void pb_rest_ok(Client *client)
 
 static void pb_rest_core_result(Client *client, PbCoreResult r)
 {
-	switch (r) {
-		case PB_CORE_OK:          pb_rest_ok(client); return;
-		case PB_CORE_BAD_REQUEST: pb_rest_send_error(client, 400, "invalid request"); return;
-		case PB_CORE_NOT_FOUND:   pb_rest_send_error(client, 404, "not found"); return;
-		case PB_CORE_FORBIDDEN:   pb_rest_send_error(client, 403, "forbidden"); return;
+	switch (r)
+	{
+		case PB_CORE_OK:
+			pb_rest_ok(client);
+			return;
+		case PB_CORE_BAD_REQUEST:
+			pb_rest_send_error(client, 400, "invalid request");
+			return;
+		case PB_CORE_NOT_FOUND:
+			pb_rest_send_error(client, 404, "not found");
+			return;
+		case PB_CORE_FORBIDDEN:
+			pb_rest_send_error(client, 403, "forbidden");
+			return;
 	}
 }
 
 static void pb_rest_register_commands(Client *client, WebRequest *web, PbBot *b)
 {
 	json_t *body = pb_rest_parse_object(client, web);
-	if (!body) return;
+	if (!body)
+		return;
 	json_t *cmds = json_object_get(body, "commands");
-	if (!json_is_array(cmds)) {
+	if (!json_is_array(cmds))
+	{
 		pb_rest_send_error(client, 400, "commands must be an array");
 		json_decref(body);
 		return;
@@ -5010,17 +5814,21 @@ static void pb_rest_interaction_respond(Client *client, WebRequest *web,
                                         PbBot *b, const char *iid)
 {
 	json_t *body = pb_rest_parse_object(client, web);
-	if (!body) return;
+	if (!body)
+		return;
 
 	const char *content = "";
 	const char *vis = "public";
 	int ephemeral = 0;
 	json_t *cj = json_object_get(body, "content");
-	if (json_is_string(cj)) content = json_string_value(cj);
+	if (json_is_string(cj))
+		content = json_string_value(cj);
 	json_t *vj = json_object_get(body, "visibility");
-	if (json_is_string(vj)) vis = json_string_value(vj);
+	if (json_is_string(vj))
+		vis = json_string_value(vj);
 	json_t *ej = json_object_get(body, "ephemeral");
-	if (json_is_boolean(ej)) ephemeral = json_is_true(ej) ? 1 : 0;
+	if (json_is_boolean(ej))
+		ephemeral = json_is_true(ej) ? 1 : 0;
 
 	MessageTag *extra = pb_build_tags(json_object_get(body, "tags"));
 	PbCoreResult r = pb_core_interaction_respond(b, iid, content, vis,
@@ -5034,11 +5842,14 @@ static void pb_rest_interaction_defer(Client *client, WebRequest *web,
                                       PbBot *b, const char *iid)
 {
 	int seconds = 0;
-	if (web->request_buffer && *web->request_buffer) {
+	if (web->request_buffer && *web->request_buffer)
+	{
 		json_t *body = pb_rest_parse_object(client, web);
-		if (!body) return;
+		if (!body)
+			return;
 		json_t *sj = json_object_get(body, "seconds");
-		if (json_is_integer(sj)) seconds = (int)json_integer_value(sj);
+		if (json_is_integer(sj))
+			seconds = (int)json_integer_value(sj);
 		json_decref(body);
 	}
 	pb_rest_core_result(client, pb_core_interaction_defer(b, iid, seconds));
@@ -5051,11 +5862,13 @@ static void pb_rest_workflow_event(Client *client, WebRequest *web,
                                    PbBot *b, const char *wid_in_path)
 {
 	json_t *body = pb_rest_parse_object(client, web);
-	if (!body) return;
+	if (!body)
+		return;
 
 	json_t *tj = json_object_get(body, "target");
 	json_t *payload = json_object_get(body, "payload");
-	if (!json_is_string(tj) || !json_is_object(payload)) {
+	if (!json_is_string(tj) || !json_is_object(payload))
+	{
 		pb_rest_send_error(client, 400, "need {target, payload}");
 		json_decref(body);
 		return;
@@ -5064,7 +5877,8 @@ static void pb_rest_workflow_event(Client *client, WebRequest *web,
 	 * from the URL. Lets the bot use the cleaner-looking form
 	 * POST /workflows/wf123/events { target, payload: {msg:"step",sid:"s1",...} }
 	 * without restating the id inside the payload too. */
-	if (wid_in_path && *wid_in_path) {
+	if (wid_in_path && *wid_in_path)
+	{
 		json_t *msgj = json_object_get(payload, "msg");
 		const char *msg = json_is_string(msgj) ? json_string_value(msgj) : "";
 		if (!strcmp(msg, "workflow") && !json_object_get(payload, "id"))
@@ -5092,53 +5906,69 @@ static void pb_rest_workflow_event(Client *client, WebRequest *web,
 static void pb_webhook_dispatch_inline_action(PbBot *b, const char *iid,
                                               json_t *action)
 {
-	if (!b || !json_is_object(action)) return;
+	if (!b || !json_is_object(action))
+		return;
 	json_t *tj = json_object_get(action, "type");
-	if (!json_is_string(tj)) return;
+	if (!json_is_string(tj))
+		return;
 	const char *type = json_string_value(tj);
 
-	if (!strcmp(type, "send_message")) {
+	if (!strcmp(type, "send_message"))
+	{
 		const char *content = "", *vis = "public";
 		int ephemeral = 0;
 		json_t *cj = json_object_get(action, "content");
 		json_t *vj = json_object_get(action, "visibility");
 		json_t *ej = json_object_get(action, "ephemeral");
-		if (json_is_string(cj)) content = json_string_value(cj);
-		if (json_is_string(vj)) vis = json_string_value(vj);
-		if (json_is_true(ej)) ephemeral = 1;
+		if (json_is_string(cj))
+			content = json_string_value(cj);
+		if (json_is_string(vj))
+			vis = json_string_value(vj);
+		if (json_is_true(ej))
+			ephemeral = 1;
 		MessageTag *extra = pb_build_tags(json_object_get(action, "tags"));
 		if (iid)
 			pb_core_interaction_respond(b, iid, content, vis, ephemeral, extra);
 		free_message_tags(extra);
-	} else if (!strcmp(type, "ephemeral_reply")) {
+	} else if (!strcmp(type, "ephemeral_reply"))
+	{
 		const char *content = "";
 		json_t *cj = json_object_get(action, "content");
-		if (json_is_string(cj)) content = json_string_value(cj);
+		if (json_is_string(cj))
+			content = json_string_value(cj);
 		if (iid)
 			pb_core_interaction_respond(b, iid, content, "public", 1, NULL);
-	} else if (!strcmp(type, "error")) {
+	} else if (!strcmp(type, "error"))
+	{
 		const char *content = "(error)";
 		json_t *mj = json_object_get(action, "message");
-		if (json_is_string(mj)) content = json_string_value(mj);
+		if (json_is_string(mj))
+			content = json_string_value(mj);
 		if (iid)
 			pb_core_interaction_respond(b, iid, content, "public", 1, NULL);
-	} else if (!strcmp(type, "defer")) {
+	} else if (!strcmp(type, "defer"))
+	{
 		int seconds = 0;
 		json_t *sj = json_object_get(action, "seconds");
-		if (json_is_integer(sj)) seconds = (int)json_integer_value(sj);
+		if (json_is_integer(sj))
+			seconds = (int)json_integer_value(sj);
 		if (iid)
 			pb_core_interaction_defer(b, iid, seconds);
-	} else if (!strcmp(type, "workflow") || !strcmp(type, "step")) {
+	} else if (!strcmp(type, "workflow") || !strcmp(type, "step"))
+	{
 		/* Inline workflow/step: emit the tag now. Target defaults to
 		 * the channel the interaction was invoked on; the bot can
 		 * override with action.target. */
 		json_t *payload = json_object_get(action, "payload");
-		if (!json_is_object(payload)) {
+		if (!json_is_object(payload))
+		{
 			/* Treat top-level fields as the payload itself for the
 			 * convenience case `{type:"workflow", state:"start", id:"..."}`. */
 			payload = json_object();
-			const char *key; json_t *v;
-			json_object_foreach(action, key, v) {
+			const char *key;
+			json_t *v;
+			json_object_foreach(action, key, v)
+			{
 				if (strcmp(key, "type") && strcmp(key, "target"))
 					json_object_set(payload, key, v);
 			}
@@ -5146,21 +5976,28 @@ static void pb_webhook_dispatch_inline_action(PbBot *b, const char *iid,
 				json_object_set_new(payload, "msg", json_string(type));
 			const char *target = NULL;
 			json_t *tjj = json_object_get(action, "target");
-			if (json_is_string(tjj)) target = json_string_value(tjj);
-			if (!target && iid) {
+			if (json_is_string(tjj))
+				target = json_string_value(tjj);
+			if (!target && iid)
+			{
 				PbInteraction *it = pb_interaction_find(iid);
-				if (it) target = it->channel;
+				if (it)
+					target = it->channel;
 			}
 			if (target)
 				pb_core_workflow_event(b, target, payload);
 			json_decref(payload);
-		} else {
+		} else
+		{
 			const char *target = NULL;
 			json_t *tjj = json_object_get(action, "target");
-			if (json_is_string(tjj)) target = json_string_value(tjj);
-			if (!target && iid) {
+			if (json_is_string(tjj))
+				target = json_string_value(tjj);
+			if (!target && iid)
+			{
 				PbInteraction *it = pb_interaction_find(iid);
-				if (it) target = it->channel;
+				if (it)
+					target = it->channel;
 			}
 			if (target)
 				pb_core_workflow_event(b, target, payload);
@@ -5172,7 +6009,8 @@ static void pb_webhook_dispatch_inline_action(PbBot *b, const char *iid,
 
 static int pb_handle_rest(Client *client, WebRequest *web, PbBot *b)
 {
-	if (!web->uri || strncmp(web->uri, "/pushbot/v1/", 12) != 0) {
+	if (!web->uri || strncmp(web->uri, "/pushbot/v1/", 12) != 0)
+	{
 		pb_rest_send_error(client, 404, "not found");
 		return 0;
 	}
@@ -5180,11 +6018,14 @@ static int pb_handle_rest(Client *client, WebRequest *web, PbBot *b)
 	strlcpy(path, web->uri + 12, sizeof(path));   /* skip /pushbot/v1/ */
 	/* Strip query string if any. */
 	char *q = strchr(path, '?');
-	if (q) *q = '\0';
+	if (q)
+		*q = '\0';
 
 	/* /bot */
-	if (!strcmp(path, "bot")) {
-		if (web->method != HTTP_METHOD_GET) {
+	if (!strcmp(path, "bot"))
+	{
+		if (web->method != HTTP_METHOD_GET)
+		{
 			pb_rest_send_error(client, 405, "method not allowed");
 			return 0;
 		}
@@ -5193,8 +6034,10 @@ static int pb_handle_rest(Client *client, WebRequest *web, PbBot *b)
 	}
 
 	/* /channels */
-	if (!strcmp(path, "channels")) {
-		if (web->method != HTTP_METHOD_GET) {
+	if (!strcmp(path, "channels"))
+	{
+		if (web->method != HTTP_METHOD_GET)
+		{
 			pb_rest_send_error(client, 405, "method not allowed");
 			return 0;
 		}
@@ -5203,53 +6046,71 @@ static int pb_handle_rest(Client *client, WebRequest *web, PbBot *b)
 	}
 
 	/* /channels/<name>/... */
-	if (!strncmp(path, "channels/", 9)) {
+	if (!strncmp(path, "channels/", 9))
+	{
 		char rest[512];
 		strlcpy(rest, path + 9, sizeof(rest));
 		char *slash = strchr(rest, '/');
 		char *channel = rest;
 		const char *sub = "";
-		if (slash) { *slash = '\0'; sub = slash + 1; }
-		if (pb_pct_decode(channel) < 0) {
+		if (slash)
+		{
+			*slash = '\0';
+			sub = slash + 1;
+		}
+		if (pb_pct_decode(channel) < 0)
+		{
 			pb_rest_send_error(client, 400, "bad channel encoding");
 			return 0;
 		}
 
-		if (!strcmp(sub, "join") && web->method == HTTP_METHOD_POST) {
+		if (!strcmp(sub, "join") && web->method == HTTP_METHOD_POST)
+		{
 			pb_rest_channel_join(client, web, b, channel);
 			return 0;
 		}
-		if (!strcmp(sub, "part") && web->method == HTTP_METHOD_POST) {
+		if (!strcmp(sub, "part") && web->method == HTTP_METHOD_POST)
+		{
 			pb_rest_channel_part(client, web, b, channel);
 			return 0;
 		}
-		if (!strcmp(sub, "messages") && web->method == HTTP_METHOD_POST) {
+		if (!strcmp(sub, "messages") && web->method == HTTP_METHOD_POST)
+		{
 			pb_rest_channel_message(client, web, b, channel);
 			return 0;
 		}
-		if (!strcmp(sub, "members") && web->method == HTTP_METHOD_GET) {
+		if (!strcmp(sub, "members") && web->method == HTTP_METHOD_GET)
+		{
 			pb_rest_get_members(client, web, b, channel);
 			return 0;
 		}
 		/* messages/<msgid>/... */
-		if (!strncmp(sub, "messages/", 9)) {
+		if (!strncmp(sub, "messages/", 9))
+		{
 			char msub[256];
 			strlcpy(msub, sub + 9, sizeof(msub));
 			char *mslash = strchr(msub, '/');
 			char *msgid = msub;
 			const char *msub2 = "";
-			if (mslash) { *mslash = '\0'; msub2 = mslash + 1; }
+			if (mslash)
+			{
+				*mslash = '\0';
+				msub2 = mslash + 1;
+			}
 			/* UnrealIRCd's webserver doesn't support DELETE; use POST
 			 * with subroutes for delete-style ops. */
-			if (!strcmp(msub2, "redact") && web->method == HTTP_METHOD_POST) {
+			if (!strcmp(msub2, "redact") && web->method == HTTP_METHOD_POST)
+			{
 				pb_rest_redact(client, web, b, channel, msgid);
 				return 0;
 			}
-			if (!strcmp(msub2, "react") && web->method == HTTP_METHOD_POST) {
+			if (!strcmp(msub2, "react") && web->method == HTTP_METHOD_POST)
+			{
 				pb_rest_react(client, web, b, channel, msgid, 0, NULL);
 				return 0;
 			}
-			if (!strcmp(msub2, "unreact") && web->method == HTTP_METHOD_POST) {
+			if (!strcmp(msub2, "unreact") && web->method == HTTP_METHOD_POST)
+			{
 				pb_rest_react(client, web, b, channel, msgid, 1, NULL);
 				return 0;
 			}
@@ -5257,8 +6118,10 @@ static int pb_handle_rest(Client *client, WebRequest *web, PbBot *b)
 	}
 
 	/* /commands -- publish the bot's slash-command schema */
-	if (!strcmp(path, "commands")) {
-		if (web->method != HTTP_METHOD_POST) {
+	if (!strcmp(path, "commands"))
+	{
+		if (web->method != HTTP_METHOD_POST)
+		{
 			pb_rest_send_error(client, 405, "method not allowed");
 			return 0;
 		}
@@ -5267,22 +6130,30 @@ static int pb_handle_rest(Client *client, WebRequest *web, PbBot *b)
 	}
 
 	/* /interactions/<id>/respond  and  /interactions/<id>/defer */
-	if (!strncmp(path, "interactions/", 13)) {
+	if (!strncmp(path, "interactions/", 13))
+	{
 		char rest[256];
 		strlcpy(rest, path + 13, sizeof(rest));
 		char *slash = strchr(rest, '/');
 		char *iid = rest;
 		const char *sub = "";
-		if (slash) { *slash = '\0'; sub = slash + 1; }
-		if (pb_pct_decode(iid) < 0) {
+		if (slash)
+		{
+			*slash = '\0';
+			sub = slash + 1;
+		}
+		if (pb_pct_decode(iid) < 0)
+		{
 			pb_rest_send_error(client, 400, "bad id encoding");
 			return 0;
 		}
-		if (!strcmp(sub, "respond") && web->method == HTTP_METHOD_POST) {
+		if (!strcmp(sub, "respond") && web->method == HTTP_METHOD_POST)
+		{
 			pb_rest_interaction_respond(client, web, b, iid);
 			return 0;
 		}
-		if (!strcmp(sub, "defer") && web->method == HTTP_METHOD_POST) {
+		if (!strcmp(sub, "defer") && web->method == HTTP_METHOD_POST)
+		{
 			pb_rest_interaction_defer(client, web, b, iid);
 			return 0;
 		}
@@ -5292,33 +6163,46 @@ static int pb_handle_rest(Client *client, WebRequest *web, PbBot *b)
 	 * over the life of a long-running task. No 3-second cap here:
 	 * each event also slides the linked interaction's expires_at
 	 * forward via pb_core_workflow_event. */
-	if (!strncmp(path, "workflows/", 10)) {
+	if (!strncmp(path, "workflows/", 10))
+	{
 		char rest[256];
 		strlcpy(rest, path + 10, sizeof(rest));
 		char *slash = strchr(rest, '/');
 		char *wid = rest;
 		const char *sub = "";
-		if (slash) { *slash = '\0'; sub = slash + 1; }
-		if (pb_pct_decode(wid) < 0) {
+		if (slash)
+		{
+			*slash = '\0';
+			sub = slash + 1;
+		}
+		if (pb_pct_decode(wid) < 0)
+		{
 			pb_rest_send_error(client, 400, "bad wid encoding");
 			return 0;
 		}
-		if (!strcmp(sub, "events") && web->method == HTTP_METHOD_POST) {
+		if (!strcmp(sub, "events") && web->method == HTTP_METHOD_POST)
+		{
 			pb_rest_workflow_event(client, web, b, wid);
 			return 0;
 		}
 	}
 
 	/* /users/<nick>/messages */
-	if (!strncmp(path, "users/", 6)) {
+	if (!strncmp(path, "users/", 6))
+	{
 		char rest[256];
 		strlcpy(rest, path + 6, sizeof(rest));
 		char *slash = strchr(rest, '/');
 		char *nick = rest;
 		const char *sub = "";
-		if (slash) { *slash = '\0'; sub = slash + 1; }
+		if (slash)
+		{
+			*slash = '\0';
+			sub = slash + 1;
+		}
 		pb_pct_decode(nick);
-		if (!strcmp(sub, "messages") && web->method == HTTP_METHOD_POST) {
+		if (!strcmp(sub, "messages") && web->method == HTTP_METHOD_POST)
+		{
 			pb_rest_user_message(client, web, b, nick);
 			return 0;
 		}
@@ -5338,14 +6222,15 @@ static void pb_rest_get_bot(Client *client, WebRequest *web, PbBot *b)
 	json_object_set_new(body, "transport", json_string(pb_transport_str(b->transport)));
 	json_object_set_new(body, "status", json_string(pb_status_str(b->status)));
 	json_object_set_new(body, "gateway_connected",
-	    json_boolean(b->session && b->session->identified ? 1 : 0));
+	                    json_boolean(b->session && b->session->identified ? 1 : 0));
 	pb_rest_send_json(client, 200, body);
 }
 
 static void pb_rest_get_channels(Client *client, WebRequest *web, PbBot *b)
 {
 	json_t *arr = json_array();
-	if (b->ghost) {
+	if (b->ghost)
+	{
 		for (Membership *m = b->ghost->user->channel; m; m = m->next)
 			json_array_append_new(arr, json_string(m->channel->name));
 	}
@@ -5358,8 +6243,13 @@ static void pb_rest_get_members(Client *client, WebRequest *web, PbBot *b,
                                 const char *channel)
 {
 	Channel *ch = find_channel(channel);
-	if (!ch) { pb_rest_send_error(client, 404, "no such channel"); return; }
-	if (!pb_bot_is_in_channel(b, ch)) {
+	if (!ch)
+	{
+		pb_rest_send_error(client, 404, "no such channel");
+		return;
+	}
+	if (!pb_bot_is_in_channel(b, ch))
+	{
 		pb_rest_send_error(client, 403, "bot not in channel");
 		return;
 	}
@@ -5376,19 +6266,23 @@ static void pb_rest_get_members(Client *client, WebRequest *web, PbBot *b,
 static const char *pb_post_string_field(Client *client, WebRequest *web,
                                         const char *field, json_t **owner_out)
 {
-	if (!web->request_buffer) {
+	if (!web->request_buffer)
+	{
 		pb_rest_send_error(client, 400, "missing body");
 		return NULL;
 	}
 	json_error_t err;
 	json_t *body = json_loads(web->request_buffer, 0, &err);
-	if (!body || !json_is_object(body)) {
+	if (!body || !json_is_object(body))
+	{
 		pb_rest_send_error(client, 400, "body must be a JSON object");
-		if (body) json_decref(body);
+		if (body)
+			json_decref(body);
 		return NULL;
 	}
 	json_t *v = json_object_get(body, field);
-	if (!json_is_string(v)) {
+	if (!json_is_string(v))
+	{
 		pb_rest_send_error(client, 400, "missing string field");
 		json_decref(body);
 		return NULL;
@@ -5401,14 +6295,20 @@ static void pb_rest_channel_message(Client *client, WebRequest *web, PbBot *b,
                                     const char *channel)
 {
 	Channel *ch = find_channel(channel);
-	if (!ch) { pb_rest_send_error(client, 404, "no such channel"); return; }
-	if (!pb_bot_is_in_channel(b, ch)) {
+	if (!ch)
+	{
+		pb_rest_send_error(client, 404, "no such channel");
+		return;
+	}
+	if (!pb_bot_is_in_channel(b, ch))
+	{
 		pb_rest_send_error(client, 403, "bot not in channel");
 		return;
 	}
 	json_t *owner = NULL;
 	const char *content = pb_post_string_field(client, web, "content", &owner);
-	if (!content) return;
+	if (!content)
+		return;
 
 	sendto_channel(ch, b->ghost, NULL, 0, 0, SEND_ALL, NULL,
 	               "PRIVMSG %s :%s", ch->name, content);
@@ -5423,10 +6323,15 @@ static void pb_rest_user_message(Client *client, WebRequest *web, PbBot *b,
                                  const char *nick)
 {
 	Client *target = find_user(nick, NULL);
-	if (!target) { pb_rest_send_error(client, 404, "no such user"); return; }
+	if (!target)
+	{
+		pb_rest_send_error(client, 404, "no such user");
+		return;
+	}
 	json_t *owner = NULL;
 	const char *content = pb_post_string_field(client, web, "content", &owner);
-	if (!content) return;
+	if (!content)
+		return;
 
 	sendto_one(target, NULL, ":%s PRIVMSG %s :%s",
 	           b->ghost ? b->ghost->name : b->nick, target->name, content);
@@ -5441,16 +6346,23 @@ static void pb_rest_react(Client *client, WebRequest *web, PbBot *b,
                           const char *emoji)
 {
 	Channel *ch = find_channel(channel);
-	if (!ch) { pb_rest_send_error(client, 404, "no such channel"); return; }
-	if (!pb_bot_is_in_channel(b, ch)) {
+	if (!ch)
+	{
+		pb_rest_send_error(client, 404, "no such channel");
+		return;
+	}
+	if (!pb_bot_is_in_channel(b, ch))
+	{
 		pb_rest_send_error(client, 403, "bot not in channel");
 		return;
 	}
 	const char *the_emoji = emoji;
 	json_t *owner = NULL;
-	if (!the_emoji) {
+	if (!the_emoji)
+	{
 		the_emoji = pb_post_string_field(client, web, "emoji", &owner);
-		if (!the_emoji) return;
+		if (!the_emoji)
+			return;
 	}
 	/* React via TAGMSG with the IRCv3 react tag.  Reaction removal is not yet
 	 * differentiated on the wire, so add and remove emit the same react. */
@@ -5458,7 +6370,8 @@ static void pb_rest_react(Client *client, WebRequest *web, PbBot *b,
 	sendto_channel(ch, b->ghost, NULL, 0, 0, SEND_ALL, NULL,
 	               "@+draft/react=%s;+draft/reply=%s TAGMSG %s",
 	               the_emoji, msgid, ch->name);
-	if (owner) json_decref(owner);
+	if (owner)
+		json_decref(owner);
 	json_t *body = json_object();
 	json_object_set_new(body, "ok", json_true());
 	pb_rest_send_json(client, 200, body);
@@ -5468,13 +6381,18 @@ static void pb_rest_redact(Client *client, WebRequest *web, PbBot *b,
                            const char *channel, const char *msgid)
 {
 	Channel *ch = find_channel(channel);
-	if (!ch) { pb_rest_send_error(client, 404, "no such channel"); return; }
-	if (!pb_bot_is_in_channel(b, ch)) {
+	if (!ch)
+	{
+		pb_rest_send_error(client, 404, "no such channel");
+		return;
+	}
+	if (!pb_bot_is_in_channel(b, ch))
+	{
 		pb_rest_send_error(client, 403, "bot not in channel");
 		return;
 	}
 	/* draft/message-redaction protocol: REDACT command. */
-	const char *parv[4] = { "REDACT", ch->name, msgid, NULL };
+	const char *parv[4] = {"REDACT", ch->name, msgid, NULL};
 	do_cmd(b->ghost, NULL, "REDACT", 3, parv);
 	json_t *body = json_object();
 	json_object_set_new(body, "ok", json_true());
@@ -5484,10 +6402,19 @@ static void pb_rest_redact(Client *client, WebRequest *web, PbBot *b,
 static void pb_rest_channel_join(Client *client, WebRequest *web, PbBot *b,
                                  const char *channel)
 {
-	if (!b->ghost) { pb_rest_send_error(client, 500, "ghost not up"); return; }
+	if (!b->ghost)
+	{
+		pb_rest_send_error(client, 500, "ghost not up");
+		return;
+	}
 	Channel *ch = find_channel(channel);
-	if (!ch) ch = make_channel(channel);
-	if (!ch) { pb_rest_send_error(client, 500, "could not create channel"); return; }
+	if (!ch)
+		ch = make_channel(channel);
+	if (!ch)
+	{
+		pb_rest_send_error(client, 500, "could not create channel");
+		return;
+	}
 	if (!pb_bot_is_in_channel(b, ch))
 		add_user_to_channel(ch, b->ghost, "");
 	json_t *body = json_object();
@@ -5499,16 +6426,31 @@ static void pb_rest_channel_join(Client *client, WebRequest *web, PbBot *b,
 static void pb_rest_channel_part(Client *client, WebRequest *web, PbBot *b,
                                  const char *channel)
 {
-	if (!b->ghost) { pb_rest_send_error(client, 500, "ghost not up"); return; }
+	if (!b->ghost)
+	{
+		pb_rest_send_error(client, 500, "ghost not up");
+		return;
+	}
 	Channel *ch = find_channel(channel);
-	if (!ch) { pb_rest_send_error(client, 404, "no such channel"); return; }
+	if (!ch)
+	{
+		pb_rest_send_error(client, 404, "no such channel");
+		return;
+	}
 	Membership *target = NULL;
 	for (Membership *m = b->ghost->user->channel; m; m = m->next)
-		if (m->channel == ch) { target = m; break; }
-	if (!target) { pb_rest_send_error(client, 404, "not in channel"); return; }
+		if (m->channel == ch)
+		{
+			target = m;
+			break;
+		}
+	if (!target)
+	{
+		pb_rest_send_error(client, 404, "not in channel");
+		return;
+	}
 	remove_user_from_channel_withmb(b->ghost, ch, target, 1);
 	json_t *body = json_object();
 	json_object_set_new(body, "ok", json_true());
 	pb_rest_send_json(client, 200, body);
 }
-

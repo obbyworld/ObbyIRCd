@@ -67,8 +67,8 @@ HistoryBackend *HistoryBackendAdd(Module *module, HistoryBackendInfo *mreq)
 	{
 		module->errorcode = MODERR_INVALID;
 		unreal_log(ULOG_ERROR, "module", "HISTORYBACKENDADD_API_ERROR", NULL,
-			   "HistoryBackendAdd(): missing a handler for add/del/request/destroy/set_limit. Module: $module_name",
-			   log_data_string("module_name", module->header->name));
+		           "HistoryBackendAdd(): missing a handler for add/del/request/destroy/set_limit. Module: $module_name",
+		           log_data_string("module_name", module->header->name));
 		return NULL;
 	}
 	m = HistoryBackendFind(mreq->name);
@@ -78,11 +78,13 @@ HistoryBackend *HistoryBackendAdd(Module *module, HistoryBackendInfo *mreq)
 		if (m->unloaded)
 		{
 			m->unloaded = 0;
-		} else {
+		} else
+		{
 			module->errorcode = MODERR_EXISTS;
 			return NULL;
 		}
-	} else {
+	} else
+	{
 		/* New history backend */
 		m = safe_alloc(sizeof(HistoryBackend));
 		safe_strdup(m->name, mreq->name);
@@ -127,7 +129,8 @@ void HistoryBackendDel(HistoryBackend *m)
 	if (m->owner)
 	{
 		ModuleObject *mobj;
-		for (mobj = m->owner->objects; mobj; mobj = mobj->next) {
+		for (mobj = m->owner->objects; mobj; mobj = mobj->next)
+		{
 			if (mobj->type == MOBJ_HISTORY_BACKEND && mobj->object.history_backend == m)
 			{
 				DelListItem(mobj, m->owner->objects);
@@ -170,7 +173,7 @@ int history_add(const char *object, MessageTag *mtags, const char *line)
 {
 	HistoryBackend *hb;
 
-	for (hb = historybackends; hb; hb=hb->next)
+	for (hb = historybackends; hb; hb = hb->next)
 		if (!hb->unloaded)
 			hb->history_add(object, mtags, line);
 
@@ -239,7 +242,7 @@ int history_destroy(const char *object)
 {
 	HistoryBackend *hb;
 
-	for (hb = historybackends; hb; hb=hb->next)
+	for (hb = historybackends; hb; hb = hb->next)
 		if (!hb->unloaded)
 			hb->history_destroy(object);
 
@@ -250,7 +253,7 @@ int history_set_limit(const char *object, int max_lines, long max_t)
 {
 	HistoryBackend *hb;
 
-	for (hb = historybackends; hb; hb=hb->next)
+	for (hb = historybackends; hb; hb = hb->next)
 		if (!hb->unloaded)
 			hb->history_set_limit(object, max_lines, max_t);
 
@@ -297,7 +300,8 @@ static void history_send_result_line(Client *client, HistoryLogLine *l, const ch
 	if (BadPtr(batchid))
 	{
 		sendto_one(client, l->mtags, "%s", l->line);
-	} else {
+	} else
+	{
 		MessageTag *m = safe_alloc(sizeof(MessageTag));
 		safe_strdup(m->name, "batch");
 		safe_strdup(m->value, batchid);
@@ -314,7 +318,7 @@ static void history_send_result_line(Client *client, HistoryLogLine *l, const ch
 static void history_send_result_multiline(Client *client, HistoryLogLine *head,
                                           const char *outer_batch, const char *object)
 {
-	char inner_batch[BATCHLEN+1];
+	char inner_batch[BATCHLEN + 1];
 	HistoryLogLine *l;
 	MessageTag *m;
 
@@ -391,7 +395,7 @@ static void history_send_result_multiline_fallback(Client *client, HistoryLogLin
  */
 void history_send_result(Client *client, HistoryResult *r, int end_of_pagination)
 {
-	char batch[BATCHLEN+1];
+	char batch[BATCHLEN + 1];
 	HistoryLogLine *l;
 	int has_multiline;
 	MessageTag *batch_open_mtags = NULL;
@@ -424,7 +428,8 @@ void history_send_result(Client *client, HistoryResult *r, int end_of_pagination
 				history_send_result_multiline(client, l, batch, r->object);
 			else
 				history_send_result_multiline_fallback(client, l, batch);
-		} else {
+		} else
+		{
 			history_send_result_line(client, l, batch);
 		}
 	}

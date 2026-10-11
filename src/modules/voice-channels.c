@@ -40,11 +40,11 @@
 #include <openssl/evp.h>
 
 ModuleHeader MOD_HEADER = {
-	"voice-channels",
-	"1.0",
-	"Voice/video channels (^prefix) bridged to hosted-backend SFU",
-	"obbyworld Team",
-	"unrealircd-6",
+    "voice-channels",
+    "1.0",
+    "Voice/video channels (^prefix) bridged to hosted-backend SFU",
+    "obbyworld Team",
+    "unrealircd-6",
 };
 
 #define VOICE_CHAN_PREFIX  '^'
@@ -67,9 +67,9 @@ static char *cfg_bridge_socket = NULL;
 
 /* draft-uberti-behave-turn-rest (coturn use-auth-secret). */
 static char **cfg_turn_urls = NULL;
-static int    cfg_turn_url_count = 0;
-static char  *cfg_turn_secret = NULL;
-static long   cfg_turn_ttl = 21600;
+static int cfg_turn_url_count = 0;
+static char *cfg_turn_secret = NULL;
+static long cfg_turn_ttl = 21600;
 
 /* CAP bit assigned by ClientCapabilityAdd; gates ^channel JOIN. */
 static long CAP_OBSIDIANIRC_VOICE = 0L;
@@ -154,7 +154,7 @@ static int bridge_send_frame(json_t *frame)
  * the +obsidianirc/rtc tag lands on a `^channel`.
  * =================================================================== */
 static void bridge_forward_signal(Client *client, Channel *channel,
-                                   const char *payload_json)
+                                  const char *payload_json)
 {
 	json_error_t je;
 	json_t *payload = json_loads(payload_json, 0, &je);
@@ -240,12 +240,29 @@ static void emit_outbound_signal(const char *to, const char *payload_json)
 		char c = payload_json[i];
 		switch (c)
 		{
-		case ';':  escaped[ei++] = '\\'; escaped[ei++] = ':'; break;
-		case ' ':  escaped[ei++] = '\\'; escaped[ei++] = 's'; break;
-		case '\\': escaped[ei++] = '\\'; escaped[ei++] = '\\'; break;
-		case '\r': escaped[ei++] = '\\'; escaped[ei++] = 'r'; break;
-		case '\n': escaped[ei++] = '\\'; escaped[ei++] = 'n'; break;
-		default:   escaped[ei++] = c; break;
+			case ';':
+				escaped[ei++] = '\\';
+				escaped[ei++] = ':';
+				break;
+			case ' ':
+				escaped[ei++] = '\\';
+				escaped[ei++] = 's';
+				break;
+			case '\\':
+				escaped[ei++] = '\\';
+				escaped[ei++] = '\\';
+				break;
+			case '\r':
+				escaped[ei++] = '\\';
+				escaped[ei++] = 'r';
+				break;
+			case '\n':
+				escaped[ei++] = '\\';
+				escaped[ei++] = 'n';
+				break;
+			default:
+				escaped[ei++] = c;
+				break;
 		}
 	}
 	escaped[ei] = '\0';
@@ -268,8 +285,7 @@ static void emit_outbound_signal(const char *to, const char *payload_json)
 			           "@" VOICE_RTC_TAG "=%s :%s TAGMSG %s",
 			           escaped, me.name, channel->name);
 		}
-	}
-	else
+	} else
 	{
 		/* Direct to a specific user. find_user returns the canonical;
 		 * multiclient session clients are out of the nick hash. Deliver to
@@ -392,8 +408,8 @@ EVENT(bridge_pump_event)
  * has_client_mtags() guard, so the SDP never reaches other channel
  * members. */
 static int voice_pre_chanmsg(Client *client, Channel *channel,
-                              MessageTag **mtags,
-                              const char *_text, SendType sendtype)
+                             MessageTag **mtags,
+                             const char *_text, SendType sendtype)
 {
 	if (!MyUser(client))
 		return 0;
@@ -434,7 +450,7 @@ static int voice_local_part(Client *client, Channel *channel,
 }
 
 static int voice_local_quit(Client *client, MessageTag *_mtags,
-                             const char *_comment)
+                            const char *_comment)
 {
 	if (!IsUser(client))
 		return 0;
@@ -445,7 +461,7 @@ static int voice_local_quit(Client *client, MessageTag *_mtags,
 /* Permit "+obsidianirc/rtc" from anyone -- clients send it, the
  * server module relays it back, and other servers may forward it. */
 static int voice_rtc_mtag_is_ok(Client *_client, const char *_name,
-                                 const char *_value)
+                                const char *_value)
 {
 	return 1;
 }
@@ -456,7 +472,7 @@ static int voice_rtc_mtag_is_ok(Client *_client, const char *_name,
  * see an unintelligible stream of voice signaling traffic, so we hide
  * them entirely. */
 static int voice_can_join(Client *client, Channel *channel,
-                           const char *_key, char **errmsg)
+                          const char *_key, char **errmsg)
 {
 	static char fmt[160];
 
@@ -481,8 +497,8 @@ static int voice_can_join(Client *client, Channel *channel,
  * Without this the tag is parsed and accepted but never propagated
  * past new_message(). */
 static void voice_rtc_new_message(Client *_client, MessageTag *recv_mtags,
-                                   MessageTag **mtag_list,
-                                   const char *_signature)
+                                  MessageTag **mtag_list,
+                                  const char *_signature)
 {
 	MessageTag *m = find_mtag(recv_mtags, VOICE_RTC_TAG);
 	if (m)
@@ -591,26 +607,22 @@ static int voice_turn_configtest(ConfigEntry *turn_ce, int *errs)
 				config_error("%s:%i: voice::turn::url requires a value",
 				             cep->file->filename, cep->line_number);
 				errors++;
-			}
-			else
+			} else
 			{
 				urls_seen++;
 			}
-		}
-		else if (!strcmp(cep->name, "shared-secret"))
+		} else if (!strcmp(cep->name, "shared-secret"))
 		{
 			if (!cep->value || !*cep->value)
 			{
 				config_error("%s:%i: voice::turn::shared-secret requires a value",
 				             cep->file->filename, cep->line_number);
 				errors++;
-			}
-			else
+			} else
 			{
 				secret_seen++;
 			}
-		}
-		else if (!strcmp(cep->name, "ttl"))
+		} else if (!strcmp(cep->name, "ttl"))
 		{
 			long v = cep->value ? atol(cep->value) : 0;
 			if (v < 60 || v > 86400)
@@ -619,8 +631,7 @@ static int voice_turn_configtest(ConfigEntry *turn_ce, int *errs)
 				             cep->file->filename, cep->line_number);
 				errors++;
 			}
-		}
-		else
+		} else
 		{
 			config_error("%s:%i: unknown directive voice::turn::%s",
 			             cep->file->filename, cep->line_number, cep->name);
@@ -644,7 +655,7 @@ static int voice_turn_configtest(ConfigEntry *turn_ce, int *errs)
 }
 
 static int voice_configtest(ConfigFile *_cf, ConfigEntry *ce, int type,
-                             int *errs)
+                            int *errs)
 {
 	if (type == CONFIG_SET)
 	{
@@ -670,8 +681,7 @@ static int voice_configtest(ConfigFile *_cf, ConfigEntry *ce, int type,
 						*errs = errors;
 					return -1;
 				}
-			}
-			else
+			} else
 			{
 				config_error("%s:%i: unknown directive voice::%s",
 				             cep->file->filename, cep->line_number, cep->name);
@@ -722,8 +732,7 @@ static int voice_configrun(ConfigFile *_cf, ConfigEntry *ce, int type)
 				{
 					safe_strdup(cfg_turn_urls[i], t->value);
 					i++;
-				}
-				else if (!strcmp(t->name, "shared-secret"))
+				} else if (!strcmp(t->name, "shared-secret"))
 					safe_strdup_sensitive(cfg_turn_secret, t->value);
 				else if (!strcmp(t->name, "ttl"))
 					cfg_turn_ttl = atol(t->value);

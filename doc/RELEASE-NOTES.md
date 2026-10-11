@@ -1,13 +1,147 @@
+UnrealIRCd 6.2.8-git
+=================
+
+This is the git version (development version) for future UnrealIRCd 6.2.8.
+This is work in progress and may not always be a stable version.
+
+### Enhancements:
+* A ton of spamreport changes:
+  * A spamreport block can now report automatically, via the new option
+    [spamreport::auto-report](https://www.unrealircd.org/docs/Spamreport_block).
+    Currently it has three sources:
+    * `spamfilter`: when a spamfilter kills or *LINEs a user.
+      The spamfilter itself is included in the report.
+    * `server-ban`: when an online user is banned (eg /GLINE by an oper) [*]
+    * `kill`: when a user is killed (eg /KILL by an oper) [*]
+
+    For [Central Spamreport](https://www.unrealircd.org/docs/Central_spamreport)
+    all three on by default. For other spamreport blocks it is off by default.
+    To turn it off, you put in the spamreport block: `auto-report { }`.
+    You can exempt specific users from being auto reported at all through
+    [set::spamreport::auto-report::except](https://www.unrealircd.org/docs/Set_block#set::spamreport).  
+    [*]: Not all server bans and kills are sent in, only if the ban or kill
+    reason contain the word "spam". This can be configured via
+    [set::spamreport::auto-report::ban-or-kill-filter](https://www.unrealircd.org/docs/Set_block#set::spamreport).
+  * The `SPAMREPORT` command now has an optional reason:  
+    `SPAMREPORT <nick|ip> [name-of-spamreport-block|all] [reason]`
+  * For spamreport blocks of type simple you can now use `$source`,
+    `$reason` and `$spamfilter_id` in the URL.
+
+### Changes:
+* We continue the gradual transition from `geoip_classic` to `geoip_mmdb`.
+  Now also for `./Config -quick` (and thus `./unrealircd upgrade`).
+  This because we will stop database updates for classic in mid-2027.
+* You now get a config error if you use `action { gline; report; }`.
+  This because `report` (and `set`) cannot happen after a user is killed.
+  The correct syntax is: `action { report; gline; }`
+
+### Fixes:
+* In 6.2.x every server ban was accidentally reported to all spamreport
+  blocks (including Central Spamreport). That could have been especially
+  bad if you had a spamreport block with type `dronebl`.
+
+### Developers and protocol:
+* In JSON-RPC an except in spamfilter objects previously showed as
+  `match` (which is super confusing). That's now under `except`.
+* New hook `HOOKTYPE_KILLED_CLIENT`, called when a local user is killed.
+* In `HOOKTYPE_BANNED_CLIENT` there is now a `TKL *tkl` parameter (this
+  is NULL when a ban is not a TKL, such as a realname ban).
+
+UnrealIRCd 6.2.7
+-----------------
+
+This UnrealIRCd 6.2.7 release fixes multiple issues in the webserver
+module which allow an attacker to stall the IRCd. If you use Websockets
+or JSON-RPC then we recommend to either upgrade or **hot-patch**.
+The hot-patch allows you to update the server **without a restart** on
+UnrealIRCd 6.2.x and may also work on older (unsupported) versions.
+
+To do so, run: `./unrealircd hot-patch webserver-header-dos`
+
+Note that the hot-patch *only* fixes the issues mentioned above. This
+release contains other fixes and enhancements. A good strategy may be
+to hot-patch now to fix the most urgent issue and plan an upgrade to
+6.2.7 at a more convenient time in the upcoming weeks.
+
+### Enhancements:
+* New [set::anti-flood](https://www.unrealircd.org/docs/Anti-flood_settings#max-processing-time)
+  setting `max-processing-time`: this limits how much time we spend on a
+  particular client in the I/O engine. This gives other clients a more fair
+  chance to get their commands read and processed. Defaults to 25ms for
+  unknown-users and 50ms for known-users.
+* IRCOps can use `WHO` with
+  [Extended Server Bans](https://www.unrealircd.org/docs/Extended_server_bans)
+  for things like `WHO ~asn:64496`, `WHO ~country:NL` and
+  `WHO ~security-group:unknown-users`.
+
+### Changes:
+* Update shipped libs: c-ares (1.34.8, security fixes)
+* The [GeoIP](https://www.unrealircd.org/docs/GeoIP) engine was already
+  switched to `geoip_mmdb` in 6.2.4 for new installations. We now change
+  the default for existing installations as well. The old engine
+  `geoip_classic` is now deprecated and we will stop database updates
+  for classic somewhere in 2027.
+* Added minimal self-check for Argon2 (fail early instead of crashing)
+
+### Fixes:
+* Resource exhaustion attack in the webserver. Previously we had no
+  restriction on HTTP request headers, so a client could make a big
+  request which would consume a lot of memory and stall the IRCd. This
+  only affects servers with a listen block with `listen::options::websocket`
+  (for [Websockets](https://www.unrealircd.org/docs/WebSocket_support))
+  or `listen::options::rpc`
+  (for [JSON-RPC](https://www.unrealircd.org/docs/JSON-RPC)). See the top
+  of these release notes, especially the hot-patch.
+* Websocket pings were limited in size but not throttled
+* Crash when using [crule functions](https://www.unrealircd.org/docs/Crule)
+  `match_asname()` or when using `unicode_count('Nonexistent Block')`.
+* Crash with JSON-RPC method `rpc.del_timer`
+* Crash with `REHASH -dns` if linking to a server (race condition)
+* [AntiMixedUTF8](https://www.unrealircd.org/docs/Set_block#set::antimixedutf8)
+  gave some emoji a way too high score.
+* Race condition in server linking. If a server was trying to link to
+  multiple servers at once, then the servers could clash causing a
+  connect+split. This could happen in the non-standard configuration where
+  [set::server-linking::autoconnect-strategy](https://www.unrealircd.org/docs/Set_block#set::server-linking)
+  was set to `parallel` instead of the default `sequential`. This change
+  means that `parallel` should now be safe to use.
+* The memory log, that JSON-RPC log.getall uses, was cleaned up too much.
+* Channel mode `+f` type `r` (repeat) has normalization (like ignoring
+  upper/lowercase and color), but this normalization was accidently ignored.
+
+### Developers and protocol:
+* New wiki articles: [Dev:Coding guidelines](https://www.unrealircd.org/docs/Dev:Coding_guidelines)
+  and [Dev:Visual Studio Code](https://www.unrealircd.org/docs/Dev:Visual_Studio_Code).
+* After more than 25 years, the entire source code has been reformatted
+  in one big clang-format commit ('make format'), giving the whole tree
+  a single consistent style. Git blame on github.com is unaffected thanks
+  to `.git-blame-ignore-revs`. For local `git blame` to benefit as well,
+  run this once in your working copy:
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+  If you maintain a fork or local patches, then read the migration
+  instructions in
+  [this commit message](https://github.com/unrealircd/unrealircd/commit/e77eb9e923e84853c0fb2a154150f401a9602e0b).
+* All C code must now be formatted with clang-format version 21: run
+  `make format` **before committing** (or use clang-format in your editor).
+  CI will check for this and fail a PR containing unformatted code.
+* [JSON-RPC](https://www.unrealircd.org/docs/JSON-RPC:Security_group)
+  `security_group.list` and `security_group.get`: we now consistently
+  have `builtin` on all built-in security groups, and a fix for missing
+  `public` in unknown-users.
+
 UnrealIRCd 6.2.6
-=====================
+-----------------
 
-This is the Release Candidate for future version 6.2.6. You can help us by
-testing this release and reporting bugs to https://bugs.unrealircd.org/
-
-This version enables multiline by default, adds TKL IDs and tracking of
+UnrealIRCd 6.2.6 enables multiline by default, adds TKL IDs and tracking of
 hit counts on *LINES/Spamfilter. New crule functions were added to fetch
 server flood counts. Guidance to admins for server linking with 'spkifp'
 has been improved.
+
+A crash bug in the multiline implementation in 6.2.4/6.2.5/6.2.6-rc1
+has been fixed as well. Note that multiline was not enabled by default
+in 6.2.4/6.2.5. If you *only* want to fix that issue then it is possible
+to run the following command on *NIX to patch it without a server restart:
+`./unrealircd hot-patch multiline-62x-crash`
 
 ### Enhancements:
 * [IRCv3 draft/multiline](https://ircv3.net/specs/extensions/multiline)
@@ -105,6 +239,7 @@ has been improved.
   extensions have been ratified. During the transition period we support both.
 
 ### Fixes:
+* A crash if multiline was enabled
 * The following config items previously raised a config error:
   allow channel::except, deny channel::except and spamfilter::except.
 * deny channel::mask with a [Mask item](https://www.unrealircd.org/docs/Mask_item)
