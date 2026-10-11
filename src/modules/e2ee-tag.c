@@ -13,11 +13,11 @@
 #include "unrealircd.h"
 
 ModuleHeader MOD_HEADER = {
-	"e2ee-tag",
-	"1.0",
-	"+obby.world/e2ee client tag (Obby-native end-to-end encryption)",
-	"ObbyIRCd Team",
-	"unrealircd-6",
+    "e2ee-tag",
+    "1.0",
+    "+obby.world/e2ee client tag (Obby-native end-to-end encryption)",
+    "ObbyIRCd Team",
+    "unrealircd-6",
 };
 
 #define E2EE_TAG "+obby.world/e2ee"

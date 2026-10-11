@@ -24,23 +24,22 @@
 
 CMD_FUNC(cmd_starttls);
 
-#define MSG_STARTTLS 	"STARTTLS"	
+#define MSG_STARTTLS "STARTTLS"
 
-ModuleHeader MOD_HEADER
-  = {
-	"starttls",
-	"5.0",
-	"command /starttls", 
-	"UnrealIRCd Team",
-	"unrealircd-6",
-    };
+ModuleHeader MOD_HEADER = {
+    "starttls",
+    "5.0",
+    "command /starttls",
+    "UnrealIRCd Team",
+    "unrealircd-6",
+};
 
 long CLICAP_STARTTLS;
 
 MOD_INIT()
 {
 	ClientCapabilityInfo cap;
-	
+
 	MARK_AS_OFFICIAL_MODULE(modinfo);
 	CommandAdd(modinfo->handle, MSG_STARTTLS, cmd_starttls, MAXPARA, CMD_UNREGISTERED);
 	memset(&cap, 0, sizeof(cap));
@@ -67,6 +66,12 @@ CMD_FUNC(cmd_starttls)
 
 	if (!MyConnect(client) || !IsUnknown(client))
 		return;
+
+	if (IsWebsocket(client))
+	{
+		sendnumeric(client, ERR_STARTTLS, "STARTTLS failed. This makes no sense for websockets (wrong network layer).");
+		return;
+	}
 
 	ctx = tls_ctx_for_listener(client->local->listener);
 	tls_options = tls_options_for_listener(client->local->listener)->options;

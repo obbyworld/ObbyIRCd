@@ -51,11 +51,11 @@
 static sqlite3 *inv_db = NULL;
 
 ModuleHeader MOD_HEADER = {
-	"invitation",
-	"1.0",
-	"INVITELINK + INVITECODE commands; tracks inviter -> invitee attribution",
-	"obbyircd",
-	"unrealircd-6",
+    "invitation",
+    "1.0",
+    "INVITELINK + INVITECODE commands; tracks inviter -> invitee attribution",
+    "obbyircd",
+    "unrealircd-6",
 };
 
 /* ===================================================================
@@ -70,10 +70,10 @@ static struct {
 	int max_per_account;
 	char *base_url;         /* e.g. 'https://invite.example.com:6661/i/' */
 } cfg = {
-	.require_registered = 1,
-	.single_use_default = 0,
-	.max_per_account = 50,
-	.base_url = NULL,
+    .require_registered = 1,
+    .single_use_default = 0,
+    .max_per_account = 50,
+    .base_url = NULL,
 };
 
 /* Per-client moddata: the share-id the client claimed via INVITECODE,
@@ -153,7 +153,11 @@ MOD_LOAD()
 		{
 			config_error("invitation: cannot open SQLite database %s: %s",
 			             OBSIDIAN_DB, inv_db ? sqlite3_errmsg(inv_db) : "open failed");
-			if (inv_db) { sqlite3_close(inv_db); inv_db = NULL; }
+			if (inv_db)
+			{
+				sqlite3_close(inv_db);
+				inv_db = NULL;
+			}
 			return MOD_FAILED;
 		}
 		/* WAL keeps reads/writes from competing handlers (account-
@@ -296,8 +300,8 @@ static void invitation_create_tables(void)
 	 * idempotently -- SQLite errors with "duplicate column" if the
 	 * column already exists, which we silently swallow. */
 	sqlite3_exec(inv_db,
-	    "ALTER TABLE invitations ADD COLUMN description TEXT;",
-	    NULL, NULL, NULL);
+	             "ALTER TABLE invitations ADD COLUMN description TEXT;",
+	             NULL, NULL, NULL);
 }
 
 /* Returns 1 if an account row exists in the accounts table.  Used to
@@ -310,10 +314,10 @@ static int inviter_account_exists(const char *name)
 	sqlite3_stmt *stmt;
 	int found = 0;
 
-	if (!inv_db) return 0;
+	if (!inv_db)
+		return 0;
 	if (sqlite3_prepare_v2(inv_db,
-	    "SELECT 1 FROM accounts WHERE LOWER(name) = LOWER(?)", -1, &stmt, NULL)
-	    != SQLITE_OK)
+	                       "SELECT 1 FROM accounts WHERE LOWER(name) = LOWER(?)", -1, &stmt, NULL) != SQLITE_OK)
 		return 0;
 	sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
 	if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -328,10 +332,11 @@ static int invitation_count_for_account(const char *account)
 {
 	sqlite3_stmt *stmt;
 	int n = 0;
-	if (!inv_db) return 0;
+	if (!inv_db)
+		return 0;
 	if (sqlite3_prepare_v2(inv_db,
-	    "SELECT COUNT(*) FROM invitations WHERE LOWER(inviter_account) = LOWER(?)",
-	    -1, &stmt, NULL) != SQLITE_OK)
+	                       "SELECT COUNT(*) FROM invitations WHERE LOWER(inviter_account) = LOWER(?)",
+	                       -1, &stmt, NULL) != SQLITE_OK)
 		return 0;
 	sqlite3_bind_text(stmt, 1, account, -1, SQLITE_STATIC);
 	if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -349,7 +354,8 @@ static int generate_share_id(char *out, size_t n)
 	static const char alphabet[] =
 	    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 	size_t i;
-	if (n < INVITATION_SHARE_ID_LEN + 1) return 0;
+	if (n < INVITATION_SHARE_ID_LEN + 1)
+		return 0;
 	for (i = 0; i < INVITATION_SHARE_ID_LEN; i++)
 		out[i] = alphabet[getrandom8() % (sizeof(alphabet) - 1)];
 	out[INVITATION_SHARE_ID_LEN] = '\0';
@@ -375,15 +381,19 @@ int invitation_lookup_v1(const char *share_id, char *out_inviter, size_t out_inv
 	sqlite3_stmt *stmt;
 	int rc, found = 0;
 
-	if (out_inviter && out_inviter_sz) out_inviter[0] = '\0';
-	if (out_channel && out_channel_sz) out_channel[0] = '\0';
-	if (out_valid) *out_valid = 0;
+	if (out_inviter && out_inviter_sz)
+		out_inviter[0] = '\0';
+	if (out_channel && out_channel_sz)
+		out_channel[0] = '\0';
+	if (out_valid)
+		*out_valid = 0;
 
-	if (!inv_db || !share_id || !*share_id) return 0;
+	if (!inv_db || !share_id || !*share_id)
+		return 0;
 
 	if (sqlite3_prepare_v2(inv_db,
-	    "SELECT inviter_account, COALESCE(channel,'') FROM invitations WHERE share_id = ?",
-	    -1, &stmt, NULL) != SQLITE_OK)
+	                       "SELECT inviter_account, COALESCE(channel,'') FROM invitations WHERE share_id = ?",
+	                       -1, &stmt, NULL) != SQLITE_OK)
 		return 0;
 	sqlite3_bind_text(stmt, 1, share_id, -1, SQLITE_STATIC);
 	rc = sqlite3_step(stmt);
@@ -464,22 +474,19 @@ CMD_FUNC(cmd_invitation)
 				channel = parv[2];
 				if (parc >= 4 && !BadPtr(parv[3]))
 					description = parv[3];
-			}
-			else if (!strcmp(parv[2], "*"))
+			} else if (!strcmp(parv[2], "*"))
 			{
 				if (parc >= 4 && !BadPtr(parv[3]))
 					description = parv[3];
-			}
-			else if (parc == 3)
+			} else if (parc == 3)
 			{
 				/* `INVITELINK CREATE :Description text` */
 				description = parv[2];
-			}
-			else
+			} else
 			{
 				sendto_one(client, NULL,
-				    ":%s FAIL INVITELINK INVALID_CHANNEL %s :Channel must start with # & ^ $ or be \"*\".",
-				    me.name, parv[2]);
+				           ":%s FAIL INVITELINK INVALID_CHANNEL %s :Channel must start with # & ^ $ or be \"*\".",
+				           me.name, parv[2]);
 				return;
 			}
 		}
@@ -497,8 +504,8 @@ CMD_FUNC(cmd_invitation)
 		if (parc < 3 || BadPtr(parv[2]))
 		{
 			sendto_one(client, NULL,
-			    ":%s FAIL INVITELINK INVALID_PARAMS :Syntax: /INVITELINK DELETE <share-id>",
-			    me.name);
+			           ":%s FAIL INVITELINK INVALID_PARAMS :Syntax: /INVITELINK DELETE <share-id>",
+			           me.name);
 			return;
 		}
 		inv_do_delete(client, parv[2]);
@@ -506,8 +513,8 @@ CMD_FUNC(cmd_invitation)
 	}
 
 	sendto_one(client, NULL,
-	    ":%s FAIL INVITELINK INVALID_PARAMS :Subcommand must be CREATE, LIST, or DELETE.",
-	    me.name);
+	           ":%s FAIL INVITELINK INVALID_PARAMS :Subcommand must be CREATE, LIST, or DELETE.",
+	           me.name);
 }
 
 /* Helper: return the calling client's "owner account" string for
@@ -516,8 +523,7 @@ CMD_FUNC(cmd_invitation)
  * the caller isn't allowed to mint/own invitations. */
 static const char *inv_owner_for(Client *client)
 {
-	const char *acct = (client->user && IsLoggedIn(client)) ?
-	    client->user->account : NULL;
+	const char *acct = (client->user && IsLoggedIn(client)) ? client->user->account : NULL;
 	if (acct && *acct)
 		return acct;
 	if (cfg.require_registered)
@@ -544,8 +550,8 @@ static void inv_do_create(Client *client, const char *channel_raw,
 	if (!account)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK NOT_AUTHORISED :You must be logged in to create invitations.",
-		    me.name);
+		           ":%s FAIL INVITELINK NOT_AUTHORISED :You must be logged in to create invitations.",
+		           me.name);
 		return;
 	}
 
@@ -555,15 +561,15 @@ static void inv_do_create(Client *client, const char *channel_raw,
 		    *channel_raw != '^' && *channel_raw != '$')
 		{
 			sendto_one(client, NULL,
-			    ":%s FAIL INVITELINK INVALID_CHANNEL %s :Channel must start with # & ^ or $.",
-			    me.name, channel_raw);
+			           ":%s FAIL INVITELINK INVALID_CHANNEL %s :Channel must start with # & ^ or $.",
+			           me.name, channel_raw);
 			return;
 		}
 		if (strlen(channel_raw) > CHANNELLEN)
 		{
 			sendto_one(client, NULL,
-			    ":%s FAIL INVITELINK INVALID_CHANNEL :Channel name too long.",
-			    me.name);
+			           ":%s FAIL INVITELINK INVALID_CHANNEL :Channel name too long.",
+			           me.name);
 			return;
 		}
 		channel = channel_raw;
@@ -574,8 +580,8 @@ static void inv_do_create(Client *client, const char *channel_raw,
 		if (strlen(description_raw) > INVITELINK_DESCRIPTION_MAX)
 		{
 			sendto_one(client, NULL,
-			    ":%s FAIL INVITELINK INVALID_DESCRIPTION :Description too long (max %d).",
-			    me.name, INVITELINK_DESCRIPTION_MAX);
+			           ":%s FAIL INVITELINK INVALID_DESCRIPTION :Description too long (max %d).",
+			           me.name, INVITELINK_DESCRIPTION_MAX);
 			return;
 		}
 		/* Reject control characters so the trailing on the wire
@@ -587,8 +593,8 @@ static void inv_do_create(Client *client, const char *channel_raw,
 				if ((unsigned char)*p < 0x20)
 				{
 					sendto_one(client, NULL,
-					    ":%s FAIL INVITELINK INVALID_DESCRIPTION :Description may not contain control characters.",
-					    me.name);
+					           ":%s FAIL INVITELINK INVALID_DESCRIPTION :Description may not contain control characters.",
+					           me.name);
 					return;
 				}
 		}
@@ -599,16 +605,16 @@ static void inv_do_create(Client *client, const char *channel_raw,
 	    invitation_count_for_account(account) >= cfg.max_per_account)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK QUOTA_EXCEEDED :You have reached the max %d invitations.",
-		    me.name, cfg.max_per_account);
+		           ":%s FAIL INVITELINK QUOTA_EXCEEDED :You have reached the max %d invitations.",
+		           me.name, cfg.max_per_account);
 		return;
 	}
 
 	if (!inv_db)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK SERVER_BUG :Invitation database unavailable.",
-		    me.name);
+		           ":%s FAIL INVITELINK SERVER_BUG :Invitation database unavailable.",
+		           me.name);
 		return;
 	}
 
@@ -623,9 +629,9 @@ static void inv_do_create(Client *client, const char *channel_raw,
 			generate_share_id(share_id, sizeof(share_id));
 
 			if (sqlite3_prepare_v2(inv_db,
-			    "INSERT INTO invitations (share_id, inviter_account, channel, description, created_at, single_use) "
-			    "VALUES (?, ?, ?, ?, ?, ?)",
-			    -1, &stmt, NULL) != SQLITE_OK)
+			                       "INSERT INTO invitations (share_id, inviter_account, channel, description, created_at, single_use) "
+			                       "VALUES (?, ?, ?, ?, ?, ?)",
+			                       -1, &stmt, NULL) != SQLITE_OK)
 				break;
 			sqlite3_bind_text(stmt, 1, share_id, -1, SQLITE_STATIC);
 			sqlite3_bind_text(stmt, 2, account, -1, SQLITE_STATIC);
@@ -646,8 +652,8 @@ static void inv_do_create(Client *client, const char *channel_raw,
 		if (!inserted)
 		{
 			sendto_one(client, NULL,
-			    ":%s FAIL INVITELINK SERVER_BUG :Failed to record invitation.",
-			    me.name);
+			           ":%s FAIL INVITELINK SERVER_BUG :Failed to record invitation.",
+			           me.name);
 			return;
 		}
 	}
@@ -660,18 +666,18 @@ static void inv_do_create(Client *client, const char *channel_raw,
 	/* Machine-readable parameter-positional reply. */
 	if (channel)
 		sendto_one(client, NULL,
-		    ":%s INVITELINK %s %s :%s",
-		    me.name, share_id, channel, url_buf);
+		           ":%s INVITELINK %s %s :%s",
+		           me.name, share_id, channel, url_buf);
 	else
 		sendto_one(client, NULL,
-		    ":%s INVITELINK %s * :%s",
-		    me.name, share_id, url_buf);
+		           ":%s INVITELINK %s * :%s",
+		           me.name, share_id, url_buf);
 
 	/* IRCv3 standard-replies NOTE so cap-aware clients can render
 	 * the link nicely. */
 	sendto_one(client, NULL,
-	    ":%s NOTE INVITELINK CREATED %s %s :Invitation link: %s",
-	    me.name, share_id, channel ? channel : "*", url_buf);
+	           ":%s NOTE INVITELINK CREATED %s %s :Invitation link: %s",
+	           me.name, share_id, channel ? channel : "*", url_buf);
 }
 
 /* INVITELINK LIST: enumerate the caller's invitations.
@@ -698,29 +704,29 @@ static void inv_do_list(Client *client)
 	if (!account)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK NOT_AUTHORISED :You must be logged in to list invitations.",
-		    me.name);
+		           ":%s FAIL INVITELINK NOT_AUTHORISED :You must be logged in to list invitations.",
+		           me.name);
 		return;
 	}
 	if (!inv_db)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK SERVER_BUG :Invitation database unavailable.",
-		    me.name);
+		           ":%s FAIL INVITELINK SERVER_BUG :Invitation database unavailable.",
+		           me.name);
 		return;
 	}
 
 	if (sqlite3_prepare_v2(inv_db,
-	    "SELECT i.share_id, COALESCE(i.channel,''), i.created_at, "
-	    "       (SELECT COUNT(*) FROM invitation_redemptions r WHERE r.share_id = i.share_id), "
-	    "       COALESCE(i.description,'') "
-	    "FROM invitations i "
-	    "WHERE LOWER(i.inviter_account) = LOWER(?) "
-	    "ORDER BY i.created_at DESC",
-	    -1, &stmt, NULL) != SQLITE_OK)
+	                       "SELECT i.share_id, COALESCE(i.channel,''), i.created_at, "
+	                       "       (SELECT COUNT(*) FROM invitation_redemptions r WHERE r.share_id = i.share_id), "
+	                       "       COALESCE(i.description,'') "
+	                       "FROM invitations i "
+	                       "WHERE LOWER(i.inviter_account) = LOWER(?) "
+	                       "ORDER BY i.created_at DESC",
+	                       -1, &stmt, NULL) != SQLITE_OK)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK SERVER_BUG :Database error.", me.name);
+		           ":%s FAIL INVITELINK SERVER_BUG :Database error.", me.name);
 		return;
 	}
 	sqlite3_bind_text(stmt, 1, account, -1, SQLITE_STATIC);
@@ -728,11 +734,11 @@ static void inv_do_list(Client *client)
 	while (sqlite3_step(stmt) == SQLITE_ROW)
 	{
 		const char *share_id = (const char *)sqlite3_column_text(stmt, 0);
-		const char *channel  = (const char *)sqlite3_column_text(stmt, 1);
-		int         created  = sqlite3_column_int(stmt, 2);
-		int         redeems  = sqlite3_column_int(stmt, 3);
-		const char *descr    = (const char *)sqlite3_column_text(stmt, 4);
-		const char *iso      = timestamp_iso8601((time_t)created);
+		const char *channel = (const char *)sqlite3_column_text(stmt, 1);
+		int created = sqlite3_column_int(stmt, 2);
+		int redeems = sqlite3_column_int(stmt, 3);
+		const char *descr = (const char *)sqlite3_column_text(stmt, 4);
+		const char *iso = timestamp_iso8601((time_t)created);
 		char url_buf[512];
 		if (cfg.base_url && *cfg.base_url)
 			snprintf(url_buf, sizeof(url_buf), "%s%s", cfg.base_url, share_id);
@@ -740,23 +746,23 @@ static void inv_do_list(Client *client)
 			snprintf(url_buf, sizeof(url_buf), "%s", share_id);
 		if (descr && *descr)
 			sendto_one(client, NULL,
-			    ":%s INVITELINK ENTRY %s %s %s %d %s :%s",
-			    me.name, share_id,
-			    (channel && *channel) ? channel : "*",
-			    iso, redeems, url_buf, descr);
+			           ":%s INVITELINK ENTRY %s %s %s %d %s :%s",
+			           me.name, share_id,
+			           (channel && *channel) ? channel : "*",
+			           iso, redeems, url_buf, descr);
 		else
 			sendto_one(client, NULL,
-			    ":%s INVITELINK ENTRY %s %s %s %d %s",
-			    me.name, share_id,
-			    (channel && *channel) ? channel : "*",
-			    iso, redeems, url_buf);
+			           ":%s INVITELINK ENTRY %s %s %s %d %s",
+			           me.name, share_id,
+			           (channel && *channel) ? channel : "*",
+			           iso, redeems, url_buf);
 		count++;
 	}
 	sqlite3_finalize(stmt);
 
 	sendto_one(client, NULL,
-	    ":%s NOTE INVITELINK LIST_END * :End of invitation list (%d %s).",
-	    me.name, count, count == 1 ? "entry" : "entries");
+	           ":%s NOTE INVITELINK LIST_END * :End of invitation list (%d %s).",
+	           me.name, count, count == 1 ? "entry" : "entries");
 }
 
 /* INVITELINK DELETE <share-id> -- caller must own the share-id
@@ -771,38 +777,37 @@ static void inv_do_delete(Client *client, const char *share_id)
 	if (!account)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK NOT_AUTHORISED :You must be logged in to delete invitations.",
-		    me.name);
+		           ":%s FAIL INVITELINK NOT_AUTHORISED :You must be logged in to delete invitations.",
+		           me.name);
 		return;
 	}
 	if (!inv_db)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK SERVER_BUG :Invitation database unavailable.",
-		    me.name);
+		           ":%s FAIL INVITELINK SERVER_BUG :Invitation database unavailable.",
+		           me.name);
 		return;
 	}
 
 	if (IsOper(client))
 	{
 		if (sqlite3_prepare_v2(inv_db,
-		    "DELETE FROM invitations WHERE share_id = ?",
-		    -1, &stmt, NULL) != SQLITE_OK)
+		                       "DELETE FROM invitations WHERE share_id = ?",
+		                       -1, &stmt, NULL) != SQLITE_OK)
 		{
 			sendto_one(client, NULL,
-			    ":%s FAIL INVITELINK SERVER_BUG :Database error.", me.name);
+			           ":%s FAIL INVITELINK SERVER_BUG :Database error.", me.name);
 			return;
 		}
 		sqlite3_bind_text(stmt, 1, share_id, -1, SQLITE_STATIC);
-	}
-	else
+	} else
 	{
 		if (sqlite3_prepare_v2(inv_db,
-		    "DELETE FROM invitations WHERE share_id = ? AND LOWER(inviter_account) = LOWER(?)",
-		    -1, &stmt, NULL) != SQLITE_OK)
+		                       "DELETE FROM invitations WHERE share_id = ? AND LOWER(inviter_account) = LOWER(?)",
+		                       -1, &stmt, NULL) != SQLITE_OK)
 		{
 			sendto_one(client, NULL,
-			    ":%s FAIL INVITELINK SERVER_BUG :Database error.", me.name);
+			           ":%s FAIL INVITELINK SERVER_BUG :Database error.", me.name);
 			return;
 		}
 		sqlite3_bind_text(stmt, 1, share_id, -1, SQLITE_STATIC);
@@ -816,19 +821,19 @@ static void inv_do_delete(Client *client, const char *share_id)
 	if (affected <= 0)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITELINK NOT_FOUND %s :No matching invitation owned by you.",
-		    me.name, share_id);
+		           ":%s FAIL INVITELINK NOT_FOUND %s :No matching invitation owned by you.",
+		           me.name, share_id);
 		return;
 	}
 
 	sendto_one(client, NULL,
-	    ":%s NOTE INVITELINK DELETED %s :Invitation deleted.",
-	    me.name, share_id);
+	           ":%s NOTE INVITELINK DELETED %s :Invitation deleted.",
+	           me.name, share_id);
 
 	/* Also delete the redemption history rows for tidy bookkeeping. */
 	if (sqlite3_prepare_v2(inv_db,
-	    "DELETE FROM invitation_redemptions WHERE share_id = ?",
-	    -1, &stmt, NULL) == SQLITE_OK)
+	                       "DELETE FROM invitation_redemptions WHERE share_id = ?",
+	                       -1, &stmt, NULL) == SQLITE_OK)
 	{
 		sqlite3_bind_text(stmt, 1, share_id, -1, SQLITE_STATIC);
 		sqlite3_step(stmt);
@@ -859,7 +864,7 @@ CMD_FUNC(cmd_invcode)
 	if (parc < 2 || BadPtr(parv[1]))
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITECODE INVALID_PARAMS :Syntax: /INVITECODE <share-id>", me.name);
+		           ":%s FAIL INVITECODE INVALID_PARAMS :Syntax: /INVITECODE <share-id>", me.name);
 		return;
 	}
 	code = parv[1];
@@ -867,8 +872,8 @@ CMD_FUNC(cmd_invcode)
 	if (IsLoggedIn(client))
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITECODE ALREADY_REGISTERED :Invite codes are only consumed during account registration.",
-		    me.name);
+		           ":%s FAIL INVITECODE ALREADY_REGISTERED :Invite codes are only consumed during account registration.",
+		           me.name);
 		return;
 	}
 
@@ -876,15 +881,15 @@ CMD_FUNC(cmd_invcode)
 	                          channel, sizeof(channel), &valid))
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITECODE INVALID_CODE %s :Unknown invitation code.",
-		    me.name, code);
+		           ":%s FAIL INVITECODE INVALID_CODE %s :Unknown invitation code.",
+		           me.name, code);
 		return;
 	}
 	if (!valid)
 	{
 		sendto_one(client, NULL,
-		    ":%s FAIL INVITECODE EXPIRED %s :This invitation has expired (inviter account no longer registered).",
-		    me.name, code);
+		           ":%s FAIL INVITECODE EXPIRED %s :This invitation has expired (inviter account no longer registered).",
+		           me.name, code);
 		return;
 	}
 
@@ -896,8 +901,8 @@ CMD_FUNC(cmd_invcode)
 	}
 
 	sendto_one(client, NULL,
-	    ":%s NOTE INVITECODE ACCEPTED %s %s :Invitation code accepted; proceed with REGISTER.",
-	    me.name, code, channel[0] ? channel : "*");
+	           ":%s NOTE INVITECODE ACCEPTED %s %s :Invitation code accepted; proceed with REGISTER.",
+	           me.name, code, channel[0] ? channel : "*");
 }
 
 /* ===================================================================
@@ -912,10 +917,13 @@ static int invitation_account_login(Client *client, MessageTag *mtags)
 	sqlite3_stmt *stmt;
 	int already;
 
-	if (!MyUser(client) || !pending_md) return 0;
+	if (!MyUser(client) || !pending_md)
+		return 0;
 	md = &moddata_client(client, pending_md);
-	if (!md || !md->str || !*md->str) return 0;
-	if (!client->user || !*client->user->account) return 0;
+	if (!md || !md->str || !*md->str)
+		return 0;
+	if (!client->user || !*client->user->account)
+		return 0;
 
 	code = md->str;
 	account = client->user->account;
@@ -923,8 +931,8 @@ static int invitation_account_login(Client *client, MessageTag *mtags)
 	/* Already recorded? Don't double-attribute. */
 	already = 0;
 	if (inv_db && sqlite3_prepare_v2(inv_db,
-	    "SELECT 1 FROM invitation_redemptions WHERE share_id = ? AND LOWER(account_name) = LOWER(?)",
-	    -1, &stmt, NULL) == SQLITE_OK)
+	                                 "SELECT 1 FROM invitation_redemptions WHERE share_id = ? AND LOWER(account_name) = LOWER(?)",
+	                                 -1, &stmt, NULL) == SQLITE_OK)
 	{
 		sqlite3_bind_text(stmt, 1, code, -1, SQLITE_STATIC);
 		sqlite3_bind_text(stmt, 2, account, -1, SQLITE_STATIC);
@@ -935,20 +943,21 @@ static int invitation_account_login(Client *client, MessageTag *mtags)
 
 	if (!already && inv_db &&
 	    sqlite3_prepare_v2(inv_db,
-	    "INSERT INTO invitation_redemptions (share_id, account_name, redeemed_at) "
-	    "VALUES (?, ?, ?)", -1, &stmt, NULL) == SQLITE_OK)
+	                       "INSERT INTO invitation_redemptions (share_id, account_name, redeemed_at) "
+	                       "VALUES (?, ?, ?)",
+	                       -1, &stmt, NULL) == SQLITE_OK)
 	{
 		sqlite3_bind_text(stmt, 1, code, -1, SQLITE_STATIC);
 		sqlite3_bind_text(stmt, 2, account, -1, SQLITE_STATIC);
-		sqlite3_bind_int (stmt, 3, (int)TStime());
+		sqlite3_bind_int(stmt, 3, (int)TStime());
 		sqlite3_step(stmt);
 		sqlite3_finalize(stmt);
 
 		/* If the share-id is single-use, delete it now so further
 		 * redemptions fail at lookup time. */
 		if (sqlite3_prepare_v2(inv_db,
-		    "DELETE FROM invitations WHERE share_id = ? AND single_use = 1",
-		    -1, &stmt, NULL) == SQLITE_OK)
+		                       "DELETE FROM invitations WHERE share_id = ? AND single_use = 1",
+		                       -1, &stmt, NULL) == SQLITE_OK)
 		{
 			sqlite3_bind_text(stmt, 1, code, -1, SQLITE_STATIC);
 			sqlite3_step(stmt);
@@ -996,7 +1005,8 @@ static int invitation_whois(Client *client, Client *target, NameValuePrioList **
 	sqlite3_stmt *stmt;
 	char inviter[NICKLEN + 1] = "";
 
-	if (!inv_db || !target->user) return 0;
+	if (!inv_db || !target->user)
+		return 0;
 	target_account = target->user->account;
 	if (!target_account || !*target_account || !strcmp(target_account, "0"))
 		return 0;
@@ -1004,18 +1014,19 @@ static int invitation_whois(Client *client, Client *target, NameValuePrioList **
 		return 0;
 
 	if (sqlite3_prepare_v2(inv_db,
-	    "SELECT i.inviter_account "
-	    "FROM invitation_redemptions r "
-	    "JOIN invitations i ON i.share_id = r.share_id "
-	    "WHERE LOWER(r.account_name) = LOWER(?) "
-	    "ORDER BY r.redeemed_at ASC LIMIT 1",
-	    -1, &stmt, NULL) != SQLITE_OK)
+	                       "SELECT i.inviter_account "
+	                       "FROM invitation_redemptions r "
+	                       "JOIN invitations i ON i.share_id = r.share_id "
+	                       "WHERE LOWER(r.account_name) = LOWER(?) "
+	                       "ORDER BY r.redeemed_at ASC LIMIT 1",
+	                       -1, &stmt, NULL) != SQLITE_OK)
 		return 0;
 	sqlite3_bind_text(stmt, 1, target_account, -1, SQLITE_STATIC);
 	if (sqlite3_step(stmt) == SQLITE_ROW)
 	{
 		const char *inv = (const char *)sqlite3_column_text(stmt, 0);
-		if (inv) strlcpy(inviter, inv, sizeof(inviter));
+		if (inv)
+			strlcpy(inviter, inv, sizeof(inviter));
 	}
 	sqlite3_finalize(stmt);
 

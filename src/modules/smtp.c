@@ -28,11 +28,11 @@
 #include "smtp.h"
 
 ModuleHeader MOD_HEADER = {
-	"smtp",
-	"1.0",
-	"Asynchronous SMTP client for outbound email",
-	"ObbyIRCd Team",
-	"unrealircd-6",
+    "smtp",
+    "1.0",
+    "Asynchronous SMTP client for outbound email",
+    "ObbyIRCd Team",
+    "unrealircd-6",
 };
 
 /* External resolver channel from src/dns.c (used by url_unreal.c too). */
@@ -41,23 +41,22 @@ extern ares_channel resolver_channel_https;
 /* ===================================================================
  * Constants
  * =================================================================== */
-#define SMTP_DEFAULT_CONNECT_TIMEOUT   30
-#define SMTP_DEFAULT_TRANSFER_TIMEOUT  60
-#define SMTP_READ_BUFSIZE              4096
-#define SMTP_MAX_REPLY_LINE            8192
-#define SMTP_MAX_BODY_BYTES            (1024 * 1024)
-#define SMTP_TIMER_INTERVAL_MS         1000
+#define SMTP_DEFAULT_CONNECT_TIMEOUT  30
+#define SMTP_DEFAULT_TRANSFER_TIMEOUT 60
+#define SMTP_READ_BUFSIZE             4096
+#define SMTP_MAX_REPLY_LINE           8192
+#define SMTP_MAX_BODY_BYTES           (1024 * 1024)
+#define SMTP_TIMER_INTERVAL_MS        1000
 
-#define SMTP_SEC_NONE      0
-#define SMTP_SEC_STARTTLS  1
-#define SMTP_SEC_TLS       2
+#define SMTP_SEC_NONE     0
+#define SMTP_SEC_STARTTLS 1
+#define SMTP_SEC_TLS      2
 
 /* ===================================================================
  * Types
  * =================================================================== */
 
-typedef enum SmtpState
-{
+typedef enum SmtpState {
 	SMTP_STATE_DNS,
 	SMTP_STATE_CONNECTING,
 	SMTP_STATE_TLS_INITIAL,        /* implicit-TLS handshake (port 465) */
@@ -77,8 +76,7 @@ typedef enum SmtpState
 
 typedef struct SmtpJob_ SmtpJob;
 
-struct SmtpJob_
-{
+struct SmtpJob_ {
 	SmtpJob *prev, *next;
 
 	/* Caller payload */
@@ -143,7 +141,7 @@ static EVENT(smtp_timer);
 
 static void job_start(SmtpJob *j);
 static void job_finish_ok(SmtpJob *j);
-static void job_finish_err(SmtpJob *j, FORMAT_STRING(const char *fmt), ...) __attribute__((format(printf,2,3)));
+static void job_finish_err(SmtpJob *j, FORMAT_STRING(const char *fmt), ...) __attribute__((format(printf, 2, 3)));
 static void job_free(SmtpJob *j);
 
 static void resolve_cb(void *arg, int status, int timeouts, struct hostent *he);
@@ -392,8 +390,7 @@ static void on_connect_ready(int fd, int revents, void *data)
 		j->state = SMTP_STATE_TLS_INITIAL;
 		if (begin_tls(j) < 0)
 			return;
-	}
-	else
+	} else
 	{
 		j->state = SMTP_STATE_WAIT_BANNER;
 		arm_read(j);
@@ -466,8 +463,7 @@ static int continue_tls(SmtpJob *j)
 	{
 		j->state = SMTP_STATE_WAIT_BANNER;
 		arm_read(j);
-	}
-	else if (j->state == SMTP_STATE_TLS_AFTER_STARTTLS)
+	} else if (j->state == SMTP_STATE_TLS_AFTER_STARTTLS)
 	{
 		/* Re-EHLO after STARTTLS upgrade */
 		j->state = SMTP_STATE_SENT_EHLO2;
@@ -514,8 +510,7 @@ static int try_send_writebuf(SmtpJob *j)
 				job_finish_err(j, "TLS write error (%d)", err);
 				return -1;
 			}
-		}
-		else
+		} else
 		{
 			n = write(j->fd, j->writebuf + j->writepos, remaining);
 			if (n < 0)
@@ -614,8 +609,7 @@ static void on_readable(int fd, int revents, void *data)
 				job_finish_err(j, "TLS read error (%d)", err);
 				return;
 			}
-		}
-		else
+		} else
 		{
 			n = read(j->fd, j->readbuf + j->readlen, space);
 			if (n < 0)
@@ -681,8 +675,7 @@ static int parse_reply(SmtpJob *j, int *code, int *more, char **text)
 	{
 		linelen = (int)(eol - j->readbuf);
 		eat = linelen + 2;
-	}
-	else
+	} else
 	{
 		/* Some servers send just LF.  Tolerate. */
 		eol = strchr(j->readbuf, '\n');
@@ -734,8 +727,7 @@ static char *build_dot_stuffed_message(SmtpJob *j, int *outlen)
 
 	strftime(date, sizeof(date), "%a, %d %b %Y %H:%M:%S +0000", tm);
 
-	hdrlen = 1024 + strlen(cfg.from) + strlen(j->to_addr)
-	         + strlen(j->subject ? j->subject : "");
+	hdrlen = 1024 + strlen(cfg.from) + strlen(j->to_addr) + strlen(j->subject ? j->subject : "");
 	header = safe_alloc(hdrlen);
 	snprintf(header, hdrlen,
 	         "From: %s\r\n"
@@ -829,8 +821,7 @@ static void process_reply(SmtpJob *j, int code, const char *text)
 			{
 				j->state = SMTP_STATE_SENT_STARTTLS;
 				send_line(j, "STARTTLS");
-			}
-			else if (cfg.username && *cfg.username)
+			} else if (cfg.username && *cfg.username)
 			{
 				char *blob;
 				char cmd[1024];
@@ -849,8 +840,7 @@ static void process_reply(SmtpJob *j, int code, const char *text)
 				safe_free(blob);
 				j->state = SMTP_STATE_SENT_AUTH;
 				send_line(j, cmd);
-			}
-			else
+			} else
 			{
 				char buf[512];
 				snprintf(buf, sizeof(buf), "MAIL FROM:<%s>", cfg.from);
@@ -889,8 +879,7 @@ static void process_reply(SmtpJob *j, int code, const char *text)
 				safe_free(blob);
 				j->state = SMTP_STATE_SENT_AUTH;
 				send_line(j, cmd);
-			}
-			else
+			} else
 			{
 				char buf[512];
 				snprintf(buf, sizeof(buf), "MAIL FROM:<%s>", cfg.from);
@@ -1086,10 +1075,13 @@ static int smtp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 			continue;
 		if (!strcasecmp(cep->name, "host"))
 		{
-			if (BadPtr(cep->value)) { errors++; config_error("%s:%i: smtp::host empty", cep->file->filename, cep->line_number); }
-			else has_host = 1;
-		}
-		else if (!strcasecmp(cep->name, "port"))
+			if (BadPtr(cep->value))
+			{
+				errors++;
+				config_error("%s:%i: smtp::host empty", cep->file->filename, cep->line_number);
+			} else
+				has_host = 1;
+		} else if (!strcasecmp(cep->name, "port"))
 		{
 			int p = cep->value ? atoi(cep->value) : 0;
 			if (p < 1 || p > 65535)
@@ -1097,8 +1089,7 @@ static int smtp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 				errors++;
 				config_error("%s:%i: smtp::port must be 1-65535", cep->file->filename, cep->line_number);
 			}
-		}
-		else if (!strcasecmp(cep->name, "security"))
+		} else if (!strcasecmp(cep->name, "security"))
 		{
 			if (parse_security(cep->value) < 0)
 			{
@@ -1106,43 +1097,47 @@ static int smtp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 				config_error("%s:%i: smtp::security must be none|starttls|tls",
 				             cep->file->filename, cep->line_number);
 			}
-		}
-		else if (!strcasecmp(cep->name, "username") ||
-		         !strcasecmp(cep->name, "password"))
+		} else if (!strcasecmp(cep->name, "username") ||
+		           !strcasecmp(cep->name, "password"))
 		{
 			if (BadPtr(cep->value))
 			{
 				errors++;
 				config_error("%s:%i: smtp::%s empty", cep->file->filename, cep->line_number, cep->name);
 			}
-		}
-		else if (!strcasecmp(cep->name, "from"))
+		} else if (!strcasecmp(cep->name, "from"))
 		{
 			if (BadPtr(cep->value))
 			{
 				errors++;
 				config_error("%s:%i: smtp::from empty", cep->file->filename, cep->line_number);
-			}
-			else has_from = 1;
-		}
-		else if (!strcasecmp(cep->name, "connect-timeout") ||
-		         !strcasecmp(cep->name, "transfer-timeout"))
+			} else
+				has_from = 1;
+		} else if (!strcasecmp(cep->name, "connect-timeout") ||
+		           !strcasecmp(cep->name, "transfer-timeout"))
 		{
 			if (BadPtr(cep->value))
 			{
 				errors++;
 				config_error("%s:%i: smtp::%s empty", cep->file->filename, cep->line_number, cep->name);
 			}
-		}
-		else
+		} else
 		{
 			config_warn("%s:%i: unknown smtp::%s",
 			            cep->file->filename, cep->line_number, cep->name);
 		}
 	}
 
-	if (!has_host) { errors++; config_error("%s:%i: smtp::host required", ce->file->filename, ce->line_number); }
-	if (!has_from) { errors++; config_error("%s:%i: smtp::from required", ce->file->filename, ce->line_number); }
+	if (!has_host)
+	{
+		errors++;
+		config_error("%s:%i: smtp::host required", ce->file->filename, ce->line_number);
+	}
+	if (!has_from)
+	{
+		errors++;
+		config_error("%s:%i: smtp::from required", ce->file->filename, ce->line_number);
+	}
 
 	*errs = errors;
 	return errors ? -1 : 1;
@@ -1183,9 +1178,12 @@ static int smtp_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 
 	if (cfg.port == 0)
 	{
-		if (cfg.security == SMTP_SEC_TLS) cfg.port = 465;
-		else if (cfg.security == SMTP_SEC_STARTTLS) cfg.port = 587;
-		else cfg.port = 25;
+		if (cfg.security == SMTP_SEC_TLS)
+			cfg.port = 465;
+		else if (cfg.security == SMTP_SEC_STARTTLS)
+			cfg.port = 587;
+		else
+			cfg.port = 25;
 	}
 
 	cfg.configured = 1;

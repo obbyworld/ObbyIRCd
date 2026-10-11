@@ -17,11 +17,11 @@
 #include "unrealircd.h"
 
 ModuleHeader MOD_HEADER = {
-	"draft-ai-tools",
-	"0.5",
-	"draft/bot-tools — bot workflow transparency tags (single-tag JSON)",
-	"irc-ai-tag-framework",
-	"unrealircd-6",
+    "draft-ai-tools",
+    "0.5",
+    "draft/bot-tools — bot workflow transparency tags (single-tag JSON)",
+    "irc-ai-tag-framework",
+    "unrealircd-6",
 };
 
 /* Allocated by ClientCapabilityAdd; used for fast bitmask checks. */
@@ -29,10 +29,10 @@ static long CAP_AI_TOOLS = 0L;
 
 /* ── forward declarations ─────────────────────────────────────────────────── */
 
-static int         ai_tools_mtag_is_ok(Client *client, const char *name, const char *value);
-static void        ai_tools_mtag_relay(Client *client, MessageTag *recv_mtags,
-                                       MessageTag **mtag_list, const char *signature);
-static void        register_ait_tag(Module *module, ClientCapability *cap, const char *name);
+static int ai_tools_mtag_is_ok(Client *client, const char *name, const char *value);
+static void ai_tools_mtag_relay(Client *client, MessageTag *recv_mtags,
+                                MessageTag **mtag_list, const char *signature);
+static void register_ait_tag(Module *module, ClientCapability *cap, const char *name);
 
 /* ── tag sender validation ────────────────────────────────────────────────── */
 
@@ -84,8 +84,8 @@ static void register_ait_tag(Module *module, ClientCapability *cap, const char *
 	MessageTagHandlerInfo mtag;
 
 	memset(&mtag, 0, sizeof(mtag));
-	mtag.name           = (char *)name;  /* const-cast safe; API doesn't modify */
-	mtag.is_ok          = ai_tools_mtag_is_ok;
+	mtag.name = (char *)name;  /* const-cast safe; API doesn't modify */
+	mtag.is_ok = ai_tools_mtag_is_ok;
 	mtag.clicap_handler = cap;           /* relay only to draft/bot-tools clients */
 	/* should_send_to_client left NULL: clicap_handler already handles filtering */
 	MessageTagHandlerAdd(module, &mtag);
@@ -108,7 +108,7 @@ MOD_INIT()
 	 * per-workflow in its `features` array, since a server cannot speak for an
 	 * individual bot. */
 	memset(&cap, 0, sizeof(cap));
-	cap.name      = "draft/bot-tools";
+	cap.name = "draft/bot-tools";
 	/* flags = CLICAP_FLAGS_NONE: individual tags carry their own clicap_handler */
 	c = ClientCapabilityAdd(modinfo->handle, &cap, &CAP_AI_TOOLS);
 	if (!c)

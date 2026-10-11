@@ -32,13 +32,12 @@
 #include "obsidian.h"
 #include <sqlite3.h>
 
-ModuleHeader MOD_HEADER
-= {
-	"webpush",
-	"0.1",
-	"IRCv3 soju.im/webpush: per-account Web Push subscriptions",
-	"obbyircd",
-	"unrealircd-6",
+ModuleHeader MOD_HEADER = {
+    "webpush",
+    "0.1",
+    "IRCv3 soju.im/webpush: per-account Web Push subscriptions",
+    "obbyircd",
+    "unrealircd-6",
 };
 
 #define WEBPUSH_DEFAULT_TTL 86400
@@ -147,8 +146,7 @@ static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 				             cep->file->filename, cep->line_number, cep->name);
 				errors++;
 			}
-		}
-		else if (!strcmp(cep->name, "ttl"))
+		} else if (!strcmp(cep->name, "ttl"))
 		{
 			int n = cep->value ? atoi(cep->value) : -1;
 			if (n < 0 || n > 2592000)
@@ -157,8 +155,7 @@ static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 				             cep->file->filename, cep->line_number);
 				errors++;
 			}
-		}
-		else
+		} else
 		{
 			config_error("%s:%i: unknown directive set::webpush::%s",
 			             cep->file->filename, cep->line_number, cep->name);
@@ -204,7 +201,8 @@ static int wp_open_db(void)
 	{
 		config_error("webpush: could not open %s: %s", OBSIDIAN_DB,
 		             wp_db ? sqlite3_errmsg(wp_db) : "(open failed)");
-		if (wp_db) sqlite3_close(wp_db);
+		if (wp_db)
+			sqlite3_close(wp_db);
 		wp_db = NULL;
 		return -1;
 	}
@@ -216,21 +214,22 @@ static int wp_open_db(void)
 static void wp_create_tables(void)
 {
 	const char *sql =
-		"CREATE TABLE IF NOT EXISTS webpush_subscriptions ("
-		"  account TEXT NOT NULL,"
-		"  endpoint TEXT NOT NULL,"
-		"  p256dh TEXT NOT NULL,"
-		"  auth TEXT NOT NULL,"
-		"  created_at INTEGER NOT NULL,"
-		"  PRIMARY KEY (account, endpoint)"
-		");"
-		"CREATE INDEX IF NOT EXISTS webpush_subs_account "
-		"  ON webpush_subscriptions(account);";
+	    "CREATE TABLE IF NOT EXISTS webpush_subscriptions ("
+	    "  account TEXT NOT NULL,"
+	    "  endpoint TEXT NOT NULL,"
+	    "  p256dh TEXT NOT NULL,"
+	    "  auth TEXT NOT NULL,"
+	    "  created_at INTEGER NOT NULL,"
+	    "  PRIMARY KEY (account, endpoint)"
+	    ");"
+	    "CREATE INDEX IF NOT EXISTS webpush_subs_account "
+	    "  ON webpush_subscriptions(account);";
 	char *err = NULL;
 	if (sqlite3_exec(wp_db, sql, NULL, NULL, &err) != SQLITE_OK)
 	{
 		config_error("webpush: schema create failed: %s", err ? err : "(unknown)");
-		if (err) sqlite3_free(err);
+		if (err)
+			sqlite3_free(err);
 	}
 }
 
@@ -297,17 +296,19 @@ CMD_FUNC(cmd_webpush)
 			sendto_one(client, NULL,
 			           ":%s FAIL WEBPUSH INVALID_PARAMS REGISTER :keys must include p256dh and auth",
 			           me.name);
-			if (p256dh) free(p256dh);
-			if (errk_auth) free(errk_auth);
+			if (p256dh)
+				free(p256dh);
+			if (errk_auth)
+				free(errk_auth);
 			return;
 		}
 
 		sqlite3_stmt *st = NULL;
 		const char *sql =
-			"INSERT INTO webpush_subscriptions (account, endpoint, p256dh, auth, created_at) "
-			"VALUES (?, ?, ?, ?, ?) "
-			"ON CONFLICT(account, endpoint) DO UPDATE SET "
-			"  p256dh=excluded.p256dh, auth=excluded.auth, created_at=excluded.created_at";
+		    "INSERT INTO webpush_subscriptions (account, endpoint, p256dh, auth, created_at) "
+		    "VALUES (?, ?, ?, ?, ?) "
+		    "ON CONFLICT(account, endpoint) DO UPDATE SET "
+		    "  p256dh=excluded.p256dh, auth=excluded.auth, created_at=excluded.created_at";
 		if (wp_db && sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) == SQLITE_OK)
 		{
 			sqlite3_bind_text(st, 1, client->user->account, -1, SQLITE_TRANSIENT);
@@ -321,15 +322,13 @@ CMD_FUNC(cmd_webpush)
 			{
 				sendto_one(client, NULL, ":%s WEBPUSH REGISTER %s",
 				           me.name, endpoint);
-			}
-			else
+			} else
 			{
 				sendto_one(client, NULL,
 				           ":%s FAIL WEBPUSH INTERNAL_ERROR REGISTER :Could not store subscription",
 				           me.name);
 			}
-		}
-		else
+		} else
 		{
 			sendto_one(client, NULL,
 			           ":%s FAIL WEBPUSH INTERNAL_ERROR REGISTER :Database unavailable",
@@ -346,7 +345,7 @@ CMD_FUNC(cmd_webpush)
 		const char *endpoint = parv[2];
 		sqlite3_stmt *st = NULL;
 		const char *sql =
-			"DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=?";
+		    "DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=?";
 		if (wp_db && sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) == SQLITE_OK)
 		{
 			sqlite3_bind_text(st, 1, client->user->account, -1, SQLITE_TRANSIENT);
@@ -374,25 +373,41 @@ CMD_FUNC(cmd_webpush)
 static void json_append_string(char *dst, size_t dstsize, const char *src)
 {
 	size_t len = strlen(dst);
-	if (len + 1 >= dstsize) return;
+	if (len + 1 >= dstsize)
+		return;
 	dst[len++] = '"';
 	for (const char *p = src; *p && len + 8 < dstsize; p++)
 	{
 		unsigned char ch = (unsigned char)*p;
 		switch (ch)
 		{
-			case '"':  dst[len++] = '\\'; dst[len++] = '"'; break;
-			case '\\': dst[len++] = '\\'; dst[len++] = '\\'; break;
-			case '\n': dst[len++] = '\\'; dst[len++] = 'n'; break;
-			case '\r': dst[len++] = '\\'; dst[len++] = 'r'; break;
-			case '\t': dst[len++] = '\\'; dst[len++] = 't'; break;
+			case '"':
+				dst[len++] = '\\';
+				dst[len++] = '"';
+				break;
+			case '\\':
+				dst[len++] = '\\';
+				dst[len++] = '\\';
+				break;
+			case '\n':
+				dst[len++] = '\\';
+				dst[len++] = 'n';
+				break;
+			case '\r':
+				dst[len++] = '\\';
+				dst[len++] = 'r';
+				break;
+			case '\t':
+				dst[len++] = '\\';
+				dst[len++] = 't';
+				break;
 			default:
 				if (ch < 0x20)
 				{
 					int n = snprintf(dst + len, dstsize - len, "\\u%04x", ch);
-					if (n > 0) len += n;
-				}
-				else
+					if (n > 0)
+						len += n;
+				} else
 				{
 					dst[len++] = (char)ch;
 				}
@@ -490,7 +505,7 @@ static void wp_push_to_account(const char *account, const char *payload)
 {
 	sqlite3_stmt *st = NULL;
 	const char *sql =
-		"SELECT endpoint, p256dh, auth FROM webpush_subscriptions WHERE account=?";
+	    "SELECT endpoint, p256dh, auth FROM webpush_subscriptions WHERE account=?";
 	if (!wp_db || sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) != SQLITE_OK)
 		return;
 	sqlite3_bind_text(st, 1, account, -1, SQLITE_TRANSIENT);

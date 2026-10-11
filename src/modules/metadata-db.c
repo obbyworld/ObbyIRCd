@@ -17,50 +17,56 @@
 #include "unrealircd.h"
 
 ModuleHeader MOD_HEADER = {
-	"metadata-db",
-	"6.0",
-	"Persistent storage for draft/metadata-2 keys",
-	"k4be",
-	"unrealircd-6"
-};
+    "metadata-db",
+    "6.0",
+    "Persistent storage for draft/metadata-2 keys",
+    "k4be",
+    "unrealircd-6"};
 
 
-#define METADATADB_VERSION 100
+#define METADATADB_VERSION    100
 #define METADATADB_SAVE_EVERY 299
 
-#define MAGIC_ENTRY_START	0x11111111
-#define MAGIC_ENTRY_END	0x22222222
+#define MAGIC_ENTRY_START 0x11111111
+#define MAGIC_ENTRY_END   0x22222222
 
 #define MYCONF "metadata-db"
 
 #define WARN_WRITE_ERROR(fname) \
-	do { \
+	do \
+	{ \
 		unreal_log(ULOG_ERROR, "metadata-db", "METADATA_WRITE_ERROR", NULL, "Error writing to temporary database file '$filename': $error (DATABASE NOT SAVED)", \
-			log_data_string("filename", fname), \
-			log_data_string("error", strerror(errno)) \
-		); \
-	} while(0)
+		           log_data_string("filename", fname), \
+		           log_data_string("error", strerror(errno))); \
+	} while (0)
 
 #define W_SAFE(x) \
-	do { \
-		if (!(x)) { \
+	do \
+	{ \
+		if (!(x)) \
+		{ \
 			WARN_WRITE_ERROR(tmpfname); \
 			fclose(fd); \
 			return 0; \
 		} \
-	} while(0)
+	} while (0)
 
 #define IsMDErr(x, y, z) \
-	do { \
-		if (!(x)) { \
+	do \
+	{ \
+		if (!(x)) \
+		{ \
 			config_error("A critical error occurred when registering ModData for %s: %s", MOD_HEADER.name, ModuleGetErrorStr((z)->handle)); \
 			return MOD_FAILED; \
 		} \
-	} while(0)
+	} while (0)
 
-#define FOREACH_CHANNEL_METADATA(channel,metadata) for(metadata=moddata_channel(channel, channelmd).ptr; metadata; metadata=metadata->next)
-#define FOREACH_USER_METADATA(acptr,metadata) struct moddata_user *moddata = moddata_client(acptr, usermd).ptr; if(moddata) for(metadata=moddata->metadata; metadata; metadata=metadata->next)
-#define FOREACH_STORED_METADATA(sm) for(sm = metadata_storage; sm; sm = sm->next)
+#define FOREACH_CHANNEL_METADATA(channel, metadata) for (metadata = moddata_channel(channel, channelmd).ptr; metadata; metadata = metadata->next)
+#define FOREACH_USER_METADATA(acptr, metadata) \
+	struct moddata_user *moddata = moddata_client(acptr, usermd).ptr; \
+	if (moddata) \
+		for (metadata = moddata->metadata; metadata; metadata = metadata->next)
+#define FOREACH_STORED_METADATA(sm) for (sm = metadata_storage; sm; sm = sm->next)
 
 struct metadata {
 	char *name;
@@ -115,22 +121,26 @@ static struct cfgstruct cfg;
 static struct metadata_storage *metadata_storage;
 static long metadatadb_next_event = 0;
 
-MOD_TEST(){
+MOD_TEST()
+{
 	memset(&cfg, 0, sizeof(cfg));
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGTEST, 0, metadatadb_configtest);
 	return MOD_SUCCESS;
 }
 
-MOD_INIT(){
+MOD_INIT()
+{
 	LoadPersistentLong(modinfo, metadatadb_next_event);
 	setcfg();
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, metadatadb_configrun);
 	return MOD_SUCCESS;
 }
 
-MOD_LOAD(){
-	EventAdd(modinfo->handle, "metadatadb_write_metadatadb", write_metadatadb_evt, NULL, METADATADB_SAVE_EVERY*1000, 0);
-	if (ModuleGetError(modinfo->handle) != MODERR_NOERROR){
+MOD_LOAD()
+{
+	EventAdd(modinfo->handle, "metadatadb_write_metadatadb", write_metadatadb_evt, NULL, METADATADB_SAVE_EVERY * 1000, 0);
+	if (ModuleGetError(modinfo->handle) != MODERR_NOERROR)
+	{
 		config_error("A critical error occurred when loading module %s: %s", MOD_HEADER.name, ModuleGetErrorStr(modinfo->handle));
 		return MOD_FAILED;
 	}
@@ -145,8 +155,10 @@ MOD_LOAD(){
 	 * stored entry and the file's contents would be lost on boot.
 	 * Gated on first-load (matches channeldb/tkldb) so /REHASH doesn't
 	 * re-replay and double-insert the stored entries. */
-	if (!metadatadb_next_event){
-		if (!read_metadatadb()){
+	if (!metadatadb_next_event)
+	{
+		if (!read_metadatadb())
+		{
 			char fname[512];
 			snprintf(fname, sizeof(fname), "%s.corrupt", cfg.database);
 			if (rename(cfg.database, fname) == 0)
@@ -159,16 +171,20 @@ MOD_LOAD(){
 
 	Client *acptr;
 
-	list_for_each_entry(acptr, &client_list, client_node){ /* process all users that are already connected */
-		if(!IsUser(acptr)) continue;
+	list_for_each_entry(acptr, &client_list, client_node)
+	{ /* process all users that are already connected */
+		if (!IsUser(acptr))
+			continue;
 		account_login(acptr, NULL);
 	}
 	return MOD_SUCCESS;
 }
 
-void free_metadata_storage(void){
+void free_metadata_storage(void)
+{
 	struct metadata_storage *curr = metadata_storage, *prev = NULL;
-	while(curr){
+	while (curr)
+	{
 		prev = curr;
 		curr = curr->next;
 		safe_free(prev->account);
@@ -178,7 +194,8 @@ void free_metadata_storage(void){
 	}
 }
 
-MOD_UNLOAD(){
+MOD_UNLOAD()
+{
 	SavePersistentLong(modinfo, metadatadb_next_event);
 	write_metadatadb();
 	freecfg();
@@ -186,14 +203,16 @@ MOD_UNLOAD(){
 	return MOD_SUCCESS;
 }
 
-void setcfg(void){
+void setcfg(void)
+{
 	/* Default: $PERMDATADIR/metadata.db */
 	safe_strdup(cfg.database, "metadata.db");
 	convert_to_absolute_path(&cfg.database, PERMDATADIR);
 	cfg.expire_after = 365; /* a year */
 }
 
-void freecfg(void){
+void freecfg(void)
+{
 	safe_free(cfg.database);
 }
 
@@ -204,7 +223,8 @@ metadata-db {
 };
 */
 
-int metadatadb_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs){
+int metadatadb_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
+{
 	int errors = 0;
 	ConfigEntry *cep;
 	int i;
@@ -217,24 +237,30 @@ int metadatadb_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs){
 
 	for (cep = ce->items; cep; cep = cep->next)
 	{
-		if (!cep->value) {
+		if (!cep->value)
+		{
 			config_error("%s:%i: blank %s::%s without value", cep->file->filename, cep->line_number, MYCONF, cep->name);
 			errors++;
 			continue;
 		}
-		if (!strcmp(cep->name, "database")) {
+		if (!strcmp(cep->name, "database"))
+		{
 			convert_to_absolute_path(&cep->value, PERMDATADIR);
 			continue;
 		}
-		if (!strcmp(cep->name, "expire-after")) {
-			for(i = 0; cep->value[i]; i++) {
-				if(!isdigit(cep->value[i])) {
+		if (!strcmp(cep->name, "expire-after"))
+		{
+			for (i = 0; cep->value[i]; i++)
+			{
+				if (!isdigit(cep->value[i]))
+				{
 					config_error("%s:%i: %s::%s must be an integer between 1 and 1000 (days)", cep->file->filename, cep->line_number, MYCONF, cep->name);
 					errors++;
 					break;
 				}
 			}
-			if(!errors && (atoi(cep->value) < 1 || atoi(cep->value) > 1000)) {
+			if (!errors && (atoi(cep->value) < 1 || atoi(cep->value) > 1000))
+			{
 				config_error("%s:%i: %s::%s must be an integer between 1 and 1000 (days)", cep->file->filename, cep->line_number, MYCONF, cep->name);
 				errors++;
 			}
@@ -248,7 +274,8 @@ int metadatadb_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs){
 	return errors ? -1 : 1;
 }
 
-int metadatadb_configrun(ConfigFile *cf, ConfigEntry *ce, int type){
+int metadatadb_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
+{
 	ConfigEntry *cep;
 
 	if (type != CONFIG_MAIN)
@@ -257,44 +284,54 @@ int metadatadb_configrun(ConfigFile *cf, ConfigEntry *ce, int type){
 	if (!ce || strcmp(ce->name, "metadata-db"))
 		return 0;
 
-	for (cep = ce->items; cep; cep = cep->next){
-		if(!strcmp(cep->name, "database"))
+	for (cep = ce->items; cep; cep = cep->next)
+	{
+		if (!strcmp(cep->name, "database"))
 			safe_strdup(cfg.database, cep->value);
-		if(!strcmp(cep->name, "expire-after"))
+		if (!strcmp(cep->name, "expire-after"))
 			cfg.expire_after = atoi(cep->value);
 	}
 	return 1;
 }
 
-EVENT(write_metadatadb_evt){
+EVENT(write_metadatadb_evt)
+{
 	Client *acptr;
-	list_for_each_entry(acptr, &client_list, client_node){
-		if(!IsUser(acptr)) continue;
-		if(!IsLoggedIn(acptr)) continue;
+	list_for_each_entry(acptr, &client_list, client_node)
+	{
+		if (!IsUser(acptr))
+			continue;
+		if (!IsLoggedIn(acptr))
+			continue;
 		store_metadata_for_user(acptr, 1);
 	}
 	write_metadatadb();
 }
 
-int how_many_metadata_channel(Channel *channel, ModDataInfo *channelmd){
+int how_many_metadata_channel(Channel *channel, ModDataInfo *channelmd)
+{
 	int count = 0;
 	struct metadata *metadata;
-	FOREACH_CHANNEL_METADATA(channel, metadata){
+	FOREACH_CHANNEL_METADATA(channel, metadata)
+	{
 		count++;
 	}
 	return count;
 }
 
-int how_many_metadata_user(Client *client, ModDataInfo *usermd){
+int how_many_metadata_user(Client *client, ModDataInfo *usermd)
+{
 	int count = 0;
 	struct metadata *metadata;
-	FOREACH_USER_METADATA(client, metadata){
+	FOREACH_USER_METADATA(client, metadata)
+	{
 		count++;
 	}
 	return count;
 }
 
-int write_metadatadb(void){
+int write_metadatadb(void)
+{
 	char tmpfname[512];
 	FILE *fd;
 	Channel *channel;
@@ -304,7 +341,8 @@ int write_metadatadb(void){
 
 	ModDataInfo *usermd = findmoddata_byname("metadata_user", MODDATATYPE_CLIENT);
 	ModDataInfo *channelmd = findmoddata_byname("metadata_channel", MODDATATYPE_CHANNEL);
-	if(!usermd || !channelmd){
+	if (!usermd || !channelmd)
+	{
 		unreal_log(ULOG_ERROR, "metadata-db", "METADATA_MODDATA", NULL, "Error obtaining moddata for metadata! Maybe you forgot to load the metadata module?");
 		return 0;
 	}
@@ -312,7 +350,8 @@ int write_metadatadb(void){
 	/* Write to a tempfile first, then rename it if everything succeeded */
 	snprintf(tmpfname, sizeof(tmpfname), "%s.tmp", cfg.database);
 	fd = fopen(tmpfname, "wb");
-	if (!fd){
+	if (!fd)
+	{
 		WARN_WRITE_ERROR(tmpfname);
 		return 0;
 	}
@@ -320,41 +359,46 @@ int write_metadatadb(void){
 	W_SAFE(write_data(fd, &metadatadb_version, sizeof(metadatadb_version)));
 
 	/* First, count +P channel metadata entries */
-	for (channel = channels; channel; channel=channel->nextch)
-		if(has_channel_mode(channel, 'P'))
+	for (channel = channels; channel; channel = channel->nextch)
+		if (has_channel_mode(channel, 'P'))
 			cnt += how_many_metadata_channel(channel, channelmd);
 
 
 	/* ... and stored user entries, then write the count to the database */
 
 	FOREACH_STORED_METADATA(sm)
-		cnt++;
+	cnt++;
 
 	W_SAFE(write_int64(fd, cnt));
 
 	/* now write the actual data */
 
-	for(channel = channels; channel; channel=channel->nextch){
+	for (channel = channels; channel; channel = channel->nextch)
+	{
 		/* We only care about +P (persistent) channels */
-		if(has_channel_mode(channel, 'P')){
-			FOREACH_CHANNEL_METADATA(channel, metadata){
-				if(!write_metadata_entry(fd, tmpfname, metadata, channel->name, 0))
+		if (has_channel_mode(channel, 'P'))
+		{
+			FOREACH_CHANNEL_METADATA(channel, metadata)
+			{
+				if (!write_metadata_entry(fd, tmpfname, metadata, channel->name, 0))
 					return 0;
 			}
 		}
 	}
 
 	metadata = safe_alloc(sizeof(struct metadata)); /* lazy */
-	FOREACH_STORED_METADATA(sm){
+	FOREACH_STORED_METADATA(sm)
+	{
 		metadata->name = sm->name;
 		metadata->value = sm->value;
-		if(!write_metadata_entry(fd, tmpfname, metadata, sm->account, sm->last_seen))
+		if (!write_metadata_entry(fd, tmpfname, metadata, sm->account, sm->last_seen))
 			return 0;
 	}
 	safe_free(metadata);
 
 	/* Everything seems to have gone well, attempt to close and rename the tempfile */
-	if (fclose(fd) != 0){
+	if (fclose(fd) != 0)
+	{
 		WARN_WRITE_ERROR(tmpfname);
 		return 0;
 	}
@@ -363,19 +407,20 @@ int write_metadatadb(void){
 	/* The rename operation cannot be atomic on Windows as it will cause a "file exists" error */
 	unlink(cfg.database);
 #endif
-	if (rename(tmpfname, cfg.database) < 0){
+	if (rename(tmpfname, cfg.database) < 0)
+	{
 		unreal_log(ULOG_ERROR, "metadata-db", "METADATA_SAVE_ERROR", NULL, "Error renaming '$oldname' to '$newname': $error (DATABASE NOT SAVED)",
-			log_data_string("oldname", tmpfname),
-			log_data_string("newname", cfg.database),
-			log_data_string("error", strerror(errno))
-		);
+		           log_data_string("oldname", tmpfname),
+		           log_data_string("newname", cfg.database),
+		           log_data_string("error", strerror(errno)));
 		return 0;
 	}
 
 	return 1;
 }
 
-int write_metadata_entry(FILE *fd, const char *tmpfname, struct metadata *metadata, char *name, time_t last_seen){
+int write_metadata_entry(FILE *fd, const char *tmpfname, struct metadata *metadata, char *name, time_t last_seen)
+{
 	W_SAFE(write_int32(fd, MAGIC_ENTRY_START));
 	/* Owner name */
 	W_SAFE(write_str(fd, name));
@@ -390,36 +435,42 @@ int write_metadata_entry(FILE *fd, const char *tmpfname, struct metadata *metada
 }
 
 #define FreeMetadataEntry() \
- 	do { \
+	do \
+	{ \
 		/* Some of these might be NULL */ \
 		safe_free(name); \
 		safe_free(metadata.name); \
 		safe_free(metadata.value); \
-	} while(0)
+	} while (0)
 
 #define R_SAFE(x) \
-	do { \
-		if (!(x)) { \
+	do \
+	{ \
+		if (!(x)) \
+		{ \
 			config_warn("[metadata-db] Read error from database file '%s' (possible corruption): %s", cfg.database, strerror(errno)); \
 			fclose(fd); \
 			FreeMetadataEntry(); \
 			return 0; \
 		} \
-	} while(0)
+	} while (0)
 
-void store_metadata(char *account, struct metadata *metadata, time_t last_seen){
-	if(TStime() - (cfg.expire_after * 60 * 60 * 24) > last_seen){
+void store_metadata(char *account, struct metadata *metadata, time_t last_seen)
+{
+	if (TStime() - (cfg.expire_after * 60 * 60 * 24) > last_seen)
+	{
 		unreal_log(ULOG_DEBUG, "metadata-db", "METADATA_DEBUG", NULL, "Expiring metadata key $keyname for account $account, last seen $lastseen, current time $now",
-			log_data_string("keyname", metadata->name),
-			log_data_string("account", account),
-			log_data_integer("lastseen", last_seen),
-			log_data_integer("now", TStime())
-		);
+		           log_data_string("keyname", metadata->name),
+		           log_data_string("account", account),
+		           log_data_integer("lastseen", last_seen),
+		           log_data_integer("now", TStime()));
 		return; /* dropping the outdated entry */
 	}
 	struct metadata_storage *prev = NULL, *curr;
-	for(curr = metadata_storage; curr; curr = curr->next){
-		if(!strcmp(curr->account, account) && !strcasecmp(curr->name, metadata->name)){
+	for (curr = metadata_storage; curr; curr = curr->next)
+	{
+		if (!strcmp(curr->account, account) && !strcasecmp(curr->name, metadata->name))
+		{
 			/* we already know this metadata - the user has changed it in the meantime */
 			safe_free(curr->value);
 			curr->value = strdup(metadata->value);
@@ -432,36 +483,44 @@ void store_metadata(char *account, struct metadata *metadata, time_t last_seen){
 	curr->name = strdup(metadata->name);
 	curr->value = strdup(metadata->value);
 	curr->last_seen = last_seen;
-	if(!prev){
+	if (!prev)
+	{
 		metadata_storage = curr;
-	} else {
+	} else
+	{
 		prev->next = curr;
 	}
 }
 
-void send_out_metadata(char *name, char *key, char *value){
+void send_out_metadata(char *name, char *key, char *value)
+{
 	const char *parv[] = {
-		NULL,
-		name,
-		key,
-		"*",
-		value
-	};
+	    NULL,
+	    name,
+	    key,
+	    "*",
+	    value};
 	do_cmd(&me, NULL, "METADATA", 5, parv);
 }
 
-void set_channel_metadata(Channel *channel, struct metadata *metadata){
+void set_channel_metadata(Channel *channel, struct metadata *metadata)
+{
 	send_out_metadata(channel->name, metadata->name, metadata->value);
 }
 
-void set_user_metadata(char *account, struct metadata *metadata, time_t last_seen){
+void set_user_metadata(char *account, struct metadata *metadata, time_t last_seen)
+{
 	/* first, find whether there is a user logged into this account */
 	Client *acptr;
 	int found = 0;
-	list_for_each_entry(acptr, &client_list, client_node){
-		if(!IsUser(acptr)) continue;
-		if(IsLoggedIn(acptr)){
-			if(!strcmp(acptr->user->account, account)){
+	list_for_each_entry(acptr, &client_list, client_node)
+	{
+		if (!IsUser(acptr))
+			continue;
+		if (IsLoggedIn(acptr))
+		{
+			if (!strcmp(acptr->user->account, account))
+			{
 				found = 1;
 				/* may be more than one user with a single account, so no "break" */
 				send_out_metadata(acptr->name, metadata->name, metadata->value);
@@ -469,12 +528,13 @@ void set_user_metadata(char *account, struct metadata *metadata, time_t last_see
 		}
 	}
 
-	if(found)
+	if (found)
 		last_seen = TStime();
 	store_metadata(account, metadata, last_seen);
 }
 
-int read_metadatadb(void){
+int read_metadatadb(void)
+{
 	FILE *fd;
 	uint32_t version;
 	int added = 0;
@@ -494,19 +554,23 @@ int read_metadatadb(void){
 	memset(&metadata, 0, sizeof(metadata));
 
 	fd = fopen(cfg.database, "rb");
-	if (!fd){
-		if (errno == ENOENT){
+	if (!fd)
+	{
+		if (errno == ENOENT)
+		{
 			/* Database does not exist. Could be first boot */
 			config_warn("[metadata-db] No database present at '%s', will start a new one", cfg.database);
 			return 1;
-		} else {
+		} else
+		{
 			config_warn("[metadata-db] Unable to open the database file '%s' for reading: %s", cfg.database, strerror(errno));
 			return 0;
 		}
 	}
 
 	R_SAFE(read_data(fd, &version, sizeof(version)));
-	if (version > metadatadb_version){
+	if (version > metadatadb_version)
+	{
 		config_warn("[metadata-db] Database '%s' has a wrong version: expected it to be <= %u but got %u instead", cfg.database, metadatadb_version, version);
 		fclose(fd);
 		return 0;
@@ -514,14 +578,16 @@ int read_metadatadb(void){
 
 	R_SAFE(read_data(fd, &count, sizeof(count)));
 
-	for (i=1; i <= count; i++){
+	for (i = 1; i <= count; i++)
+	{
 		name = NULL;
 		metadata.name = NULL;
 		metadata.value = NULL;
 		last_seen = 0;
 
 		R_SAFE(read_data(fd, &magic, sizeof(magic)));
-		if (magic != MAGIC_ENTRY_START)		{
+		if (magic != MAGIC_ENTRY_START)
+		{
 			config_error("[metadata-db] Corrupt database (%s) - metadata magic start is 0x%x. Further reading aborted.", cfg.database, magic);
 			break;
 		}
@@ -532,16 +598,19 @@ int read_metadatadb(void){
 		R_SAFE(read_data(fd, &magic, sizeof(magic)));
 
 		/* If we got this far, we can initialize the data with the above */
-		if(*name == '#'){ /* a channel */
+		if (*name == '#')
+		{ /* a channel */
 			channel = make_channel(name);
 			set_channel_metadata(channel, &metadata);
-		} else {
+		} else
+		{
 			set_user_metadata(name, &metadata, last_seen);
 		}
 		FreeMetadataEntry();
 		added++;
 
-		if (magic != MAGIC_ENTRY_END){
+		if (magic != MAGIC_ENTRY_END)
+		{
 			config_error("[metadata-db] Corrupt database (%s) - metadata magic end is 0x%x. Further reading aborted.", cfg.database, magic);
 			break;
 		}
@@ -556,40 +625,44 @@ int read_metadatadb(void){
 #undef FreeMetadataEntry
 #undef R_SAFE
 
-void store_metadata_for_user(Client *client, int remove){ /* client must be logged in */
+void store_metadata_for_user(Client *client, int remove)
+{ /* client must be logged in */
 	struct metadata *metadata;
 	struct metadata_storage *sm, *prev_sm, *next_sm;
 	ModDataInfo *usermd;
 	int found;
 
 	usermd = findmoddata_byname("metadata_user", MODDATATYPE_CLIENT);
-	if(!usermd){
+	if (!usermd)
+	{
 		unreal_log(ULOG_ERROR, "metadata-db", "METADATA_MODDATA", NULL, "Error obtaining moddata for metadata! Maybe you forgot to load the metadata module?");
 		return;
 	}
 
-	FOREACH_USER_METADATA(client, metadata){
+	FOREACH_USER_METADATA(client, metadata)
+	{
 		found = 0;
 		prev_sm = NULL;
-		FOREACH_STORED_METADATA(sm){
+		FOREACH_STORED_METADATA(sm)
+		{
 			prev_sm = sm;
-			if(strcmp(sm->account, client->user->account)) /* other user */
+			if (strcmp(sm->account, client->user->account)) /* other user */
 				continue;
-			if(strcmp(sm->name, metadata->name)) /* key name not matching */
+			if (strcmp(sm->name, metadata->name)) /* key name not matching */
 				continue;
 			/* replace the stored metadata, as the user's one has priority */
 			found = 1;
-			if(strcmp(sm->value, metadata->value)){
+			if (strcmp(sm->value, metadata->value))
+			{
 				unreal_log(ULOG_DEBUG, "metadata-db", "METADATA_DEBUG", NULL, "Replacing key $keyname for user $client",
-					log_data_string("keyname", metadata->name),
-					log_data_client("client", client)
-				);
+				           log_data_string("keyname", metadata->name),
+				           log_data_client("client", client));
 				safe_free(sm->value);
 				sm->value = strdup(metadata->value);
 			}
 			sm->last_seen = TStime();
 		}
-		if(found)
+		if (found)
 			continue;
 		/* save user's metadata to the storage (set something before logging in) */
 		sm = safe_alloc(sizeof(struct metadata_storage));
@@ -598,72 +671,86 @@ void store_metadata_for_user(Client *client, int remove){ /* client must be logg
 		sm->value = strdup(metadata->value);
 		sm->last_seen = TStime();
 		unreal_log(ULOG_DEBUG, "metadata-db", "METADATA_DEBUG", NULL, "Saving key $keyname for user $client",
-			log_data_string("keyname", metadata->name),
-			log_data_client("client", client)
-		);
-		if(!prev_sm){
+		           log_data_string("keyname", metadata->name),
+		           log_data_client("client", client));
+		if (!prev_sm)
+		{
 			metadata_storage = sm;
-		} else {
+		} else
+		{
 			prev_sm->next = sm;
 		}
 	}
 
 	/* remove metadata that the user no longer wants */
-	if(!remove) return;
+	if (!remove)
+		return;
 	sm = metadata_storage;
 	prev_sm = NULL;
-	while(sm){
+	while (sm)
+	{
 		next_sm = sm->next;
-		if(!strcmp(sm->account, client->user->account)){
+		if (!strcmp(sm->account, client->user->account))
+		{
 			found = 0;
-			FOREACH_USER_METADATA(client, metadata){
-				if(!strcmp(sm->name, metadata->name)){
+			FOREACH_USER_METADATA(client, metadata)
+			{
+				if (!strcmp(sm->name, metadata->name))
+				{
 					found = 1;
 					break;
 				}
 			}
-			if(!found){ /* drop from the list */
+			if (!found)
+			{ /* drop from the list */
 				unreal_log(ULOG_DEBUG, "metadata-db", "METADATA_DEBUG", NULL, "Dropping key $keyname for user $client",
-					log_data_string("keyname", sm->name),
-					log_data_client("client", client)
-				);
-				if(prev_sm){
+				           log_data_string("keyname", sm->name),
+				           log_data_client("client", client));
+				if (prev_sm)
+				{
 					prev_sm->next = sm->next;
-				} else {
+				} else
+				{
 					metadata_storage = sm->next;
 				}
 				safe_free(sm->account);
 				safe_free(sm->name);
 				safe_free(sm->value);
 				safe_free(sm);
-			} else {
+			} else
+			{
 				prev_sm = sm;
 			}
-		} else {
+		} else
+		{
 			prev_sm = sm;
 		}
 		sm = next_sm;
 	}
 }
 
-int account_login(Client *client, MessageTag *recv_mtags){
+int account_login(Client *client, MessageTag *recv_mtags)
+{
 	ModDataInfo *usermd;
 	struct metadata_storage *sm;
 
 	usermd = findmoddata_byname("metadata_user", MODDATATYPE_CLIENT);
-	if(!usermd){
+	if (!usermd)
+	{
 		unreal_log(ULOG_ERROR, "metadata-db", "METADATA_MODDATA", NULL, "Error obtaining moddata for metadata! Maybe you forgot to load the metadata module?");
 		return 0;
 	}
-	if(!IsLoggedIn(client)){ /* just logged out, ignoring */
+	if (!IsLoggedIn(client))
+	{ /* just logged out, ignoring */
 		return 0;
 	}
 
 	store_metadata_for_user(client, 0);
 
 	/* set all stored metadata for the user */
-	FOREACH_STORED_METADATA(sm){
-		if(strcmp(sm->account, client->user->account)) /* other user */
+	FOREACH_STORED_METADATA(sm)
+	{
+		if (strcmp(sm->account, client->user->account)) /* other user */
 			continue;
 		send_out_metadata(client->name, sm->name, sm->value);
 		sm->last_seen = TStime();
@@ -671,8 +758,10 @@ int account_login(Client *client, MessageTag *recv_mtags){
 	return 0;
 }
 
-int user_quit(Client *client, MessageTag *mtags, const char *comment){
-	if(!IsUser(client) || !IsLoggedIn(client)) return 0;
+int user_quit(Client *client, MessageTag *mtags, const char *comment)
+{
+	if (!IsUser(client) || !IsLoggedIn(client))
+		return 0;
 	store_metadata_for_user(client, 1);
 	return 0;
 }

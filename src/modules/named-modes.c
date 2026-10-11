@@ -19,11 +19,11 @@
 #include "unrealircd.h"
 
 ModuleHeader MOD_HEADER = {
-	"named-modes",
-	"1.0",
-	"IRCv3 draft/named-modes -- PROP command + RPL_CHMODELIST etc.",
-	"obbyworld Team",
-	"unrealircd-6",
+    "named-modes",
+    "1.0",
+    "IRCv3 draft/named-modes -- PROP command + RPL_CHMODELIST etc.",
+    "obbyworld Team",
+    "unrealircd-6",
 };
 
 #define NAMED_MODES_CAP "draft/named-modes"
@@ -39,9 +39,9 @@ static long CAP_NAMED_MODES = 0L;
 CMD_FUNC(cmd_prop);
 static int named_modes_connect(Client *client, int after_numeric);
 static int named_modes_local_chanmode(Client *client, Channel *channel,
-                                       MessageTag *mtags, const char *modebuf,
-                                       const char *parabuf, time_t sendts,
-                                       int samode, int *destroy_channel);
+                                      MessageTag *mtags, const char *modebuf,
+                                      const char *parabuf, time_t sendts,
+                                      int samode, int *destroy_channel);
 
 static void send_chmodelist(Client *to);
 static void send_umodelist(Client *to);
@@ -75,8 +75,14 @@ MOD_INIT()
 	return MOD_SUCCESS;
 }
 
-MOD_LOAD()  { return MOD_SUCCESS; }
-MOD_UNLOAD(){ return MOD_SUCCESS; }
+MOD_LOAD()
+{
+	return MOD_SUCCESS;
+}
+MOD_UNLOAD()
+{
+	return MOD_SUCCESS;
+}
 
 /* ===================================================================
  * Helpers
@@ -118,11 +124,10 @@ static const struct {
 	const char *name;
 	char letter;
 } extra_chmodes[] = {
-	{ 1, "ban",   'b' },
-	{ 1, "banex", 'e' },
-	{ 1, "invex", 'I' },
-	{ 0, NULL,    0   }
-};
+    {1, "ban", 'b'},
+    {1, "banex", 'e'},
+    {1, "invex", 'I'},
+    {0, NULL, 0}};
 
 /* For the relay path: when a client sends PROP +foo=bar with a vendor
  * prefix (obsidianirc/foo), we accept either form. strip_vendor returns
@@ -273,9 +278,9 @@ static void send_umodelist(Client *to)
  *     -> "PROP #chan +op=alice +op=bob -topiclock"
  * =================================================================== */
 static int named_modes_local_chanmode(Client *client, Channel *channel,
-                                       MessageTag *mtags, const char *modebuf,
-                                       const char *parabuf, time_t sendts,
-                                       int samode, int *destroy_channel)
+                                      MessageTag *mtags, const char *modebuf,
+                                      const char *parabuf, time_t sendts,
+                                      int samode, int *destroy_channel)
 {
 	char propbuf[BUFSIZE];
 	const char *params[64];
@@ -345,20 +350,19 @@ static int named_modes_local_chanmode(Client *client, Channel *channel,
 			else
 				snprintf(buf, sizeof(buf), "%c%s",
 				         what, cm->name);
-		}
-		else if (*p == 'b' || *p == 'e' || *p == 'I')
+		} else if (*p == 'b' || *p == 'e' || *p == 'I')
 		{
 			/* Hardcoded list-mode bridge. Always one param. */
-			const char *name = (*p == 'b') ? "ban"
-			                 : (*p == 'e') ? "banex" : "invex";
+			const char *name = (*p == 'b')   ? "ban"
+			                   : (*p == 'e') ? "banex"
+			                                 : "invex";
 			if (param_idx < n_params)
 				param = params[param_idx++];
 			else
 				continue;
 			snprintf(buf, sizeof(buf), "%c%s=%s",
 			         what, name, param);
-		}
-		else
+		} else
 		{
 			/* Unknown letter -- skip silently rather than
 			 * desync the parameter index. */
@@ -481,13 +485,12 @@ CMD_FUNC(cmd_prop)
 			const char *name;
 			size_t list_offset;   /* offsetof(Channel, banlist) etc. */
 		} listmodes[] = {
-			{ "ban",   offsetof(Channel, banlist)   },
-			{ "banex", offsetof(Channel, exlist)    },
-			{ "invex", offsetof(Channel, invexlist) },
-			/* Future: vendored list-modes register here, e.g.
+		    {"ban", offsetof(Channel, banlist)},
+		    {"banex", offsetof(Channel, exlist)},
+		    {"invex", offsetof(Channel, invexlist)},
+		        /* Future: vendored list-modes register here, e.g.
 			 *   { "obsidianirc/timedban", offsetof(...) }, */
-			{ NULL, 0 }
-		};
+		    {NULL, 0}};
 		const char *name = parv[2];
 		const char *resolved = NULL;
 		Ban *b, *list_head = NULL;
@@ -519,7 +522,7 @@ CMD_FUNC(cmd_prop)
 					{
 						resolved = listmodes[i].name;
 						list_head = *(Ban **)((char *)channel +
-						              listmodes[i].list_offset);
+						                      listmodes[i].list_offset);
 						break;
 					}
 				}
@@ -581,8 +584,7 @@ CMD_FUNC(cmd_prop)
 					nlen = sizeof(namebuf) - 1;
 				memcpy(namebuf, item, nlen);
 				namebuf[nlen] = '\0';
-			}
-			else
+			} else
 			{
 				strlcpy(namebuf, item, sizeof(namebuf));
 			}
@@ -599,9 +601,12 @@ CMD_FUNC(cmd_prop)
 			if (!cm)
 			{
 				char letter = 0;
-				if (!strcmp(namebuf, "ban")) letter = 'b';
-				else if (!strcmp(namebuf, "banex")) letter = 'e';
-				else if (!strcmp(namebuf, "invex")) letter = 'I';
+				if (!strcmp(namebuf, "ban"))
+					letter = 'b';
+				else if (!strcmp(namebuf, "banex"))
+					letter = 'e';
+				else if (!strcmp(namebuf, "invex"))
+					letter = 'I';
 				if (letter)
 				{
 					if (sign != what)
@@ -637,7 +642,7 @@ CMD_FUNC(cmd_prop)
 				 * register name-only param modes). */
 				int cls = prop_classify_chanmode(cm);
 				int mode_change_what =
-					(sign == '+') ? MODE_ADD : MODE_DEL;
+				    (sign == '+') ? MODE_ADD : MODE_DEL;
 				if (cls != 4 || cm->type != CMODE_NORMAL)
 				{
 					sendnumeric(client, ERR_UNKNOWNMODE, '?');
