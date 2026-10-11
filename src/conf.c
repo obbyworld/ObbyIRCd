@@ -337,7 +337,7 @@ int config_detect_duplicate(int *var, ConfigEntry *ce, int *errors)
 	{
 		config_error("%s:%d: Duplicate %s directive",
 		             ce->file->filename, ce->line_number,
-		             ce->name);
+		             config_item_name(ce));
 		(*errors)++;
 		return 1;
 	} else
@@ -7032,7 +7032,7 @@ int _test_ban(ConfigFile *conf, ConfigEntry *ce)
 	int errors = 0;
 	Hook *h;
 	char type = 0;
-	char has_mask = 0, has_action = 0, has_reason = 0;
+	int has_mask = 0, has_action = 0, has_reason = 0;
 
 	if (!ce->value)
 	{
@@ -7092,30 +7092,16 @@ int _test_ban(ConfigFile *conf, ConfigEntry *ce)
 		}
 		if (!strcmp(cep->name, "mask"))
 		{
-			if (has_mask)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "ban::mask");
+			if (config_detect_duplicate(&has_mask, cep, &errors))
 				continue;
-			}
-			has_mask = 1;
 		} else if (!strcmp(cep->name, "reason"))
 		{
-			if (has_reason)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "ban::reason");
+			if (config_detect_duplicate(&has_reason, cep, &errors))
 				continue;
-			}
-			has_reason = 1;
 		} else if (!strcmp(cep->name, "action"))
 		{
-			if (has_action)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "ban::action");
-			}
-			has_action = 1;
+			if (config_detect_duplicate(&has_action, cep, &errors))
+				continue;
 			errors += test_ban_action_config(cep);
 		}
 	}
@@ -8423,7 +8409,7 @@ static int is_set_item_deprecated(ConfigEntry *cep)
 		             cep->file->filename, cep->line_number);
 		config_error("If you insist on using geoip_classic then re-run ./Config, answer "
 		             "'classic' at the GeoIP question and run make install. Note that "
-		             "database updates for 'geoip_classic' will stop somewhere in 2027.");
+		             "database updates for 'geoip_classic' will stop in mid-2027.");
 		return 1;
 	}
 

@@ -1598,6 +1598,8 @@ extern APICallback *APICallbackAdd(Module *module, APICallback *mreq);
 #define HOOKTYPE_CHANMSG_MULTILINE 132
 /** See hooktype_postconf() */
 #define HOOKTYPE_POSTCONF 133
+/** See hooktype_killed_client() */
+#define HOOKTYPE_KILLED_CLIENT 134
 
 
 /* Adding a new hook here?
@@ -2766,11 +2768,21 @@ int hooktype_can_use_nick(Client *client, const char *newnick, const char **reje
  * @param client	The client
  * @param bantype	The ban type, such as: "K-Lined", "G-Lined" or "realname"
  * @param reason	The specified reason
+ * @param tkl		The server ban that caused this, or NULL (eg for realname bans)
  * @param global	Whether the ban is global (1) or for this server only (0)
  * @notes This function is not called on /KILL (which is not a ban).
  * @return The return value is ignored (use return 0)
  */
-int hooktype_banned_client(Client *client, const char *bantype, const char *reason, int global);
+int hooktype_banned_client(Client *client, const char *bantype, const char *reason, TKL *tkl, int global);
+
+/** Called when a local user is killed by /KILL, by a local or remote user or server.
+ * @param client	The client that issued the kill (can be a server)
+ * @param victim	The local user that is killed
+ * @param reason	The kill reason
+ * @notes This is called right before the victim is exited, so all data of the victim is still there.
+ * @return The return value is ignored (use return 0)
+ */
+int hooktype_killed_client(Client *client, Client *victim, const char *reason);
 
 /** Called when a local user calls /MOTD, including on connect
   * @param client	The client
@@ -2922,7 +2934,8 @@ _UNREAL_ERROR(_hook_error_incompatible, "Incompatible hook function. Check argum
 	     ((hooktype == HOOKTYPE_CAN_USE_NICK) && !ValidateHook(hooktype_can_use_nick, func)) || \
 	     ((hooktype == HOOKTYPE_BANNED_CLIENT) && !ValidateHook(hooktype_banned_client, func)) || \
 	     ((hooktype == HOOKTYPE_MOTD) && !ValidateHook(hooktype_motd, func)) || \
-	     ((hooktype == HOOKTYPE_KNOWN_USER_CACHE_CHANGE) && !ValidateHook(hooktype_known_user_cache_change, func))) \
+	     ((hooktype == HOOKTYPE_KNOWN_USER_CACHE_CHANGE) && !ValidateHook(hooktype_known_user_cache_change, func)) || \
+	     ((hooktype == HOOKTYPE_KILLED_CLIENT) && !ValidateHook(hooktype_killed_client, func))) \
 		 _hook_error_incompatible();
 #endif /* GCC_TYPECHECKING */
 
@@ -3103,6 +3116,7 @@ enum EfunctionType {
 	EFUNC_TKL_HIT,
 	EFUNC_REMOVE_CONFIG_TKLS,
 	EFUNC_CONFIG_TKL_HITS_RESTORE,
+	EFUNC_FIND_TKL_SPAMFILTER_BY_ID,
 };
 
 /* Module flags */

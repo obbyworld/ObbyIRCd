@@ -19,6 +19,7 @@ Module *cbl_module = NULL;
 #define CBL_URL                        "https://centralblocklist.unrealircd-api.org/api/v1"
 #define SPAMREPORT_URL                 "https://spamreport.unrealircd-api.org/api/spamreport-v1"
 #define CBL_TRANSFER_TIMEOUT           10
+#define CBL_MAX_REQUEST_SIZE           65536
 #define SPAMREPORT_NUM_REMEMBERED_CMDS 20
 
 #define WEB(client) ((WebRequest *)moddata_local_client(client, webserver_md).ptr)
@@ -75,7 +76,7 @@ ModDataInfo *webserver_md = NULL; /* (external module, looked up) */
 ModDataInfo *websocket_md = NULL; /* (external module, looked up) */
 
 /* Forward declarations */
-int _central_spamreport(Client *client, Client *by, const char *url);
+int _central_spamreport(Client *client, Client *by, const char *source, const char *reason, TKL *spamfilter, NameValuePrioList *details, const char *url);
 int cbl_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
 int cbl_config_posttest(int *errs);
 int cbl_config_run(ConfigFile *cf, ConfigEntry *ce, int type);
@@ -89,6 +90,7 @@ void cbl_cancel_all_transfers(void);
 EVENT(centralblocklist_bundle_requests);
 EVENT(centralblocklist_timeout_evt);
 void cbl_allow(Client *client);
+void send_request_for_clients(json_t *requests, NameList *clientlist);
 void send_request_for_pending_clients(void);
 const char *get_api_key(void);
 void set_tag(Client *client, const char *tag, int value);
@@ -995,48 +997,72 @@ void cbl_mdata_free(ModData *m)
 void send_request_for_pending_clients(void)
 {
 	Client *client, *next;
-	OutgoingWebRequest *w;
-	json_t *j, *requests;
-	NameValuePrioList *headers = NULL;
-	int num;
-	char *json_serialized;
-	CBLTransfer *c;
+	json_t *requests = NULL;
 	NameList *clientlist = NULL;
-
-	num = downloads_in_progress();
-	if (num > cfg.max_downloads)
-	{
-		unreal_log(ULOG_WARNING, "central-blocklist", "CENTRAL_BLOCKLIST_TOO_MANY_CONCURRENT_REQUESTS", NULL,
-		           "Already $num_requests HTTP(S) requests in progress.",
-		           log_data_integer("num_requests", num));
-		return;
-	}
-
-	j = json_object();
-	json_object_set_new(j, "server", json_string_unreal(me.name));
-	json_object_set_new(j, "module_version", json_string_unreal(cbl_module->header->version));
-	json_object_set_new(j, "unrealircd_version", json_string_unreal(VERSIONONLY));
-	requests = json_object();
-	json_object_set_new(j, "requests", requests);
+	char *json_serialized;
+	int num;
+	int size = 0;
 
 	list_for_each_entry_safe(client, next, &unknown_list, lclient_node)
 	{
 		CBLUser *cbl = CBL(client);
 		if (cbl && cbl->request_pending)
 		{
+			if (!requests)
+			{
+				num = downloads_in_progress();
+				if (num > cfg.max_downloads)
+				{
+					unreal_log(ULOG_WARNING, "central-blocklist", "CENTRAL_BLOCKLIST_TOO_MANY_CONCURRENT_REQUESTS", NULL,
+					           "Already $num_requests HTTP(S) requests in progress.",
+					           log_data_integer("num_requests", num));
+					break;
+				}
+				requests = json_object();
+			}
 			// requests[clientid] => ["client"=>["nick"=>"xyz"...etc...
 			json_object_set_new(requests, client->id, json_deep_copy(cbl->handshake));
 
 			cbl->request_pending = 0;
 			cbl->request_sent = TStime();
 			add_name_list(clientlist, client->id);
+
+			json_serialized = json_dumps(cbl->handshake, JSON_COMPACT);
+			if (json_serialized)
+				size += strlen(json_serialized);
+			safe_free(json_serialized);
+			if (size >= CBL_MAX_REQUEST_SIZE)
+			{
+				send_request_for_clients(requests, clientlist);
+				requests = NULL;
+				clientlist = NULL;
+				size = 0;
+			}
 		}
 	}
+
+	if (requests)
+		send_request_for_clients(requests, clientlist);
+}
+
+void send_request_for_clients(json_t *requests, NameList *clientlist)
+{
+	OutgoingWebRequest *w;
+	json_t *j;
+	NameValuePrioList *headers = NULL;
+	char *json_serialized;
+	CBLTransfer *c;
+
+	j = json_object();
+	json_object_set_new(j, "server", json_string_unreal(me.name));
+	json_object_set_new(j, "module_version", json_string_unreal(cbl_module->header->version));
+	json_object_set_new(j, "unrealircd_version", json_string_unreal(VERSIONONLY));
+	json_object_set_new(j, "requests", requests);
 
 	json_serialized = json_dumps(j, JSON_COMPACT);
 	if (!json_serialized)
 	{
-		unreal_log(ULOG_WARNING, "central-blocklist", "CENTRAL_BLOCKLIST_BUG_SERIALIZE", client,
+		unreal_log(ULOG_WARNING, "central-blocklist", "CENTRAL_BLOCKLIST_BUG_SERIALIZE", NULL,
 		           "Unable to serialize JSON request. Weird.");
 		json_decref(j);
 		free_entire_name_list(clientlist);
@@ -1115,11 +1141,13 @@ CMD_OVERRIDE_FUNC(cbl_override_spamreport_gather)
 	CALL_NEXT_COMMAND_OVERRIDE();
 }
 
-int _central_spamreport(Client *client, Client *by, const char *url)
+int _central_spamreport(Client *client, Client *by, const char *source, const char *reason, TKL *spamfilter, NameValuePrioList *details, const char *url)
 {
-	json_t *j, *requests, *data, *cmds, *item, *clientobj;
+	json_t *j, *requests, *data, *cmds, *item, *clientobj, *originobj;
 	OutgoingWebRequest *w;
 	NameValuePrioList *headers = NULL;
+	MessageTag *mtags = NULL, *m;
+	const char *str;
 	int num;
 	char *json_serialized;
 	int i, start;
@@ -1145,13 +1173,29 @@ int _central_spamreport(Client *client, Client *by, const char *url)
 	json_object_set_new(j, "server", json_string_unreal(me.name));
 	json_object_set_new(j, "module_version", json_string_unreal(cbl_module->header->version));
 	json_object_set_new(j, "unrealircd_version", json_string_unreal(VERSIONONLY));
-	if (by)
-		json_object_set_new(j, "reporter", json_string_unreal(by->name));
 	requests = json_object();
 	json_object_set_new(j, "reports", requests);
 
 	data = json_deep_copy(CBL(client)->handshake); /* .. deep copy. */
 	json_object_set_new(requests, client->id, data); /* ..and steal reference */
+
+	originobj = json_object();
+	json_object_set_new(data, "origin", originobj);
+	if (source)
+		json_object_set_new(originobj, "source", json_string_unreal(source));
+	if (by)
+	{
+		mtag_add_issued_by(&mtags, by, NULL);
+		if ((m = find_mtag(mtags, "unrealircd.org/issued-by")))
+			json_object_set_new(originobj, "reporter", json_string_unreal(m->value));
+		free_message_tags(mtags);
+	}
+	if (reason)
+		json_object_set_new(originobj, "reason", json_string_unreal(reason));
+	if ((str = get_nvplist(details, "spamfilter_id")))
+		json_object_set_new(originobj, "spamfilter_id", json_string_unreal(str));
+	if (spamfilter)
+		json_expand_tkl(originobj, "spamfilter", spamfilter, 1);
 
 	/* We add the flood counters here explicitly, because when "client" was created
 	 * earlier there were no or limited flood counts yet (during registration phase).

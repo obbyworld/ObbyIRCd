@@ -116,10 +116,12 @@ TKL *_find_tkl_serverban(int type, const char *usermask, const char *hostmask, i
 TKL *_find_tkl_banexception(int type, const char *usermask, const char *hostmask, int softban);
 TKL *_find_tkl_nameban(int type, const char *name, int hold);
 TKL *_find_tkl_spamfilter(int type, const char *match_string, BanActionValue action, unsigned short target);
+TKL *_find_tkl_spamfilter_by_id(const char *id);
 int _find_tkl_exception(int ban_type, Client *client);
 int _server_ban_parse_mask(Client *client, int add, char type, const char *str, char **usermask_out, char **hostmask_out, int *soft, const char **error);
 int _server_ban_exception_parse_mask(Client *client, int add, const char *bantypes, const char *str, char **usermask_out, char **hostmask_out, int *soft, const char **error);
 static void add_default_exempts(void);
+static void reparse_central_spamfilter_rules(void);
 int parse_extended_server_ban(const char *mask_in, Client *client, char **error, int skip_checking, char *buf1, size_t buf1len, char *buf2, size_t buf2len);
 void _tkl_added(Client *client, TKL *tkl);
 int spamfilter_pre_command(Client *from, MessageTag *mtags, const char *buf);
@@ -262,6 +264,7 @@ MOD_TEST()
 	EfunctionAddPVoid(modinfo->handle, EFUNC_FIND_TKL_BANEXCEPTION, TO_PVOIDFUNC(_find_tkl_banexception));
 	EfunctionAddPVoid(modinfo->handle, EFUNC_FIND_TKL_NAMEBAN, TO_PVOIDFUNC(_find_tkl_nameban));
 	EfunctionAddPVoid(modinfo->handle, EFUNC_FIND_TKL_SPAMFILTER, TO_PVOIDFUNC(_find_tkl_spamfilter));
+	EfunctionAddPVoid(modinfo->handle, EFUNC_FIND_TKL_SPAMFILTER_BY_ID, TO_PVOIDFUNC(_find_tkl_spamfilter_by_id));
 	EfunctionAddVoid(modinfo->handle, EFUNC_TKL_STATS, _tkl_stats);
 	EfunctionAddVoid(modinfo->handle, EFUNC_TKL_SYNCH, _tkl_sync);
 	EfunctionAddVoid(modinfo->handle, EFUNC_CMD_TKL, _cmd_tkl);
@@ -315,6 +318,7 @@ MOD_INIT()
 
 MOD_LOAD()
 {
+	reparse_central_spamfilter_rules();
 	check_special_spamfilters_present();
 	check_set_spamfilter_utf8_setting_changed();
 	_config_tkl_hits_restore();
@@ -353,9 +357,10 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 	ConfigEntry *cep, *cepp;
 	int errors = 0;
 	char *match = NULL, *reason = NULL;
-	char has_target = 0, has_id = 0, has_match = 0, has_rule = 0, has_action = 0, has_reason = 0;
-	char has_bantime = 0, has_match_type = 0, has_input_conversion = 0;
-	char has_show_message_content_on_hit = 0;
+	int has_target = 0, has_id = 0, has_match = 0, has_rule = 0, has_action = 0, has_reason = 0;
+	int has_bantime = 0, has_match_type = 0, has_input_conversion = 0;
+	int has_show_message_content_on_hit = 0;
+	int action_uses_ban_time = 0;
 	char central_spamfilter = 0;
 	int match_type = 0;
 
@@ -368,31 +373,10 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 
 	for (cep = ce->items; cep; cep = cep->next)
 	{
-		if (!strcmp(cep->name, "id"))
+		if (!strcmp(cep->name, "target"))
 		{
-			if (has_id)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::id");
+			if (config_detect_duplicate(&has_target, cep, &errors))
 				continue;
-			}
-			has_id = 1;
-			if (!valid_spamfilter_id(cep->value))
-			{
-				config_error("%s:%i: spamfilter::id invalid: maximum size (%d chars) exceeded "
-				             "or forbidden characters encountered: only A-Z, 0-9 and _ are permitted.",
-				             cep->file->filename, cep->line_number, TKLIDLEN - 1);
-				errors++;
-			}
-		} else if (!strcmp(cep->name, "target"))
-		{
-			if (has_target)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::target");
-				continue;
-			}
-			has_target = 1;
 			if (cep->value)
 			{
 				if (!spamfilter_getconftargets(cep->value))
@@ -422,13 +406,8 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 			continue;
 		} else if (!strcmp(cep->name, "input-conversion"))
 		{
-			if (has_input_conversion)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::input-conversion");
+			if (config_detect_duplicate(&has_input_conversion, cep, &errors))
 				continue;
-			}
-			has_input_conversion = 1;
 			if (cep->value)
 			{
 				if (input_conversion_strtoval(cep->value) < 0)
@@ -458,14 +437,10 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 			continue;
 		} else if (!strcmp(cep->name, "action"))
 		{
-			if (has_action)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::action");
+			if (config_detect_duplicate(&has_action, cep, &errors))
 				continue;
-			}
-			has_action = 1;
 			errors += test_ban_action_config(cep);
+			action_uses_ban_time = ban_action_config_uses_ban_time(cep);
 		} else if (!strcmp(cep->name, "except"))
 		{
 			test_match_block(cf, cep, &errors);
@@ -475,36 +450,32 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 			                   "spamfilter", cep->name);
 			errors++;
 			continue;
+		} else if (!strcmp(cep->name, "id"))
+		{
+			if (config_detect_duplicate(&has_id, cep, &errors))
+				continue;
+			if (!valid_spamfilter_id(cep->value))
+			{
+				config_error("%s:%i: spamfilter::id invalid: maximum size (%d chars) exceeded "
+				             "or forbidden characters encountered: only A-Z, 0-9 and _ are permitted.",
+				             cep->file->filename, cep->line_number, TKLIDLEN - 1);
+				errors++;
+			}
 		} else if (!strcmp(cep->name, "reason"))
 		{
-			if (has_reason)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::reason");
+			if (config_detect_duplicate(&has_reason, cep, &errors))
 				continue;
-			}
-			has_reason = 1;
 			reason = cep->value;
 		} else if (!strcmp(cep->name, "match") || !strcmp(cep->name, "match-string"))
 		{
-			if (has_match)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::match-string");
+			if (config_detect_duplicate(&has_match, cep, &errors))
 				continue;
-			}
-			has_match = 1;
 			match = cep->value;
 		} else if (!strcmp(cep->name, "rule"))
 		{
 			int val;
-			if (has_rule)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::rule");
+			if (config_detect_duplicate(&has_rule, cep, &errors))
 				continue;
-			}
-			has_rule = 1;
 			if ((val = crule_test(cep->value)))
 			{
 				config_error("%s:%i: spamfilter::rule contains an invalid expression: %s",
@@ -515,21 +486,12 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 			}
 		} else if (!strcmp(cep->name, "ban-time"))
 		{
-			if (has_bantime)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::ban-time");
+			if (config_detect_duplicate(&has_bantime, cep, &errors))
 				continue;
-			}
-			has_bantime = 1;
 		} else if (!strcmp(cep->name, "match-type"))
 		{
-			if (has_match_type)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::match-type");
+			if (config_detect_duplicate(&has_match_type, cep, &errors))
 				continue;
-			}
 			if (!strcasecmp(cep->value, "posix"))
 			{
 				config_error("%s:%i: this spamfilter uses match-type 'posix' which is no longer supported. "
@@ -550,16 +512,10 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 				errors++;
 				continue;
 			}
-			has_match_type = 1;
 		} else if (!strcmp(cep->name, "show-message-content-on-hit"))
 		{
-			if (has_show_message_content_on_hit)
-			{
-				config_warn_duplicate(cep->file->filename,
-				                      cep->line_number, "spamfilter::show-message-content-on-hit");
+			if (config_detect_duplicate(&has_show_message_content_on_hit, cep, &errors))
 				continue;
-			}
-			has_show_message_content_on_hit = 1;
 			if (!spamfilter_show_message_content_on_hit_strtoval(cep->value))
 			{
 				config_error("%s:%i: spamfilter::show-message-content-on-hit: unknown value '%s'",
@@ -651,6 +607,13 @@ int tkl_config_test_spamfilter(ConfigFile *cf, ConfigEntry *ce, int type, int *e
 	if (central_spamfilter && !has_reason)
 	{
 		config_error("%s:%i: central spamfilter encountered without 'reason', rejected.",
+		             ce->file->filename, ce->line_number);
+		errors++;
+	}
+
+	if (central_spamfilter && action_uses_ban_time && !has_bantime)
+	{
+		config_error("%s:%i: central spamfilter with a ban action encountered without 'ban-time', rejected.",
 		             ce->file->filename, ce->line_number);
 		errors++;
 	}
@@ -1567,7 +1530,7 @@ int tkl_ip_change(Client *client, const char *oldip)
 	if ((tkl = find_tkline_match_zap(client)))
 	{
 		tkl_hit(client, tkl);
-		banned_client(client, "Z-Lined", tkl->ptr.serverban->reason, tkl->id, (tkl->type & TKL_GLOBAL) ? 1 : 0, NO_EXIT_CLIENT);
+		banned_client(client, "Z-Lined", tkl->ptr.serverban->reason, tkl, (tkl->type & TKL_GLOBAL) ? 1 : 0, NO_EXIT_CLIENT);
 	}
 	return 0;
 }
@@ -1578,7 +1541,7 @@ int tkl_accept(Client *client)
 	if ((tkl = find_tkline_match_zap(client)))
 	{
 		tkl_hit(client, tkl);
-		banned_client(client, "Z-Lined", tkl->ptr.serverban->reason, tkl->id, (tkl->type & TKL_GLOBAL) ? 1 : 0, NO_EXIT_CLIENT);
+		banned_client(client, "Z-Lined", tkl->ptr.serverban->reason, tkl, (tkl->type & TKL_GLOBAL) ? 1 : 0, NO_EXIT_CLIENT);
 		return 2; // TODO: HOOK_DENY_ALWAYS;
 	}
 	return 0;
@@ -3700,6 +3663,51 @@ void _remove_config_tkls(int flag)
 	}
 }
 
+/** Re-parse the crules of the central spamfilters.
+ * A REHASH does not reload central spamfilters, which have their own (re)load
+ * timing whenever the feed gets refreshed. However, a REHASH does reload the
+ * crule module, which means all our pointers in spamfilter->rule and in
+ * spamfilter->except->rule are now invalid.
+ * In this function we simply re-parse all central spamfilter rules.
+ *
+ * (Theoretically this can mean that a 'rule' no longer parses, even though
+ *  it parsed fine before. If that happens then we remove the TKL entry.)
+ */
+static void reparse_central_spamfilter_rules(void)
+{
+	TKL *tkl, *tkl_next;
+	Spamfilter *s;
+
+	for (tkl = tklines[tkl_hash('F')]; tkl; tkl = tkl_next)
+	{
+		int failed = 0;
+		tkl_next = tkl->next;
+		if (!(tkl->flags & TKL_FLAG_CENTRAL_SPAMFILTER))
+			continue;
+		s = tkl->ptr.spamfilter;
+		if (s->prettyrule)
+		{
+			safe_crule_free(s->rule);
+			if (!(s->rule = crule_parse(s->prettyrule)))
+				failed = 1;
+		}
+		if (s->except && s->except->prettyrule)
+		{
+			safe_crule_free(s->except->rule);
+			if (!(s->except->rule = crule_parse(s->except->prettyrule)))
+				failed = 1;
+		}
+		if (s->except && s->except->exclude_prettyrule)
+		{
+			safe_crule_free(s->except->exclude_rule);
+			if (!(s->except->exclude_rule = crule_parse(s->except->exclude_prettyrule)))
+				failed = 1;
+		}
+		if (failed)
+			tkl_del_line(tkl);
+	}
+}
+
 /** Delete a TKL entry from the list and free it.
  * @param tkl The TKL entry.
  */
@@ -4136,15 +4144,15 @@ int _find_tkline_match(Client *client, int skip_soft)
 		ircstats.is_ref++;
 		tkl_hit(client, tkl);
 		if (tkl->type & TKL_GLOBAL)
-			banned_client(client, "G-Lined", tkl->ptr.serverban->reason, tkl->id, 1, 0);
+			banned_client(client, "G-Lined", tkl->ptr.serverban->reason, tkl, 1, 0);
 		else
-			banned_client(client, "K-Lined", tkl->ptr.serverban->reason, tkl->id, 0, 0);
+			banned_client(client, "K-Lined", tkl->ptr.serverban->reason, tkl, 0, 0);
 		return 1; /* killed */
 	} else if (tkl->type & TKL_ZAP)
 	{
 		ircstats.is_ref++;
 		tkl_hit(client, tkl);
-		banned_client(client, "Z-Lined", tkl->ptr.serverban->reason, tkl->id, (tkl->type & TKL_GLOBAL) ? 1 : 0, 0);
+		banned_client(client, "Z-Lined", tkl->ptr.serverban->reason, tkl, (tkl->type & TKL_GLOBAL) ? 1 : 0, 0);
 		return 1; /* killed */
 	}
 
@@ -4942,6 +4950,21 @@ TKL *_find_tkl_spamfilter(int type, const char *match_string, BanActionValue act
 	return NULL; /* Not found */
 }
 
+/** Find a spamfilter by id. Returns NULL on no match. */
+TKL *_find_tkl_spamfilter_by_id(const char *id)
+{
+	TKL *tkl;
+
+	if (BadPtr(id))
+		return NULL;
+
+	for (tkl = tklines[tkl_hash('F')]; tkl; tkl = tkl->next)
+		if (!strcasecmp(tkl->id, id))
+			return tkl;
+
+	return NULL;
+}
+
 /** Send a notice to opers about the TKL that is being added */
 void _sendnotice_tkl_add(TKL *tkl)
 {
@@ -5683,7 +5706,7 @@ void ban_action_run_all_sets_and_stops(Client *client, BanAction *action, int *s
  * @note Be sure to check IsDead(client) if return value is 1 and you are
  *       considering to continue processing.
  */
-static int take_action_ex(Client *client, BanAction *actions, const char *reason, long duration, int take_action_flags, int *stopped, const char *spamfilter_id);
+static int take_action_ex(Client *client, BanAction *actions, const char *reason, long duration, int take_action_flags, int *stopped, TKL *spamfilter);
 
 int _take_action(Client *client, BanAction *actions, const char *reason, long duration, int take_action_flags, int *stopped)
 {
@@ -5694,20 +5717,41 @@ int _take_action(Client *client, BanAction *actions, const char *reason, long du
  * *LINE/SHUN it creates, for the gline->spamfilter trace. Kept internal so the public
  * take_action() efunc stays free of this spamfilter-specific concept.
  */
-static int take_action_ex(Client *client, BanAction *actions, const char *reason, long duration, int take_action_flags, int *stopped, const char *spamfilter_id)
+static int take_action_ex(Client *client, BanAction *actions, const char *reason, long duration, int take_action_flags, int *stopped, TKL *spamfilter)
 {
 	BanAction *action;
 	int previous_highest = 0;
 	int highest = 0;
+	NameValuePrioList *details = NULL;
+	int reported_to_all = 0;
+	int auto_reported = 0;
 
 	if (stopped)
 		*stopped = 0;
+
+	if (!MyConnect(client))
+	{
+		unreal_log(ULOG_ERROR, "tkl", "BUG_TAKE_ACTION_REMOTE_CLIENT", client,
+		           "[BUG] take_action() called for remote client $client.details. This should never happen.");
+		return 0;
+	}
 
 	for (action = actions; action; action = action->next)
 	{
 		/* If this is a soft action and the user is logged in, then the ban does not apply. */
 		if (IsSoftBanAction(action->action) && IsLoggedIn(client))
 			return 0;
+
+		/* Spamfilter auto-report: needs to happen before the user is disconnected */
+		if (spamfilter && !auto_reported && !reported_to_all && banact_disconnects(action->action) &&
+		    !(take_action_flags & TAKE_ACTION_SIMULATE_USER_ACTION))
+		{
+			if (*spamfilter->id)
+				add_nvplist(&details, 0, "spamfilter_id", spamfilter->id);
+			spamreport(client, client->ip, details, NULL, NULL, "spamfilter", reason, spamfilter, SPAMREPORT_FLAG_AUTO);
+			safe_free_nvplist(details);
+			auto_reported = 1;
+		}
 
 		previous_highest = highest;
 		if ((action->action > highest) && (action->action != BAN_ACT_SET) && (action->action != BAN_ACT_REPORT))
@@ -5770,7 +5814,7 @@ static int take_action_ex(Client *client, BanAction *actions, const char *reason
 				tkllayer[7] = mo2;
 				tkllayer[8] = reason;
 				{
-					MessageTag *m = tkl_spamfilter_id_mtag(spamfilter_id); /* NULL unless set by a spamfilter */
+					MessageTag *m = tkl_spamfilter_id_mtag(spamfilter ? spamfilter->id : NULL); /* NULL unless set by a spamfilter */
 					cmd_tkl(NULL, &me, m, 9, tkllayer);
 					safe_free_message_tags(m);
 				}
@@ -5780,11 +5824,14 @@ static int take_action_ex(Client *client, BanAction *actions, const char *reason
 					find_shun(client);
 					break;
 				} /* else.. */
+				if (reported_to_all || auto_reported)
+					client->flags |= CLIENT_FLAG_SKIP_BAN_SPAMREPORT;
 				if (!find_tkline_match(client, 0))
 				{
 					/* Not banned! revert the return value that we had in mind... */
 					highest = previous_highest;
 				}
+				client->flags &= ~CLIENT_FLAG_SKIP_BAN_SPAMREPORT;
 				break;
 			}
 			case BAN_ACT_SOFT_KILL:
@@ -5808,7 +5855,12 @@ static int take_action_ex(Client *client, BanAction *actions, const char *reason
 			case BAN_ACT_REPORT:
 				if (take_action_flags & TAKE_ACTION_SIMULATE_USER_ACTION)
 					break;
-				spamreport(client, client->ip, NULL, action->var, NULL);
+				if (spamfilter && *spamfilter->id)
+					add_nvplist(&details, 0, "spamfilter_id", spamfilter->id);
+				spamreport(client, client->ip, details, action->var, NULL, spamfilter ? "spamfilter" : NULL, reason, spamfilter, 0);
+				safe_free_nvplist(details);
+				if (!action->var)
+					reported_to_all = 1;
 				break;
 			case BAN_ACT_SET:
 				if (!(take_action_flags & TAKE_ACTION_SKIP_SET))
@@ -6158,9 +6210,11 @@ void _run_deferred_rule_only_spamfilters(Client *client)
 
 	if (winner_tkl && !match_spamfilter_exempt(winner_tkl, user_is_exempt_general, user_is_exempt_central))
 	{
-		char *reason = unreal_decodespace(winner_tkl->ptr.spamfilter->tkl_reason);
+		char reason[512];
+
+		unreal_decodespace_r(winner_tkl->ptr.spamfilter->tkl_reason, reason, sizeof(reason));
 		take_action_ex(client, winner_tkl->ptr.spamfilter->action, reason,
-		               winner_tkl->ptr.spamfilter->tkl_duration, TAKE_ACTION_SKIP_SET, NULL, winner_tkl->id);
+		               winner_tkl->ptr.spamfilter->tkl_duration, TAKE_ACTION_SKIP_SET, NULL, winner_tkl);
 	}
 }
 
@@ -6182,7 +6236,7 @@ int _match_spamfilter(Client *client, const char *str_in, int target, const char
 	const char *str_deconfused = NULL;
 	char deconfused[8192];
 	int ret = -1;
-	char *reason = NULL;
+	char reason[512];
 #ifdef SPAMFILTER_DETECTSLOW
 	struct rusage rnow, rprev;
 	long ms_past;
@@ -6365,8 +6419,8 @@ int _match_spamfilter(Client *client, const char *str_in, int target, const char
 		return 0;
 
 	/* Spamfilter matched */
-	reason = unreal_decodespace(tkl->ptr.spamfilter->tkl_reason);
-	ret = take_action_ex(client, tkl->ptr.spamfilter->action, reason, tkl->ptr.spamfilter->tkl_duration, TAKE_ACTION_SKIP_SET, NULL, tkl->id);
+	unreal_decodespace_r(tkl->ptr.spamfilter->tkl_reason, reason, sizeof(reason));
+	ret = take_action_ex(client, tkl->ptr.spamfilter->action, reason, tkl->ptr.spamfilter->tkl_duration, TAKE_ACTION_SKIP_SET, NULL, tkl);
 	if (!IsDead(client))
 	{
 		if ((ret == BAN_ACT_BLOCK) || (ret == BAN_ACT_SOFT_BLOCK))

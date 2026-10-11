@@ -69,38 +69,40 @@ static const char *short_weekdays[7] = {
 };
 
 typedef struct {
-	int value;   /** Unique integer value of item */
-	char character;  /** Unique character assigned to item */
-	char *name;   /** Name of item */
-	char config_only;
+	int value;          /**< Unique integer value of item */
+	char character;     /**< Unique character assigned to item */
+	char *name;         /**< Name of item */
+	char config_only;   /**< Action only settable through config (not over S2S TKL)*/
+	char disconnects;   /**< disconnects the user */
+	char uses_ban_time; /**< uses ::ban-time */
 } BanActTable;
 
 /* clang-format off */
 static BanActTable banacttable[] = {
-	{ BAN_ACT_KILL,		'K',	"kill",			0 },
-	{ BAN_ACT_SOFT_KILL,	'i',	"soft-kill",		0 },
-	{ BAN_ACT_TEMPSHUN,	'S',	"tempshun",		0 },
-	{ BAN_ACT_SOFT_TEMPSHUN,'T',	"soft-tempshun",	0 },
-	{ BAN_ACT_SHUN,		's',	"shun",			0 },
-	{ BAN_ACT_SOFT_SHUN,	'H',	"soft-shun",		0 },
-	{ BAN_ACT_KLINE,	'k',	"kline",		0 },
-	{ BAN_ACT_SOFT_KLINE,	'I',	"soft-kline",		0 },
-	{ BAN_ACT_ZLINE,	'z',	"zline",		0 },
-	{ BAN_ACT_GLINE,	'g',	"gline",		0 },
-	{ BAN_ACT_SOFT_GLINE,	'G',	"soft-gline",		0 },
-	{ BAN_ACT_GZLINE,	'Z',	"gzline",		0 },
-	{ BAN_ACT_BLOCK,	'b',	"block",		0 },
-	{ BAN_ACT_SOFT_BLOCK,	'B',	"soft-block",		0 },
-	{ BAN_ACT_DCCBLOCK,	'd',	"dccblock",		0 },
-	{ BAN_ACT_SOFT_DCCBLOCK,'D',	"soft-dccblock",	0 },
-	{ BAN_ACT_VIRUSCHAN,	'v',	"viruschan",		0 },
-	{ BAN_ACT_SOFT_VIRUSCHAN,'V',	"soft-viruschan",	0 },
-	{ BAN_ACT_WARN,		'w',	"warn",			0 },
-	{ BAN_ACT_SOFT_WARN,	'W',	"soft-warn",		0 },
-	{ BAN_ACT_SET,		'1',	"set",			1 },
-	{ BAN_ACT_REPORT,	'r',	"report",		1 },
-	{ BAN_ACT_STOP,		'0',	"stop",			1 },
-	{ 0, 0, 0, 0 }
+	{ BAN_ACT_GZLINE,		'Z',	"gzline",		0, 1, 1 },
+	{ BAN_ACT_GLINE,		'g',	"gline",		0, 1, 1 },
+	{ BAN_ACT_SOFT_GLINE,		'G',	"soft-gline",		0, 1, 1 },
+	{ BAN_ACT_ZLINE,		'z',	"zline",		0, 1, 1 },
+	{ BAN_ACT_KLINE,		'k',	"kline",		0, 1, 1 },
+	{ BAN_ACT_SOFT_KLINE,		'I',	"soft-kline",		0, 1, 1 },
+	{ BAN_ACT_SHUN,			's',	"shun",			0, 0, 1 },
+	{ BAN_ACT_SOFT_SHUN,		'H',	"soft-shun",		0, 0, 1 },
+	{ BAN_ACT_KILL,			'K',	"kill",			0, 1, 0 },
+	{ BAN_ACT_SOFT_KILL,		'i',	"soft-kill",		0, 1, 0 },
+	{ BAN_ACT_TEMPSHUN,		'S',	"tempshun",		0, 0, 0 },
+	{ BAN_ACT_SOFT_TEMPSHUN,	'T',	"soft-tempshun",	0, 0, 0 },
+	{ BAN_ACT_VIRUSCHAN,		'v',	"viruschan",		0, 0, 0 },
+	{ BAN_ACT_SOFT_VIRUSCHAN,	'V',	"soft-viruschan",	0, 0, 0 },
+	{ BAN_ACT_DCCBLOCK,		'd',	"dccblock",		0, 0, 0 },
+	{ BAN_ACT_SOFT_DCCBLOCK,	'D',	"soft-dccblock",	0, 0, 0 },
+	{ BAN_ACT_BLOCK,		'b',	"block",		0, 0, 0 },
+	{ BAN_ACT_SOFT_BLOCK,		'B',	"soft-block",		0, 0, 0 },
+	{ BAN_ACT_WARN,			'w',	"warn",			0, 0, 0 },
+	{ BAN_ACT_SOFT_WARN,		'W',	"soft-warn",		0, 0, 0 },
+	{ BAN_ACT_REPORT,		'r',	"report",		1, 0, 0 },
+	{ BAN_ACT_SET,			'1',	"set",			1, 0, 0 },
+	{ BAN_ACT_STOP,			'0',	"stop",			1, 0, 0 },
+	{ 0, 0, 0, 0, 0, 0 }
 };
 /* clang-format on */
 
@@ -675,12 +677,27 @@ int test_ban_action_config(ConfigEntry *ce)
 {
 	ConfigEntry *cep;
 	int errors = 0;
+	BanActionValue action;
+	const char *disconnect_action = NULL;
 
 	if (ce->items && !ce->value)
 	{
 		/* action { xxx; } */
 		for (cep = ce->items; cep; cep = cep->next)
+		{
 			errors += test_ban_action_config_helper(cep, cep->name, cep->value);
+			action = banact_stringtoval(cep->name);
+			if (disconnect_action && ((action == BAN_ACT_REPORT) || (action == BAN_ACT_SET)))
+			{
+				config_error("%s:%d: action '%s' must come BEFORE action '%s'. "
+				             "You cannot use '%s' on a user that is already disconnected.",
+				             cep->file->filename, cep->line_number, cep->name,
+				             disconnect_action, cep->name);
+				errors++;
+			}
+			if (banact_disconnects(action) && !disconnect_action)
+				disconnect_action = cep->name;
+		}
 	} else if (!ce->value)
 	{
 		config_error("%s:%d: action has no value", ce->file->filename, ce->line_number);
@@ -692,6 +709,19 @@ int test_ban_action_config(ConfigEntry *ce)
 	}
 
 	return errors;
+}
+
+/** Returns 1 if any action item places a ban (and thus possibly requiring ::ban-time) */
+int ban_action_config_uses_ban_time(ConfigEntry *ce)
+{
+	ConfigEntry *cep;
+
+	if (ce->value)
+		return banact_uses_ban_time(banact_stringtoval(ce->value));
+	for (cep = ce->items; cep; cep = cep->next)
+		if (banact_uses_ban_time(banact_stringtoval(cep->name)))
+			return 1;
+	return 0;
 }
 
 BanAction *parse_ban_action_config_helper(const char *name, const char *value)
@@ -767,6 +797,28 @@ int banact_config_only(BanActionValue action)
 	for (b = &banacttable[0]; b->value; b++)
 		if (b->value == action)
 			return b->config_only;
+	return 0;
+}
+
+/** Return 1 if this ban action disconnects the user, like BAN_ACT_KILL or BAN_ACT_GLINE */
+int banact_disconnects(BanActionValue action)
+{
+	BanActTable *b;
+
+	for (b = &banacttable[0]; b->value; b++)
+		if (b->value == action)
+			return b->disconnects;
+	return 0;
+}
+
+/** Return 1 if this ban action places a ban (and thus uses ban-time), like BAN_ACT_GLINE */
+int banact_uses_ban_time(BanActionValue action)
+{
+	BanActTable *b;
+
+	for (b = &banacttable[0]; b->value; b++)
+		if (b->value == action)
+			return b->uses_ban_time;
 	return 0;
 }
 
@@ -987,10 +1039,20 @@ char *spamfilter_target_inttostring(int v)
  */
 char *unreal_decodespace(const char *s)
 {
-	const char *i;
-	static char buf[512], *o;
+	static char buf[512];
 
-	for (i = s, o = buf; (*i) && (o < buf + 510); i++)
+	return unreal_decodespace_r(s, buf, sizeof(buf));
+}
+
+/** Replace underscores back to the space character, writing the result to 'buf'.
+ * This is used for the spamfilter reason.
+ */
+char *unreal_decodespace_r(const char *s, char *buf, size_t buflen)
+{
+	const char *i;
+	char *o;
+
+	for (i = s, o = buf; (*i) && (o < buf + buflen - 1); i++)
 		if (*i == '_')
 		{
 			if (i[1] != '_')
@@ -1011,13 +1073,31 @@ char *unreal_decodespace(const char *s)
  */
 char *unreal_encodespace(const char *s)
 {
+	static char buf[512];
+
+	return unreal_encodespace_r(s, buf, sizeof(buf));
+}
+
+/** Replace spaces to underscore characters, writing the result to 'buf'.
+ * This is used for the spamfilter reason.
+ */
+char *unreal_encodespace_r(const char *s, char *buf, size_t buflen)
+{
 	const char *i;
-	static char buf[512], *o;
+	char *o;
+
+	/* Always initialize the buffer, even for the NULL case */
+	*buf = '\0';
 
 	if (!s)
 		return NULL; /* NULL in = NULL out */
 
-	for (i = s, o = buf; (*i) && (o < buf + 509); i++)
+	/* You would normally expect "buflen - 2" here but that
+	 * would write up to 511 characters for a typical 512 buffer.
+	 * In S2S we cut off at 510, so we use "buflen - 3" to
+	 * handle this typical case.
+	 */
+	for (i = s, o = buf; (*i) && (o < buf + buflen - 3); i++)
 	{
 		if (*i == ' ')
 			*o++ = '_';
@@ -1474,7 +1554,7 @@ int is_silenced_default_handler(Client *client, Client *acptr)
 	return 0;
 }
 
-int spamreport_default_handler(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by)
+int spamreport_default_handler(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by, const char *source, const char *reason, TKL *spamfilter, int flags)
 {
 	return -1;
 }
@@ -1629,7 +1709,7 @@ const char *get_central_api_key_default_handler(void)
 	return NULL;
 }
 
-int central_spamreport_default_handler(Client *target, Client *by, const char *url)
+int central_spamreport_default_handler(Client *target, Client *by, const char *source, const char *reason, TKL *spamfilter, NameValuePrioList *details, const char *url)
 {
 	return 0;
 }

@@ -51,11 +51,13 @@ fi
 
 if [ "$QUICK" = "1" -a "$GEOIP" = "classic" ]; then
 	echo ""
-	echo "WARNING: You are using GeoIP engine 'classic', which is being phased out"
-	echo "         and will stop receiving database updates somewhere in 2027."
-	echo "         Please consider switching to 'mmdb'."
+	echo "WARNING: You were using GeoIP engine 'classic', which is being phased out"
+	echo "         and will stop receiving database updates in mid-2027."
+	echo "         You are now automatically SWITCHED OVER to 'mmdb'."
+	echo "         If that is not what you want, then run ./Config manually."
 	echo ""
 	echo "(Sleeping 10 seconds so you can read this message...)"
+	GEOIP="mmdb"
 	sleep 10
 fi
 
@@ -300,6 +302,31 @@ else
 	n="-n"
 fi
 
+# Check for gmake early (and set $MAKE if empty, as we need it later)..
+if [ "$MAKE" = "" ]; then
+	MAKE="make"
+fi
+if ! $MAKE --version 2>&1|grep -q "GNU Make"; then
+	# So $MAKE is not GNU make, but do we have gmake?
+	if gmake --version 2>&1|grep -q "GNU Make"; then
+		# Great, use that one!
+		MAKE="gmake"
+	else
+		# Both $MAKE and gmake are not GNU make, do we have a working $MAKE at all?
+		if command -v "$MAKE" 1>/dev/null 2>&1; then
+			echo "Your system has 'make' but ObbyIRCd requires GNU Make ('gmake')"
+			echo "Please install 'gmake' "
+			echo "eg 'pkg install gmake' on FreeBSD and 'pkg_add gmake' on OpenBSD."
+			exit 1
+		else
+			echo "Your system does not have the required tools installed to build ObbyIRCd."
+			echo "Please check https://www.unrealircd.org/docs/Installing_from_source"
+			echo "and install the required tools listed under 'Prerequisites'."
+			echo "After that, you can run ./Config again"
+			exit 1
+		fi
+	fi
+fi
 
 #parse arguments
 IMPORTEDSETTINGS=""
@@ -346,34 +373,6 @@ if [ "`id -u`" = "0" ]; then
 	echo "See https://www.unrealircd.org/docs/Do_not_run_as_root"
 	exit
 fi
-
-# Check for gmake early...
-if [ "$MAKE" = "" ]; then
-	MAKE="make"
-fi
-
-if ! $MAKE --version 2>&1|grep -q "GNU Make"; then
-	# So $MAKE is not GNU make, but do we have gmake?
-	if gmake --version 2>&1|grep -q "GNU Make"; then
-		# Great, use that one!
-		MAKE="gmake"
-	else
-		# Both $MAKE and gmake are not GNU make, do we have a working $MAKE at all?
-		if command -v "$MAKE" 1>/dev/null 2>&1; then
-			echo "Your system has 'make' but ObbyIRCd requires GNU Make ('gmake')"
-			echo "Please install 'gmake' "
-			echo "eg 'pkg install gmake' on FreeBSD and 'pkg_add gmake' on OpenBSD."
-			exit 1
-		else
-			echo "Your system does not have the required tools installed to build ObbyIRCd."
-			echo "Please check https://www.unrealircd.org/docs/Installing_from_source"
-			echo "and install the required tools listed under 'Prerequisites'."
-			echo "After that, you can run ./Config again"
-			exit 1
-		fi
-	fi
-fi
-
 
 clear
 
@@ -800,7 +799,7 @@ while [ -z "$TEST" ] ; do
 	echo "   mmdb: This uses the built-in mmdb library. It is the new default geoip engine."
 	echo "         It receives automatic updates."
 	echo "classic: This is the classic geoip engine. It is DEPRECATED."
-	echo "         Somewhere in 2027 we will stop with database updates for 'classic'."
+	echo "         In mid-2027 we will stop database updates for 'classic'."
 	echo "   none: Don't build classic, and load neither classic nor mmdb by default."
 	echo "Choose one of: mmdb, classic, none"
 	echo $n "[$TEST] -> $c"
