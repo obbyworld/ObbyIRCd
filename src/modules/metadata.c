@@ -1170,18 +1170,19 @@ int metadata_key_valid(const char *key)
 }
 
 /* When the canonical client of a multi-session presence quits, one of its
- * sessions becomes canonical, so we copy the metadata onto every session
- * first. We run before the persistence module's quit hook, while the
- * sessions still point at this client. The copy is quiet: nobody watching
- * sees a change, since the presence's metadata stays the same. */
+ * sessions becomes canonical, so we give every session an exact copy of the
+ * metadata first, dropping keys the presence no longer has. We run before
+ * the persistence module's quit hook, while the sessions still point at this
+ * client. The copy is quiet: nobody watching sees a change, since the
+ * presence's metadata stays the same. */
 int metadata_hand_over_on_quit(Client *client, MessageTag *mtags, const char *comment)
 {
 	struct metadata_moddata_user *from = USER_METADATA(client);
 	struct metadata *item;
-	struct metadata *have;
+	struct metadata *copy;
 	Client *other;
 
-	if (!from || !from->metadata || account_canonical_client(client) != client)
+	if (!IsLoggedIn(client) || account_canonical_client(client) != client)
 		return 0;
 	list_for_each_entry(other, &lclient_list, lclient_node)
 	{
@@ -1190,21 +1191,19 @@ int metadata_hand_over_on_quit(Client *client, MessageTag *mtags, const char *co
 		struct metadata_moddata_user *to = USER_METADATA(other);
 		if (!to)
 			to = metadata_prepare_user_moddata(other);
-		for (item = from->metadata; item; item = item->next)
+		while (to->metadata)
 		{
-			for (have = to->metadata; have; have = have->next)
-				if (!strcasecmp(have->name, item->name))
-					break;
-			if (have)
-			{
-				safe_strdup(have->value, item->value);
-				continue;
-			}
-			have = safe_alloc(sizeof(struct metadata));
-			safe_strdup(have->name, item->name);
-			safe_strdup(have->value, item->value);
-			have->next = to->metadata;
-			to->metadata = have;
+			copy = to->metadata;
+			to->metadata = copy->next;
+			metadata_free(copy);
+		}
+		for (item = from ? from->metadata : NULL; item; item = item->next)
+		{
+			copy = safe_alloc(sizeof(struct metadata));
+			safe_strdup(copy->name, item->name);
+			safe_strdup(copy->value, item->value);
+			copy->next = to->metadata;
+			to->metadata = copy;
 		}
 	}
 	return 0;

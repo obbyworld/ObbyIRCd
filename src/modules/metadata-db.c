@@ -663,8 +663,10 @@ int account_login(Client *client, MessageTag *recv_mtags){
 	return 0;
 }
 
+/* A session joins a canonical that already holds the live profile, so only
+ * the canonical applies the stored copy. */
 int user_connected(Client *client){
-	if(IsLoggedIn(client))
+	if(IsLoggedIn(client) && account_canonical_client(client) == client)
 		apply_stored_metadata(client);
 	return 0;
 }
