@@ -21,6 +21,7 @@
  */
 
 #include "unrealircd.h"
+#include "obsidian.h"
 
 #define MSG_MONITOR "MONITOR"
 
@@ -33,6 +34,7 @@ int monitor_nickchange(Client *client, MessageTag *mtags, const char *newnick);
 int monitor_post_nickchange(Client *client, MessageTag *mtags, const char *oldnick);
 int monitor_quit(Client *client, MessageTag *mtags, const char *comment);
 int monitor_connect(Client *client);
+int monitor_ghost_released(Client *ghost);
 int monitor_notification(Client *client, Watch *watch, Link *lp, int event, void *data);
 
 /* These are external lookups.. */
@@ -57,8 +59,10 @@ MOD_INIT()
 	HookAdd(modinfo->handle, HOOKTYPE_POST_LOCAL_NICKCHANGE, 0, monitor_post_nickchange);
 	HookAdd(modinfo->handle, HOOKTYPE_POST_REMOTE_NICKCHANGE, 0, monitor_post_nickchange);
 	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_QUIT, 0, monitor_quit);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 0, monitor_quit);
+	/* We run after persistence, which can keep the nick on a ghost. */
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 1, monitor_quit);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT, 0, monitor_connect);
+	HookAdd(modinfo->handle, HOOKTYPE_GHOST_RELEASED, 0, monitor_ghost_released);
 	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_CONNECT, 0, monitor_connect);
 
 	return MOD_SUCCESS;
@@ -104,6 +108,12 @@ int monitor_post_nickchange(Client *client, MessageTag *mtags, const char *oldni
 int monitor_quit(Client *client, MessageTag *mtags, const char *comment)
 {
 	watch_check(client, WATCH_EVENT_OFFLINE, NULL, monitor_notification);
+	return 0;
+}
+
+int monitor_ghost_released(Client *ghost)
+{
+	watch_check(ghost, WATCH_EVENT_OFFLINE, NULL, monitor_notification);
 	return 0;
 }
 

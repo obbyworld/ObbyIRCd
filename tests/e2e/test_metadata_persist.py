@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from lib.accounts import drain_motd, register_account, sasl_plain
+from lib.accounts import connect, register_account
 from lib.container import IrcdContainer
 from lib.irc import IrcClient
 
@@ -148,23 +148,12 @@ async def test_no_double_replay_on_rehash(persistent_ircd):
     assert md.get("avatar") == avatar, f"metadata lost after rehash: {md}"
 
 
-PROFILE_CAPS = "CAP REQ :sasl draft/metadata-2 draft/persistence message-tags batch"
+PROFILE_CAPS = ["sasl", "draft/metadata-2", "draft/persistence", "message-tags", "batch"]
 PROFILE_PASS = "testpw1234"
 
 
 async def _profile_client(ircd: IrcdContainer, nick: str, account: str | None = None):
-    port = ircd.host_port(6697)
-    c = IrcClient("127.0.0.1", port, nick=nick)
-    await c.__aenter__()
-    await c.send("CAP LS 302")
-    await c.send(PROFILE_CAPS)
-    await c.expect(lambda l: " ACK " in l, timeout=10)
-    if account:
-        await sasl_plain(c, account, PROFILE_PASS)
-    await c.send("CAP END")
-    await c.register()
-    await drain_motd(c)
-    return c
+    return await connect("127.0.0.1", ircd.host_port(6697), nick, PROFILE_CAPS, account, PROFILE_PASS)
 
 
 async def _register_account(ircd: IrcdContainer, account: str):
