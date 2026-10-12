@@ -217,8 +217,9 @@ async def test_offline_persistent_user_keeps_profile(persistent_ircd):
 
 
 async def test_profile_keeps_keys_an_edit_did_not_touch(persistent_ircd):
-    """Each edit changes only its own key in metadata.db: a deleted key goes,
-    every other saved key stays through a restart."""
+    """Each edit changes only its own key in metadata.db: an overwritten key
+    keeps its new value, a deleted key goes, and every other saved key stays
+    through a restart."""
     await _register_account(persistent_ircd, "editor")
     user = await _profile_client(persistent_ircd, "editor", "editor")
     await user.send("JOIN #edits")
@@ -226,6 +227,8 @@ async def test_profile_keeps_keys_an_edit_did_not_touch(persistent_ircd):
     for key, value in {"avatar": "https://example.invalid/e.png", "color": "#ff0000", "status": "busy"}.items():
         await user.send(f"METADATA * SET {key} :{value}")
         await user.expect(lambda l, key=key: " 761 " in l and key in l)
+    await user.send("METADATA * SET color :#00ff00")
+    await user.expect(lambda l: " 761 " in l and "#00ff00" in l)
     await user.send("METADATA * SET status")
     await user.expect(lambda l: " 766 " in l and " status " in l)
     await user.__aexit__(None, None, None)
@@ -238,6 +241,6 @@ async def test_profile_keeps_keys_an_edit_did_not_touch(persistent_ircd):
         await c.send("JOIN #edits")
         await c.expect(lambda l: " 366 " in l, timeout=10)
     seen = await _profile_seen_by(watcher, "editor", ["avatar", "color", "status"])
-    assert seen == {"avatar": "https://example.invalid/e.png", "color": "#ff0000"}
+    assert seen == {"avatar": "https://example.invalid/e.png", "color": "#00ff00"}
     await user.__aexit__(None, None, None)
     await watcher.__aexit__(None, None, None)
