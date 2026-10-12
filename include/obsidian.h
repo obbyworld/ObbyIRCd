@@ -53,10 +53,11 @@
 /* ===================================================================
  * Our custom hook numbers start at 190, well above the core ones (up to
  * 134 in include/modules.h) and below MAXHOOKTYPES (200), so upstream can
- * add core hooks without colliding with ours. Taken so far:
- *   190 HOOKTYPE_ACCOUNT_REGISTER  (this file)
- *   191 HOOKTYPE_SEND_EMAIL        (include/smtp.h)
- *   192 HOOKTYPE_JOIN_SENT         (this file)
+ * add core hooks without colliding with ours. All of them are defined in
+ * this file. Taken so far:
+ *   190 HOOKTYPE_ACCOUNT_REGISTER
+ *   191 HOOKTYPE_SEND_EMAIL
+ *   192 HOOKTYPE_JOIN_SENT
  * =================================================================== */
 
 /* ===================================================================
@@ -64,6 +65,12 @@
  * Handler prototype: int my_handler(Account *acc, Client *client)
  * =================================================================== */
 #define HOOKTYPE_ACCOUNT_REGISTER 190
+
+/* ===================================================================
+ * Custom hook: send an email through the smtp module, see include/smtp.h
+ * for the handler signature.
+ * =================================================================== */
+#define HOOKTYPE_SEND_EMAIL 191
 
 /* ===================================================================
  * Custom hook: fired after we send a local client a JOIN for a channel and
