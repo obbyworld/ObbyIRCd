@@ -228,11 +228,13 @@ static int rm_join_sent(Client *client, Channel *channel)
 {
 	if (!MyUser(client) || !HasCapability(client, READMARKER_CAP_NAME))
 		return 0;
-	if (!IsLoggedIn(client))
-		return 0;
-	Account *acc = find_account_by_client(client);
+	/* Markers are stored per account, so a guest has none to report. */
+	Account *acc = IsLoggedIn(client) ? find_account_by_client(client) : NULL;
 	if (!acc)
+	{
+		send_markread(client, channel->name, NULL);
 		return 0;
+	}
 	char *low = lower_dup(channel->name);
 	char *ts = db_get_marker(acc->id, low);
 	send_markread(client, channel->name, ts);
@@ -317,6 +319,19 @@ CMD_FUNC(cmd_markread)
 		free_account(acc);
 		return;
 	}
+
+	/* Spec: a timestamp at or below the stored one is ignored and answered
+	 * with the stored value. */
+	char *previous = db_get_marker(acc->id, low);
+	if (previous && strcmp(ts, previous) <= 0)
+	{
+		send_markread(client, target, previous);
+		safe_free(previous);
+		safe_free(low);
+		free_account(acc);
+		return;
+	}
+	safe_free(previous);
 
 	char *stored = db_set_marker_if_newer(acc->id, low, ts);
 	if (!stored)
