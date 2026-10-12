@@ -51,10 +51,17 @@
 #define REGCAP_NAME "draft/account-registration"
 
 /* ===================================================================
+ * Our custom hook numbers start at 190, well above the core ones (up to
+ * 134 in include/modules.h) and below MAXHOOKTYPES (200), so upstream can
+ * add core hooks without colliding with ours. Taken so far:
+ *   190 HOOKTYPE_ACCOUNT_REGISTER  (this file)
+ *   191 HOOKTYPE_SEND_EMAIL        (include/smtp.h)
+ *   192 HOOKTYPE_JOIN_SENT         (this file)
+ * =================================================================== */
+
+/* ===================================================================
  * Custom hook: fired after a new account is registered.
  * Handler prototype: int my_handler(Account *acc, Client *client)
- * Our custom hooks use 190 and up, so new core hook numbers never collide
- * with them.
  * =================================================================== */
 #define HOOKTYPE_ACCOUNT_REGISTER 190
 
