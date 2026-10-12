@@ -16,13 +16,9 @@
  * obsidian.db.  Account-keyed -- the marker survives reconnects.  PMs
  * use the lowercased target nickname; channels use the channel name.
  *
- * Spec wrinkle: the spec says the MARKREAD that follows a JOIN MUST
- * arrive before RPL_ENDOFNAMES.  HOOKTYPE_LOCAL_JOIN fires *after*
- * NAMES in the core IRCd, so we send MARKREAD post-NAMES instead.
- * Functionally identical to clients (it's still in the JOIN burst),
- * just out of strict-spec order; documenting here so a future cleanup
- * can move the call site if a proper "post-JOIN, pre-NAMES-end" hook
- * is added.
+ * The spec has the server send MARKREAD after every JOIN it sends a client
+ * and before RPL_ENDOFNAMES, so we answer HOOKTYPE_JOIN_SENT, which join and
+ * persistence (session attach, ghost takeover) fire at that point.
  */
 
 #include "unrealircd.h"
@@ -224,21 +220,21 @@ static void broadcast_markread(Account *acc, const char *target, const char *ts)
 }
 
 /* ===================================================================
- * Hook: HOOKTYPE_LOCAL_JOIN
- * Send the channel's marker to the joining client (and only that
- * client -- the *user's* other sessions already have it from when
- * they last set it themselves).
+ * Hook: HOOKTYPE_JOIN_SENT
+ * Send the channel's marker to the client that just received the JOIN.
  * =================================================================== */
 
-static int rm_local_join(Client *client, Channel *channel, MessageTag *mtags)
+static int rm_join_sent(Client *client, Channel *channel)
 {
 	if (!MyUser(client) || !HasCapability(client, READMARKER_CAP_NAME))
 		return 0;
-	if (!IsLoggedIn(client))
-		return 0;
-	Account *acc = find_account_by_client(client);
+	/* Markers are stored per account, so a guest has none to report. */
+	Account *acc = IsLoggedIn(client) ? find_account_by_client(client) : NULL;
 	if (!acc)
+	{
+		send_markread(client, channel->name, NULL);
 		return 0;
+	}
 	char *low = lower_dup(channel->name);
 	char *ts = db_get_marker(acc->id, low);
 	send_markread(client, channel->name, ts);
@@ -324,6 +320,19 @@ CMD_FUNC(cmd_markread)
 		return;
 	}
 
+	/* Spec: a timestamp at or below the stored one is ignored and answered
+	 * with the stored value. */
+	char *previous = db_get_marker(acc->id, low);
+	if (previous && strcmp(ts, previous) <= 0)
+	{
+		send_markread(client, target, previous);
+		safe_free(previous);
+		safe_free(low);
+		free_account(acc);
+		return;
+	}
+	safe_free(previous);
+
 	char *stored = db_set_marker_if_newer(acc->id, low, ts);
 	if (!stored)
 	{
@@ -376,7 +385,7 @@ MOD_INIT()
 	}
 
 	CommandAdd(modinfo->handle, "MARKREAD", cmd_markread, MAXPARA, CMD_USER);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_JOIN, 0, rm_local_join);
+	HookAdd(modinfo->handle, HOOKTYPE_JOIN_SENT, 0, rm_join_sent);
 	return MOD_SUCCESS;
 }
 

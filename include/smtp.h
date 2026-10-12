@@ -12,9 +12,11 @@
 #ifndef OBBY_SMTP_H
 #define OBBY_SMTP_H
 
+#include "obsidian.h"
+
 /**
- * Custom hook type fired by callers that want to send email without taking
- * a hard link-time dependency on the smtp module.  The smtp module registers
+ * HOOKTYPE_SEND_EMAIL (include/obsidian.h) is fired by callers that want to
+ * send email without taking a hard link-time dependency on the smtp module.  The smtp module registers
  * a handler for this hook in MOD_INIT.  Other modules (e.g. account-
  * registration) walk Hooks[HOOKTYPE_SEND_EMAIL] and call until one returns
  * non-zero, so they degrade gracefully when smtp is not loaded.
@@ -23,11 +25,7 @@
  *   int handler(const char *to, const char *subject, const char *body,
  *               SMTPCallback cb, void *userdata);
  *   returns 1 if the email was queued, 0 if no SMTP backend handled it.
- *
- * Our custom hooks use 190 and up, so new core hook numbers never collide
- * with them.
  */
-#define HOOKTYPE_SEND_EMAIL 191
 
 /**
  * Outcome of an asynchronous SMTP delivery attempt.
