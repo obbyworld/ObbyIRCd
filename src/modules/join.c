@@ -21,6 +21,7 @@
  */
 
 #include "unrealircd.h"
+#include "obsidian.h"
 
 /* Forward declarations */
 CMD_FUNC(cmd_join);
@@ -268,6 +269,8 @@ void _join_channel(Channel *channel, Client *client, MessageTag *recv_mtags, con
 			RunHook(HOOKTYPE_LOCAL_CHANMODE, &me, channel, mtags_mode, modebuf, parabuf, 0, 0, &should_destroy);
 			free_message_tags(mtags_mode);
 		}
+
+		RunHook(HOOKTYPE_JOIN_SENT, client, channel);
 
 		parv[0] = NULL;
 		parv[1] = channel->name;

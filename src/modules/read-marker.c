@@ -16,13 +16,9 @@
  * obsidian.db.  Account-keyed -- the marker survives reconnects.  PMs
  * use the lowercased target nickname; channels use the channel name.
  *
- * Spec wrinkle: the spec says the MARKREAD that follows a JOIN MUST
- * arrive before RPL_ENDOFNAMES.  HOOKTYPE_LOCAL_JOIN fires *after*
- * NAMES in the core IRCd, so we send MARKREAD post-NAMES instead.
- * Functionally identical to clients (it's still in the JOIN burst),
- * just out of strict-spec order; documenting here so a future cleanup
- * can move the call site if a proper "post-JOIN, pre-NAMES-end" hook
- * is added.
+ * The spec has the server send MARKREAD after every JOIN it sends a client
+ * and before RPL_ENDOFNAMES, so we answer HOOKTYPE_JOIN_SENT, which join and
+ * persistence (session attach, ghost takeover) fire at that point.
  */
 
 #include "unrealircd.h"
@@ -224,13 +220,11 @@ static void broadcast_markread(Account *acc, const char *target, const char *ts)
 }
 
 /* ===================================================================
- * Hook: HOOKTYPE_LOCAL_JOIN
- * Send the channel's marker to the joining client (and only that
- * client -- the *user's* other sessions already have it from when
- * they last set it themselves).
+ * Hook: HOOKTYPE_JOIN_SENT
+ * Send the channel's marker to the client that just received the JOIN.
  * =================================================================== */
 
-static int rm_local_join(Client *client, Channel *channel, MessageTag *mtags)
+static int rm_join_sent(Client *client, Channel *channel)
 {
 	if (!MyUser(client) || !HasCapability(client, READMARKER_CAP_NAME))
 		return 0;
@@ -376,7 +370,7 @@ MOD_INIT()
 	}
 
 	CommandAdd(modinfo->handle, "MARKREAD", cmd_markread, MAXPARA, CMD_USER);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_JOIN, 0, rm_local_join);
+	HookAdd(modinfo->handle, HOOKTYPE_JOIN_SENT, 0, rm_join_sent);
 	return MOD_SUCCESS;
 }
 

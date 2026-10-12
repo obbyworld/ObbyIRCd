@@ -59,6 +59,13 @@
 #define HOOKTYPE_ACCOUNT_REGISTER 190
 
 /* ===================================================================
+ * Custom hook: fired after we send a local client a JOIN for a channel and
+ * before its RPL_ENDOFNAMES, so draft/read-marker can send MARKREAD there.
+ * Handler prototype: int my_handler(Client *client, Channel *channel)
+ * =================================================================== */
+#define HOOKTYPE_JOIN_SENT 192
+
+/* ===================================================================
  * SASL type constants
  * =================================================================== */
 #define SASL_TYPE_NONE           0

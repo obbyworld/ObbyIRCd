@@ -28,6 +28,7 @@
  */
 
 #include "unrealircd.h"
+#include "obsidian.h"
 
 /* ===================================================================
  * Module header
@@ -667,6 +668,8 @@ static void restore_channels(Client *client, PersistEntry *e)
 				            channel->topic_nick, (long long)channel->topic_time);
 			}
 
+			RunHook(HOOKTYPE_JOIN_SENT, client, channel);
+
 			if (!HasCapability(client, "draft/no-implicit-names") &&
 			    !HasCapability(client, "no-implicit-names"))
 			{
@@ -1022,6 +1025,8 @@ static void setup_session(Client *client, PersistEntry *e)
 			sendnumeric(client, RPL_TOPICWHOTIME, channel->name,
 			            channel->topic_nick, (long long)channel->topic_time);
 		}
+
+		RunHook(HOOKTYPE_JOIN_SENT, client, channel);
 
 		/* Send NAMES directly (don't go through do_cmd: avoid running
 		 * unrelated hooks/overrides on a synthetic command). Honor
@@ -1526,6 +1531,7 @@ static int persist_local_join(Client *client, Channel *channel, MessageTag *mtag
 			if (mb && mb->related)
 				mb->related->memb_flags |= MEMB_FLAG_SHADOW;
 			sendto_one(sess->client, mtags, "%s", buf);
+			RunHook(HOOKTYPE_JOIN_SENT, sess->client, channel);
 		}
 	}
 
