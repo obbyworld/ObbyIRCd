@@ -587,6 +587,7 @@ static void do_create_ghost(PersistEntry *e)
 	}
 
 	e->ghost = ghost;
+	RunHook(HOOKTYPE_GHOST_CREATED, ghost);
 
 	unreal_log(ULOG_INFO, "persistence", "PERSIST_GHOST_CREATED", ghost,
 	           "Persistent ghost created for account $account (nick $client)",

@@ -58,6 +58,7 @@
  *   190 HOOKTYPE_ACCOUNT_REGISTER
  *   191 HOOKTYPE_SEND_EMAIL
  *   192 HOOKTYPE_JOIN_SENT
+ *   193 HOOKTYPE_GHOST_CREATED
  * =================================================================== */
 
 /* ===================================================================
@@ -78,6 +79,13 @@
  * Handler prototype: int my_handler(Client *client, Channel *channel)
  * =================================================================== */
 #define HOOKTYPE_JOIN_SENT 192
+
+/* ===================================================================
+ * Custom hook: fired after persistence creates a ghost for an account whose
+ * clients are all gone, so other modules can give it the account's state.
+ * Handler prototype: int my_handler(Client *ghost)
+ * =================================================================== */
+#define HOOKTYPE_GHOST_CREATED 193
 
 /* ===================================================================
  * SASL type constants
