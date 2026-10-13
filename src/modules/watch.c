@@ -21,6 +21,7 @@
  */
 
 #include "unrealircd.h"
+#include "obsidian.h"
 
 #define MSG_WATCH "WATCH"
 
@@ -30,6 +31,7 @@ int watch_away(Client *client, MessageTag *mtags, const char *reason, int alread
 int watch_nickchange(Client *client, MessageTag *mtags, const char *newnick);
 int watch_post_nickchange(Client *client, MessageTag *mtags, const char *oldnick);
 int watch_user_connect(Client *client);
+int watch_ghost_released(Client *ghost);
 int watch_notification(Client *client, Watch *watch, Link *lp, int event, void *data);
 
 /* These are external lookups.. */
@@ -49,7 +51,8 @@ MOD_INIT()
 	MARK_AS_OFFICIAL_MODULE(modinfo);
 
 	CommandAdd(modinfo->handle, MSG_WATCH, cmd_watch, 1, CMD_USER);
-	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 0, watch_user_quit);
+	/* We run after persistence, which can keep the nick on a ghost. */
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 1, watch_user_quit);
 	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_QUIT, 0, watch_user_quit);
 	HookAdd(modinfo->handle, HOOKTYPE_AWAY, 0, watch_away);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_NICKCHANGE, 0, watch_nickchange);
@@ -57,6 +60,7 @@ MOD_INIT()
 	HookAdd(modinfo->handle, HOOKTYPE_POST_LOCAL_NICKCHANGE, 0, watch_post_nickchange);
 	HookAdd(modinfo->handle, HOOKTYPE_POST_REMOTE_NICKCHANGE, 0, watch_post_nickchange);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT, 0, watch_user_connect);
+	HookAdd(modinfo->handle, HOOKTYPE_GHOST_RELEASED, 0, watch_ghost_released);
 	HookAdd(modinfo->handle, HOOKTYPE_REMOTE_CONNECT, 0, watch_user_connect);
 
 	return MOD_SUCCESS;
@@ -351,6 +355,12 @@ int watch_post_nickchange(Client *client, MessageTag *mtags, const char *oldnick
 {
 	watch_check(client, WATCH_EVENT_ONLINE, NULL, watch_notification);
 
+	return 0;
+}
+
+int watch_ghost_released(Client *ghost)
+{
+	watch_check(ghost, WATCH_EVENT_OFFLINE, NULL, watch_notification);
 	return 0;
 }
 

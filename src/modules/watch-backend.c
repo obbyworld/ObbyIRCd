@@ -207,6 +207,11 @@ int _watch_check(Client *client, int event, void *data, int (*watch_notify)(Clie
 	Watch *watch;
 	Link *lp;
 
+	/* Sessions share their account's nick but stay out of the nick hash, so
+	 * we announce only the client the nick belongs to. */
+	if (event == WATCH_EVENT_ONLINE && find_user(client->name, NULL) != client)
+		return 0;
+
 	/* Get us the right bucket */
 	hashv = hash_watch_nick_name(client->name);
 

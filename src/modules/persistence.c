@@ -614,6 +614,9 @@ static void destroy_ghost(PersistEntry *e, const char *reason)
 	while ((mp = ghost->user->channel))
 		remove_user_from_channel_withmb(ghost, mp->channel, mp, 1);
 
+	if (reason && find_user(ghost->name, NULL) == ghost)
+		RunHook(HOOKTYPE_GHOST_RELEASED, ghost);
+
 	moddata_free_client(ghost);
 	if (*ghost->id)
 	{
@@ -1227,6 +1230,15 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 		/* No sessions — create ghost */
 		do_create_ghost(e);
 
+		/* Without channels there is no ghost, so the user really leaves and
+		 * we give the nick back for the normal quit to announce. */
+		if (!e->ghost)
+		{
+			add_to_client_hash_table(client->name, client);
+			persist_db_mark_dirty();
+			return 0;
+		}
+
 		if (e->ghost)
 		{
 			away_mtags = NULL;
@@ -1261,6 +1273,7 @@ static int persist_account_login(Client *client, MessageTag *mtags)
 	PersistEntry *e;
 	Membership *mb;
 	int i;
+	const char *final_nick;
 
 	if (!client->user || !MyConnect(client))
 		return 0;
@@ -1285,7 +1298,10 @@ static int persist_account_login(Client *client, MessageTag *mtags)
 		}
 		e->num_channels = i;
 
-		destroy_ghost(e, NULL);
+		/* Before registering we rename the client to its account, so a ghost
+		 * left under another nick frees that nick for its watchers. */
+		final_nick = IsRegistered(client) ? client->name : client->user->account;
+		destroy_ghost(e, mycmp(e->ghost->name, final_nick) ? "Reclaimed under another nick" : NULL);
 
 		if (IsDead(client))
 			return 0;

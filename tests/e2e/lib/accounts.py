@@ -33,3 +33,18 @@ async def register_account(host, port, account, password):
             ),
             timeout=10,
         )
+
+
+async def connect(host, port, nick, caps, account=None, password=None):
+    """Open a registered client, logged in to account when one is given."""
+    c = IrcClient(host, port, nick=nick)
+    await c.__aenter__()
+    await c.send("CAP LS 302")
+    await c.send("CAP REQ :" + " ".join(caps))
+    await c.expect(lambda l: " ACK " in l, timeout=10)
+    if account:
+        await sasl_plain(c, account, password)
+    await c.send("CAP END")
+    await c.register()
+    await drain_motd(c)
+    return c

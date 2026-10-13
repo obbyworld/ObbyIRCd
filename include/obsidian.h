@@ -59,6 +59,7 @@
  *   191 HOOKTYPE_SEND_EMAIL
  *   192 HOOKTYPE_JOIN_SENT
  *   193 HOOKTYPE_GHOST_CREATED
+ *   194 HOOKTYPE_GHOST_RELEASED
  * =================================================================== */
 
 /* ===================================================================
@@ -86,6 +87,13 @@
  * Handler prototype: int my_handler(Client *ghost)
  * =================================================================== */
 #define HOOKTYPE_GHOST_CREATED 193
+
+/* ===================================================================
+ * Custom hook: fired before persistence removes a ghost that still holds its
+ * account's nick, so MONITOR and WATCH can tell watchers the nick is gone.
+ * Handler prototype: int my_handler(Client *ghost)
+ * =================================================================== */
+#define HOOKTYPE_GHOST_RELEASED 194
 
 /* ===================================================================
  * SASL type constants
