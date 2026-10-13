@@ -14,6 +14,7 @@ import time
 
 import pytest
 
+from lib.accounts import drain_motd, register_account, sasl_plain
 from lib.container import IrcdContainer
 from lib.irc import IrcClient
 
@@ -145,3 +146,101 @@ async def test_no_double_replay_on_rehash(persistent_ircd):
 
     md = await _read_channel_metadata(persistent_ircd, channel)
     assert md.get("avatar") == avatar, f"metadata lost after rehash: {md}"
+
+
+PROFILE_CAPS = "CAP REQ :sasl draft/metadata-2 draft/persistence message-tags batch"
+PROFILE_PASS = "testpw1234"
+
+
+async def _profile_client(ircd: IrcdContainer, nick: str, account: str | None = None):
+    port = ircd.host_port(6697)
+    c = IrcClient("127.0.0.1", port, nick=nick)
+    await c.__aenter__()
+    await c.send("CAP LS 302")
+    await c.send(PROFILE_CAPS)
+    await c.expect(lambda l: " ACK " in l, timeout=10)
+    if account:
+        await sasl_plain(c, account, PROFILE_PASS)
+    await c.send("CAP END")
+    await c.register()
+    await drain_motd(c)
+    return c
+
+
+async def _register_account(ircd: IrcdContainer, account: str):
+    await register_account("127.0.0.1", ircd.host_port(6697), account, PROFILE_PASS)
+
+
+async def _profile_seen_by(observer: IrcClient, target: str, keys: list[str]) -> dict[str, str]:
+    await observer.send(f"METADATA {target} GET {' '.join(keys)}")
+    seen: dict[str, str] = {}
+    for _ in keys:
+        line = await observer.expect(lambda l: " 761 " in l or " 766 " in l, timeout=10)
+        if line.startswith("@"):
+            line = line.split(" ", 1)[1]
+        parts = line.split(" :", 1)[0].split()
+        numeric = "761" if " 761 " in line else "766"
+        key = parts[parts.index(numeric) + 3]
+        if numeric == "761":
+            seen[key] = line.rsplit(" :", 1)[1]
+    return seen
+
+
+async def test_offline_persistent_user_keeps_profile(persistent_ircd):
+    """A persistent user's ghost shows their saved profile, after they quit
+    and after a restart, until they come back."""
+    await _register_account(persistent_ircd, "ghostuser")
+    user = await _profile_client(persistent_ircd, "ghostuser", "ghostuser")
+    await user.send("PERSISTENCE SET ON")
+    await user.send("JOIN #ghosts")
+    await user.expect(lambda l: " 366 " in l, timeout=10)
+    await user.send("METADATA * SET avatar :https://example.invalid/g.png")
+    await user.expect(lambda l: " 761 " in l and "avatar" in l)
+    await user.send("METADATA * SET display-name :Ghost User")
+    await user.expect(lambda l: " 761 " in l and "display-name" in l)
+    await user.__aexit__(None, None, None)
+
+    profile = {"avatar": "https://example.invalid/g.png", "display-name": "Ghost User"}
+    watcher = await _profile_client(persistent_ircd, "watcher")
+    await watcher.send("JOIN #ghosts")
+    await watcher.expect(lambda l: " 366 " in l, timeout=10)
+    assert await _profile_seen_by(watcher, "ghostuser", list(profile)) == profile
+    await watcher.__aexit__(None, None, None)
+
+    _restart_and_wait(persistent_ircd)
+
+    watcher = await _profile_client(persistent_ircd, "watcher")
+    await watcher.send("JOIN #ghosts")
+    await watcher.expect(lambda l: " 366 " in l, timeout=10)
+    assert await _profile_seen_by(watcher, "ghostuser", list(profile)) == profile
+    await watcher.__aexit__(None, None, None)
+
+
+async def test_profile_keeps_keys_an_edit_did_not_touch(persistent_ircd):
+    """Each edit changes only its own key in metadata.db: an overwritten key
+    keeps its new value, a deleted key goes, and every other saved key stays
+    through a restart."""
+    await _register_account(persistent_ircd, "editor")
+    user = await _profile_client(persistent_ircd, "editor", "editor")
+    await user.send("JOIN #edits")
+    await user.expect(lambda l: " 366 " in l, timeout=10)
+    for key, value in {"avatar": "https://example.invalid/e.png", "color": "#ff0000", "status": "busy"}.items():
+        await user.send(f"METADATA * SET {key} :{value}")
+        await user.expect(lambda l, key=key: " 761 " in l and key in l)
+    await user.send("METADATA * SET color :#00ff00")
+    await user.expect(lambda l: " 761 " in l and "#00ff00" in l)
+    await user.send("METADATA * SET status")
+    await user.expect(lambda l: " 766 " in l and " status " in l)
+    await user.__aexit__(None, None, None)
+
+    _restart_and_wait(persistent_ircd)
+
+    user = await _profile_client(persistent_ircd, "editor", "editor")
+    watcher = await _profile_client(persistent_ircd, "watcher")
+    for c in (user, watcher):
+        await c.send("JOIN #edits")
+        await c.expect(lambda l: " 366 " in l, timeout=10)
+    seen = await _profile_seen_by(watcher, "editor", ["avatar", "color", "status"])
+    assert seen == {"avatar": "https://example.invalid/e.png", "color": "#00ff00"}
+    await user.__aexit__(None, None, None)
+    await watcher.__aexit__(None, None, None)

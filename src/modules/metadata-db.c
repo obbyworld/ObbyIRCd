@@ -15,6 +15,7 @@
  */
 
 #include "unrealircd.h"
+#include "obsidian.h"
 
 ModuleHeader MOD_HEADER = {
     "metadata-db",
@@ -102,7 +103,7 @@ CMD_OVERRIDE_FUNC(store_after_metadata_edit);
 
 int write_metadatadb(void);
 int write_metadata_entry(FILE *fd, const char *tmpfname, struct metadata *metadata, char *name, time_t last_seen);
-void store_metadata_for_user(Client *client);
+int ghost_created(Client *ghost);
 int read_metadatadb(void);
 void free_metadata_storage(void);
 int how_many_metadata_channel(Channel *channel, ModDataInfo *channelmd);
@@ -148,6 +149,7 @@ MOD_LOAD()
 
 	HookAdd(modinfo->handle, HOOKTYPE_ACCOUNT_LOGIN, 0, account_login);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_CONNECT, 0, user_connected);
+	HookAdd(modinfo->handle, HOOKTYPE_GHOST_CREATED, 0, ghost_created);
 	/* We add the override in MOD_LOAD because the metadata module registers
 	 * METADATA in its own MOD_INIT. */
 	CommandOverrideAdd(modinfo->handle, "METADATA", 0, store_after_metadata_edit);
@@ -468,6 +470,7 @@ void store_metadata(char *account, struct metadata *metadata, time_t last_seen)
 			/* we already know this metadata - the user has changed it in the meantime */
 			safe_free(curr->value);
 			curr->value = strdup(metadata->value);
+			curr->last_seen = last_seen;
 			return;
 		}
 		prev = curr;
@@ -619,106 +622,41 @@ int read_metadatadb(void)
 #undef FreeMetadataEntry
 #undef R_SAFE
 
-void store_metadata_for_user(Client *client)
-{ /* client must be logged in */
-	struct metadata *metadata;
-	struct metadata_storage *sm, *prev_sm, *next_sm;
-	ModDataInfo *usermd;
-	int found;
+/* We drop every key of the account when name is NULL. */
+static void forget_stored_metadata(const char *account, const char *name)
+{
+	struct metadata_storage **link = &metadata_storage;
+	struct metadata_storage *sm;
 
-	usermd = findmoddata_byname("metadata_user", MODDATATYPE_CLIENT);
-	if (!usermd)
+	while ((sm = *link))
 	{
-		unreal_log(ULOG_ERROR, "metadata-db", "METADATA_MODDATA", NULL, "Error obtaining moddata for metadata! Maybe you forgot to load the metadata module?");
-		return;
+		if (!strcmp(sm->account, account) && (!name || !strcasecmp(sm->name, name)))
+		{
+			*link = sm->next;
+			safe_free(sm->account);
+			safe_free(sm->name);
+			safe_free(sm->value);
+			safe_free(sm);
+		} else
+		{
+			link = &sm->next;
+		}
 	}
+}
 
+static const char *live_metadata_value(Client *client, const char *name)
+{
+	ModDataInfo *usermd = findmoddata_byname("metadata_user", MODDATATYPE_CLIENT);
+	struct metadata *metadata;
+
+	if (!usermd)
+		return NULL;
 	FOREACH_USER_METADATA(client, metadata)
 	{
-		found = 0;
-		prev_sm = NULL;
-		FOREACH_STORED_METADATA(sm)
-		{
-			prev_sm = sm;
-			if (strcmp(sm->account, client->user->account)) /* other user */
-				continue;
-			if (strcmp(sm->name, metadata->name)) /* key name not matching */
-				continue;
-			/* replace the stored metadata, as the user's one has priority */
-			found = 1;
-			if (strcmp(sm->value, metadata->value))
-			{
-				unreal_log(ULOG_DEBUG, "metadata-db", "METADATA_DEBUG", NULL, "Replacing key $keyname for user $client",
-				           log_data_string("keyname", metadata->name),
-				           log_data_client("client", client));
-				safe_free(sm->value);
-				sm->value = strdup(metadata->value);
-			}
-			sm->last_seen = TStime();
-		}
-		if (found)
-			continue;
-		/* save user's metadata to the storage (set something before logging in) */
-		sm = safe_alloc(sizeof(struct metadata_storage));
-		sm->account = strdup(client->user->account);
-		sm->name = strdup(metadata->name);
-		sm->value = strdup(metadata->value);
-		sm->last_seen = TStime();
-		unreal_log(ULOG_DEBUG, "metadata-db", "METADATA_DEBUG", NULL, "Saving key $keyname for user $client",
-		           log_data_string("keyname", metadata->name),
-		           log_data_client("client", client));
-		if (!prev_sm)
-		{
-			metadata_storage = sm;
-		} else
-		{
-			prev_sm->next = sm;
-		}
+		if (!strcasecmp(metadata->name, name))
+			return metadata->value;
 	}
-
-	/* remove metadata that the user no longer wants */
-	sm = metadata_storage;
-	prev_sm = NULL;
-	while (sm)
-	{
-		next_sm = sm->next;
-		if (!strcmp(sm->account, client->user->account))
-		{
-			found = 0;
-			FOREACH_USER_METADATA(client, metadata)
-			{
-				if (!strcmp(sm->name, metadata->name))
-				{
-					found = 1;
-					break;
-				}
-			}
-			if (!found)
-			{ /* drop from the list */
-				unreal_log(ULOG_DEBUG, "metadata-db", "METADATA_DEBUG", NULL, "Dropping key $keyname for user $client",
-				           log_data_string("keyname", sm->name),
-				           log_data_client("client", client));
-				if (prev_sm)
-				{
-					prev_sm->next = sm->next;
-				} else
-				{
-					metadata_storage = sm->next;
-				}
-				safe_free(sm->account);
-				safe_free(sm->name);
-				safe_free(sm->value);
-				safe_free(sm);
-			} else
-			{
-				prev_sm = sm;
-			}
-		} else
-		{
-			prev_sm = sm;
-		}
-		sm = next_sm;
-	}
+	return NULL;
 }
 
 /* We apply the account's last stored edit; the metadata module ignores a key
@@ -754,19 +692,70 @@ int user_connected(Client *client)
 	return 0;
 }
 
-/* We store a logged-in user's metadata when they edit it, and only then:
- * the last edit from any of their clients is what the account keeps. */
+/* A ghost stands in for an account whose clients are all gone, so we give it
+ * the saved profile. We fill it quietly: watchers already hold these values,
+ * and linked servers never learn the ghost's UID. */
+int ghost_created(Client *ghost)
+{
+	ModDataInfo *usermd = findmoddata_byname("metadata_user", MODDATATYPE_CLIENT);
+	struct moddata_user *profile;
+	struct metadata_storage *sm;
+	struct metadata *copy;
+
+	if (!usermd)
+		return 0;
+	profile = moddata_client(ghost, usermd).ptr;
+	if (!profile)
+	{
+		profile = safe_alloc(sizeof(struct moddata_user));
+		moddata_client(ghost, usermd).ptr = profile;
+	}
+	FOREACH_STORED_METADATA(sm)
+	{
+		if (strcmp(sm->account, ghost->user->account))
+			continue;
+		copy = safe_alloc(sizeof(struct metadata));
+		safe_strdup(copy->name, sm->name);
+		safe_strdup(copy->value, sm->value);
+		copy->next = profile->metadata;
+		profile->metadata = copy;
+	}
+	return 0;
+}
+
+/* We store each edit a logged-in user makes, key by key: the last edit from
+ * any of their clients is what the account keeps, and a key leaves the store
+ * only when they delete it. */
 CMD_OVERRIDE_FUNC(store_after_metadata_edit)
 {
-	int is_edit = parc >= 3 && (!strcasecmp(parv[2], "SET") || !strcasecmp(parv[2], "CLEAR"));
+	int is_set = parc >= 4 && !strcasecmp(parv[2], "SET");
+	int is_clear = parc >= 3 && !strcasecmp(parv[2], "CLEAR");
+	struct metadata edited;
+	const char *value;
 	Client *presence;
 
 	CALL_NEXT_COMMAND_OVERRIDE();
-	if (!is_edit || !MyUser(client) || IsDead(client) || !IsLoggedIn(client))
+	if (!(is_set || is_clear) || !MyUser(client) || IsDead(client) || !IsLoggedIn(client))
 		return;
 	presence = account_canonical_client(client);
 	if (strcmp(parv[1], "*") && hash_find_nickatserver(parv[1], NULL) != presence)
 		return;
-	if (IsLoggedIn(presence))
-		store_metadata_for_user(presence);
+	if (!IsLoggedIn(presence))
+		return;
+	if (is_clear)
+	{
+		forget_stored_metadata(presence->user->account, NULL);
+		return;
+	}
+	value = live_metadata_value(presence, parv[3]);
+	if (value)
+	{
+		edited.name = (char *)parv[3];
+		edited.value = (char *)value;
+		edited.next = NULL;
+		store_metadata(presence->user->account, &edited, TStime());
+	} else if (parc < 5 || BadPtr(parv[4]))
+	{
+		forget_stored_metadata(presence->user->account, parv[3]);
+	}
 }
