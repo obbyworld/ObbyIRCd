@@ -1,9 +1,11 @@
-/* src/modules/webpush.c - IRCv3 soju.im/webpush extension.
+/* src/modules/webpush.c - IRCv3 draft/webpush (and soju.im/webpush).
  *
  * Implements the IRC-protocol half of Web Push (RFC 8030/8291/8292):
  *
- *   * advertises the `soju.im/webpush` capability
- *   * advertises `VAPID=<base64url-public-key>` in ISUPPORT
+ *   * advertises the `draft/webpush` and `soju.im/webpush` capabilities
+ *     once a backend is configured
+ *   * advertises `VAPID=<base64url-public-key>` in ISUPPORT, taken from
+ *     set::webpush::vapid-key or fetched from the backend
  *   * handles `WEBPUSH REGISTER <endpoint> <keys>` and
  *     `WEBPUSH UNREGISTER <endpoint>` (keys = message-tag form:
  *     `p256dh=...;auth=...`), storing subscriptions per account in
@@ -21,9 +23,9 @@
  * Config:
  *   set {
  *     webpush {
- *       backend-url "http://127.0.0.1:8080";  // hosted-backend base
+ *       backend-url 'https://api.example.com';  // hosted-backend base, https
  *       backend-key "<IRC_SERVER_KEY>";        // X-ObsidianIRC-Key
- *       vapid-key "<base64url public key>";    // from /push/vapid-key
+ *       vapid-key "<base64url public key>";    // optional, else /push/vapid-key
  *       ttl 86400;                             // optional, push TTL secs
  *     }
  *   }
@@ -50,8 +52,13 @@ struct cfgstruct {
 };
 static struct cfgstruct cfg;
 
+#define WEBPUSH_ENDPOINT_MAX 1024
+
 static sqlite3 *wp_db = NULL;
+static Module *wp_module = NULL;
+static char *vapid_public = NULL;
 long CAP_WEBPUSH = 0L;
+long CAP_SOJU_WEBPUSH = 0L;
 
 /* Forward decls */
 static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
@@ -64,6 +71,10 @@ static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
                       const char *member_modes, const char *target,
                       MessageTag *mtags, const char *text, SendType sendtype);
 CMD_FUNC(cmd_webpush);
+static void wp_fetch_vapid_key(void);
+EVENT(wp_vapid_key_retry);
+static int wp_capability_visible(Client *client);
+static void wp_delete_subscription(const char *account, const char *endpoint);
 
 MOD_TEST()
 {
@@ -78,14 +89,18 @@ MOD_INIT()
 	ClientCapabilityInfo c;
 
 	MARK_AS_OFFICIAL_MODULE(modinfo);
+	wp_module = modinfo->handle;
 
 	if (wp_open_db() != 0)
 		return MOD_FAILED;
 	wp_create_tables();
 
 	memset(&c, 0, sizeof(c));
-	c.name = "soju.im/webpush";
+	c.name = "draft/webpush";
+	c.visible = wp_capability_visible;
 	ClientCapabilityAdd(modinfo->handle, &c, &CAP_WEBPUSH);
+	c.name = "soju.im/webpush";
+	ClientCapabilityAdd(modinfo->handle, &c, &CAP_SOJU_WEBPUSH);
 
 	CommandAdd(modinfo->handle, "WEBPUSH", cmd_webpush, MAXPARA, CMD_USER);
 
@@ -96,14 +111,29 @@ MOD_INIT()
 	return MOD_SUCCESS;
 }
 
+/* Clients only see push once we can deliver it: a backend to send through
+ * and a VAPID key for them to subscribe against. */
+static int wp_capability_visible(Client *client)
+{
+	return cfg.backend_url && cfg.backend_key && vapid_public;
+}
+
+static void wp_set_vapid_key(const char *key)
+{
+	safe_strdup(vapid_public, key);
+	ISupportSetFmt(wp_module, "VAPID", "%s", key);
+}
+
 MOD_LOAD()
 {
-	/* Advertise the server VAPID public key so clients can build a
-	 * PushManager subscription against it.  Only set when configured;
-	 * without it the cap is still advertised but clients can't
-	 * subscribe (they'll see no VAPID token and skip registration). */
 	if (cfg.vapid_key && *cfg.vapid_key)
-		ISupportSetFmt(modinfo->handle, "VAPID", "%s", cfg.vapid_key);
+		wp_set_vapid_key(cfg.vapid_key);
+	else if (cfg.backend_url && cfg.backend_key)
+	{
+		/* The backend usually starts after us, so we keep asking until it answers. */
+		wp_fetch_vapid_key();
+		EventAdd(modinfo->handle, "webpush_vapid_key_retry", wp_vapid_key_retry, NULL, 30000, 0);
+	}
 	return MOD_SUCCESS;
 }
 
@@ -115,6 +145,7 @@ MOD_UNLOAD()
 	safe_free(cfg.backend_url);
 	safe_free(cfg.backend_key);
 	safe_free(cfg.vapid_key);
+	safe_free(vapid_public);
 	return MOD_SUCCESS;
 }
 
@@ -144,6 +175,11 @@ static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 			{
 				config_error("%s:%i: set::webpush::%s requires a value",
 				             cep->file->filename, cep->line_number, cep->name);
+				errors++;
+			} else if (!strcmp(cep->name, "backend-url") && strncmp(cep->value, "https://", 8))
+			{
+				config_error("%s:%i: set::webpush::backend-url must be an https:// URL",
+				             cep->file->filename, cep->line_number);
 				errors++;
 			}
 		} else if (!strcmp(cep->name, "ttl"))
@@ -291,6 +327,16 @@ CMD_FUNC(cmd_webpush)
 		const char *endpoint = parv[2];
 		char *p256dh = NULL, *errk_auth = NULL;
 
+		/* Push services are public HTTPS endpoints; the backend refuses
+		 * anything else, so we turn it away here with a clear error. */
+		if (strncmp(endpoint, "https://", 8) || strlen(endpoint) > WEBPUSH_ENDPOINT_MAX)
+		{
+			sendto_one(client, NULL,
+			           ":%s FAIL WEBPUSH INVALID_PARAMS REGISTER :Invalid endpoint",
+			           me.name);
+			return;
+		}
+
 		if (BadPtr(parv[3]) || !wp_parse_keys(parv[3], &p256dh, &errk_auth))
 		{
 			sendto_one(client, NULL,
@@ -343,16 +389,7 @@ CMD_FUNC(cmd_webpush)
 	if (!strcasecmp(parv[1], "UNREGISTER"))
 	{
 		const char *endpoint = parv[2];
-		sqlite3_stmt *st = NULL;
-		const char *sql =
-		    "DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=?";
-		if (wp_db && sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) == SQLITE_OK)
-		{
-			sqlite3_bind_text(st, 1, client->user->account, -1, SQLITE_TRANSIENT);
-			sqlite3_bind_text(st, 2, endpoint, -1, SQLITE_TRANSIENT);
-			sqlite3_step(st);
-			sqlite3_finalize(st);
-		}
+		wp_delete_subscription(client->user->account, endpoint);
 		/* Echo success unconditionally -- UNREGISTER is idempotent. */
 		sendto_one(client, NULL, ":%s WEBPUSH UNREGISTER %s", me.name, endpoint);
 		return;
@@ -418,22 +455,102 @@ static void json_append_string(char *dst, size_t dstsize, const char *src)
 	dst[len] = '\0';
 }
 
-/* Result callback: only surfaces failures.  Successful pushes are
- * silent to avoid log spam (one line per delivered message). */
+static void wp_delete_subscription(const char *account, const char *endpoint)
+{
+	sqlite3_stmt *st = NULL;
+	const char *sql =
+	    "DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=?";
+	if (!wp_db || sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) != SQLITE_OK)
+		return;
+	sqlite3_bind_text(st, 1, account, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 2, endpoint, -1, SQLITE_TRANSIENT);
+	sqlite3_step(st);
+	sqlite3_finalize(st);
+}
+
+/* Which subscription a push request was for: "<account> <endpoint>". */
+static char *wp_subscription_ref(const char *account, const char *endpoint)
+{
+	size_t n = strlen(account) + strlen(endpoint) + 2;
+	char *ref = safe_alloc(n);
+	snprintf(ref, n, "%s %s", account, endpoint);
+	return ref;
+}
+
+/* Result callback: surfaces transport failures, and drops a subscription
+ * the push service reports as gone (404/410, relayed by the backend), so
+ * we stop pushing to a browser that unsubscribed. */
 static void wp_push_result_cb(OutgoingWebRequest *request,
                               OutgoingWebResponse *response)
 {
+	char *ref = response->ptr;
+	char *endpoint = ref ? strchr(ref, ' ') : NULL;
+
 	if (response->errorbuf)
 		unreal_log(ULOG_WARNING, "webpush", "WP_SEND_FAILED", NULL,
 		           "push POST to backend failed: $err",
 		           log_data_string("err", response->errorbuf));
+	else if (endpoint && response->memory &&
+	         (strstr(response->memory, "\"status\":404") ||
+	          strstr(response->memory, "\"status\":410")))
+	{
+		*endpoint++ = '\0';
+		wp_delete_subscription(ref, endpoint);
+	}
+	safe_free(ref);
+}
+
+static void wp_vapid_key_cb(OutgoingWebRequest *request,
+                            OutgoingWebResponse *response)
+{
+	const char *start;
+	char key[256];
+	size_t len;
+
+	if (response->errorbuf || !response->memory)
+	{
+		unreal_log(ULOG_WARNING, "webpush", "WP_VAPID_FAILED", NULL,
+		           "could not fetch the VAPID key from the backend: $err",
+		           log_data_string("err", response->errorbuf ? response->errorbuf : "empty response"));
+		return;
+	}
+	start = strstr(response->memory, "\"publicKey\":\"");
+	if (!start)
+		return;
+	start += strlen("\"publicKey\":\"");
+	len = strcspn(start, "\"");
+	if (len == 0 || len >= sizeof(key))
+		return;
+	strlcpy(key, start, len + 1);
+	wp_set_vapid_key(key);
+}
+
+EVENT(wp_vapid_key_retry)
+{
+	if (!vapid_public)
+		wp_fetch_vapid_key();
+}
+
+static void wp_fetch_vapid_key(void)
+{
+	OutgoingWebRequest *req = safe_alloc(sizeof(OutgoingWebRequest));
+	char url[512];
+
+	snprintf(url, sizeof(url), "%s/push/vapid-key", cfg.backend_url);
+	safe_strdup(req->url, url);
+	req->http_method = HTTP_METHOD_GET;
+	req->callback = wp_vapid_key_cb;
+	req->max_redirects = 0;
+	req->connect_timeout = 5;
+	req->transfer_timeout = 10;
+	url_start_async(req);
 }
 
 /* POST one push to the backend.  Fire-and-forget; the result callback
- * logs transport failures.  (TODO: prune subscriptions on a 404/410
- * from the push service, which the backend relays in its JSON body.) */
-static void wp_send_push(const char *endpoint, const char *p256dh,
-                         const char *auth, const char *payload)
+ * logs failures and prunes subscriptions the push service dropped. */
+static void wp_send_push(const char *account, const char *endpoint,
+                         const char *p256dh, const char *auth,
+                         const char *payload)
 {
 	OutgoingWebRequest *req;
 	char url[512];
@@ -471,6 +588,7 @@ static void wp_send_push(const char *endpoint, const char *p256dh,
 	safe_strdup(req->body, body);
 	req->headers = headers;
 	req->callback = wp_push_result_cb;
+	req->callback_data = wp_subscription_ref(account, endpoint);
 	req->max_redirects = 0;
 	req->connect_timeout = 5;
 	req->transfer_timeout = 10;
@@ -515,7 +633,7 @@ static void wp_push_to_account(const char *account, const char *payload)
 		const char *p256dh = (const char *)sqlite3_column_text(st, 1);
 		const char *auth = (const char *)sqlite3_column_text(st, 2);
 		if (endpoint && p256dh && auth)
-			wp_send_push(endpoint, p256dh, auth, payload);
+			wp_send_push(account, endpoint, p256dh, auth, payload);
 	}
 	sqlite3_finalize(st);
 }
