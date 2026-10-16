@@ -629,8 +629,9 @@ static void wp_send_push(const char *account, const char *endpoint,
 }
 
 /* Build the push payload: one IRC message, no trailing CRLF, message
- * tags dropped except msgid (per spec).  Shape:
- *   [@msgid=<id> ]:<nick>!<user>@<host> <CMD> <target> :<text>
+ * tags dropped except msgid and time, which let the client open the chat at
+ * that message.  Shape:
+ *   [@msgid=<id>;time=<ts> ]:<nick>!<user>@<host> <CMD> <target> :<text>
  * `target` is the recipient nick (DM) or the channel name (highlight).
  */
 static void wp_build_payload(char *buf, size_t n, Client *sender,
@@ -638,12 +639,24 @@ static void wp_build_payload(char *buf, size_t n, Client *sender,
                              const char *cmd, const char *text)
 {
 	MessageTag *mid = find_mtag(mtags, "msgid");
+	MessageTag *sent = find_mtag(mtags, "time");
 	const char *src_user = IsUser(sender) ? sender->user->username : "*";
 	const char *src_host = IsUser(sender) ? GetHost(sender) : me.name;
+	char tags[256] = "";
 
 	if (mid && mid->value)
-		snprintf(buf, n, "@msgid=%s :%s!%s@%s %s %s :%s",
-		         mid->value, sender->name, src_user, src_host,
+		snprintf(tags, sizeof(tags), "msgid=%s", mid->value);
+	if (sent && sent->value)
+	{
+		if (*tags)
+			strlcat(tags, ";", sizeof(tags));
+		strlcat(tags, "time=", sizeof(tags));
+		strlcat(tags, sent->value, sizeof(tags));
+	}
+
+	if (*tags)
+		snprintf(buf, n, "@%s :%s!%s@%s %s %s :%s",
+		         tags, sender->name, src_user, src_host,
 		         cmd, target, text ? text : "");
 	else
 		snprintf(buf, n, ":%s!%s@%s %s %s :%s",
