@@ -59,6 +59,7 @@ static Module *wp_module = NULL;
 static char *vapid_public = NULL;
 static long CAP_WEBPUSH = 0L;
 static long CAP_SOJU_WEBPUSH = 0L;
+static int is_retry_scheduled = 0;
 
 /* Forward decls */
 static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
@@ -502,12 +503,49 @@ static void wp_delete_subscription(const char *account, const char *endpoint)
 	sqlite3_finalize(st);
 }
 
-static char *wp_subscription_ref(const char *account, const char *endpoint)
+typedef struct WebPushRef {
+	char *account;
+	char *endpoint;
+	char *p256dh;
+	char *auth;
+} WebPushRef;
+
+static WebPushRef *wp_push_ref(const char *account, const char *endpoint,
+                               const char *p256dh, const char *auth)
 {
-	size_t n = strlen(account) + strlen(endpoint) + 2;
-	char *ref = safe_alloc(n);
-	snprintf(ref, n, "%s %s", account, endpoint);
+	WebPushRef *ref = safe_alloc(sizeof(WebPushRef));
+	safe_strdup(ref->account, account);
+	safe_strdup(ref->endpoint, endpoint);
+	safe_strdup(ref->p256dh, p256dh);
+	safe_strdup(ref->auth, auth);
 	return ref;
+}
+
+static void wp_free_push_ref(WebPushRef *ref)
+{
+	if (!ref)
+		return;
+	safe_free(ref->account);
+	safe_free(ref->endpoint);
+	safe_free(ref->p256dh);
+	safe_free(ref->auth);
+	safe_free(ref);
+}
+
+/* We match the keys too, so a late failure for an old registration keeps a newer one on the same endpoint. */
+static void wp_prune_subscription(const WebPushRef *ref)
+{
+	sqlite3_stmt *st = NULL;
+	const char *sql =
+	    "DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=? AND p256dh=? AND auth=?";
+	if (!wp_db || sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) != SQLITE_OK)
+		return;
+	sqlite3_bind_text(st, 1, ref->account, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 2, ref->endpoint, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 3, ref->p256dh, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 4, ref->auth, -1, SQLITE_TRANSIENT);
+	sqlite3_step(st);
+	sqlite3_finalize(st);
 }
 
 /* Result callback: surfaces transport failures, and drops a subscription
@@ -516,8 +554,7 @@ static char *wp_subscription_ref(const char *account, const char *endpoint)
 static void wp_push_result_cb(OutgoingWebRequest *request,
                               OutgoingWebResponse *response)
 {
-	char *ref = response->ptr;
-	char *endpoint = ref ? strchr(ref, ' ') : NULL;
+	WebPushRef *ref = response->ptr;
 	json_t *result;
 	json_error_t jerr;
 	int status;
@@ -526,28 +563,28 @@ static void wp_push_result_cb(OutgoingWebRequest *request,
 		unreal_log(ULOG_WARNING, "webpush", "WP_SEND_FAILED", NULL,
 		           "push POST to backend failed: $err",
 		           log_data_string("err", response->errorbuf));
-	else if (endpoint && response->memory &&
+	else if (ref && response->memory &&
 	         (result = json_loads(response->memory, JSON_REJECT_DUPLICATES, &jerr)))
 	{
 		status = json_object_get_integer(result, "status", 0);
 		if (status == 404 || status == 410)
-		{
-			*endpoint++ = '\0';
-			wp_delete_subscription(ref, endpoint);
-		}
+			wp_prune_subscription(ref);
 		json_decref(result);
 	}
-	safe_free(ref);
+	wp_free_push_ref(ref);
 }
 
 static void wp_vapid_key_cb(OutgoingWebRequest *request,
                             OutgoingWebResponse *response)
 {
+	char *requested_url = response->ptr;
 	json_t *result = NULL;
 	json_error_t jerr;
 	const char *key = NULL;
+	int current = wp_wants_fetched_key() && requested_url && !strcmp(requested_url, cfg.backend_url);
 
-	if (!wp_wants_fetched_key())
+	safe_free(requested_url);
+	if (!current)
 		return;
 	if (!response->errorbuf && response->memory)
 		result = json_loads(response->memory, JSON_REJECT_DUPLICATES, &jerr);
@@ -561,8 +598,11 @@ static void wp_vapid_key_cb(OutgoingWebRequest *request,
 		           "could not fetch the VAPID key from the backend, retrying in 30s: $err",
 		           log_data_string("err", response->errorbuf ? response->errorbuf : "no publicKey in the reply"));
 		/* The backend often starts after us, so we ask again until it answers. */
-		if (!EventFind("webpush_vapid_key_retry"))
+		if (!is_retry_scheduled)
+		{
+			is_retry_scheduled = 1;
 			EventAdd(wp_module, "webpush_vapid_key_retry", wp_vapid_key_retry, NULL, 30000, 1);
+		}
 	}
 	if (result)
 		json_decref(result);
@@ -570,6 +610,7 @@ static void wp_vapid_key_cb(OutgoingWebRequest *request,
 
 EVENT(wp_vapid_key_retry)
 {
+	is_retry_scheduled = 0;
 	wp_fetch_vapid_key();
 }
 
@@ -585,6 +626,7 @@ static void wp_fetch_vapid_key(void)
 	safe_strdup(req->url, url);
 	req->http_method = HTTP_METHOD_GET;
 	safe_strdup(req->apicallback, "webpush_vapid_key");
+	req->callback_data = raw_strdup(cfg.backend_url);
 	req->max_redirects = 0;
 	req->connect_timeout = 5;
 	req->transfer_timeout = 10;
@@ -632,7 +674,7 @@ static void wp_send_push(const char *account, const char *endpoint,
 	safe_strdup(req->body, body);
 	req->headers = headers;
 	safe_strdup(req->apicallback, "webpush_push_result");
-	req->callback_data = wp_subscription_ref(account, endpoint);
+	req->callback_data = wp_push_ref(account, endpoint, p256dh, auth);
 	req->max_redirects = 0;
 	req->connect_timeout = 5;
 	req->transfer_timeout = 10;
