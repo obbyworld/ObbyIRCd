@@ -57,8 +57,8 @@ static struct cfgstruct cfg;
 static sqlite3 *wp_db = NULL;
 static Module *wp_module = NULL;
 static char *vapid_public = NULL;
-long CAP_WEBPUSH = 0L;
-long CAP_SOJU_WEBPUSH = 0L;
+static long CAP_WEBPUSH = 0L;
+static long CAP_SOJU_WEBPUSH = 0L;
 
 /* Forward decls */
 static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
@@ -75,6 +75,9 @@ static void wp_fetch_vapid_key(void);
 EVENT(wp_vapid_key_retry);
 static int wp_capability_visible(Client *client);
 static void wp_delete_subscription(const char *account, const char *endpoint);
+static void wp_vapid_key_cb(OutgoingWebRequest *request, OutgoingWebResponse *response);
+static void wp_push_result_cb(OutgoingWebRequest *request, OutgoingWebResponse *response);
+static void wp_generic_free(ModData *m);
 
 MOD_TEST()
 {
@@ -90,6 +93,7 @@ MOD_INIT()
 
 	MARK_AS_OFFICIAL_MODULE(modinfo);
 	wp_module = modinfo->handle;
+	LoadPersistentPointer(modinfo, vapid_public, wp_generic_free);
 
 	if (wp_open_db() != 0)
 		return MOD_FAILED;
@@ -103,6 +107,8 @@ MOD_INIT()
 	ClientCapabilityAdd(modinfo->handle, &c, &CAP_SOJU_WEBPUSH);
 
 	CommandAdd(modinfo->handle, "WEBPUSH", cmd_webpush, MAXPARA, CMD_USER);
+	RegisterApiCallbackWebResponse(modinfo->handle, "webpush_vapid_key", wp_vapid_key_cb);
+	RegisterApiCallbackWebResponse(modinfo->handle, "webpush_push_result", wp_push_result_cb);
 
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, wp_configrun);
 	HookAdd(modinfo->handle, HOOKTYPE_USERMSG, 0, wp_usermsg);
@@ -118,10 +124,34 @@ static int wp_capability_visible(Client *client)
 	return cfg.backend_url && cfg.backend_key && vapid_public;
 }
 
+static void wp_generic_free(ModData *m)
+{
+	safe_free(m->ptr);
+}
+
+/* Clients connected before the key arrived get CAP NEW and the VAPID token
+ * now, so they can subscribe without reconnecting. */
+static void wp_announce_vapid_key(void)
+{
+	Client *client;
+	char token[300];
+
+	send_cap_notify(1, "draft/webpush");
+	send_cap_notify(1, "soju.im/webpush");
+	snprintf(token, sizeof(token), "VAPID=%s", vapid_public);
+	list_for_each_entry(client, &lclient_list, lclient_node)
+		if (IsUser(client))
+			sendnumeric(client, RPL_ISUPPORT, token);
+}
+
 static void wp_set_vapid_key(const char *key)
 {
+	int changed = !vapid_public || strcmp(vapid_public, key);
+
 	safe_strdup(vapid_public, key);
 	ISupportSetFmt(wp_module, "VAPID", "%s", key);
+	if (changed)
+		wp_announce_vapid_key();
 }
 
 MOD_LOAD()
@@ -130,9 +160,9 @@ MOD_LOAD()
 		wp_set_vapid_key(cfg.vapid_key);
 	else if (cfg.backend_url && cfg.backend_key)
 	{
-		/* The backend usually starts after us, so we keep asking until it answers. */
+		if (vapid_public)
+			ISupportSetFmt(wp_module, "VAPID", "%s", vapid_public);
 		wp_fetch_vapid_key();
-		EventAdd(modinfo->handle, "webpush_vapid_key_retry", wp_vapid_key_retry, NULL, 30000, 0);
 	}
 	return MOD_SUCCESS;
 }
@@ -145,7 +175,7 @@ MOD_UNLOAD()
 	safe_free(cfg.backend_url);
 	safe_free(cfg.backend_key);
 	safe_free(cfg.vapid_key);
-	safe_free(vapid_public);
+	SavePersistentPointer(modinfo, vapid_public);
 	return MOD_SUCCESS;
 }
 
@@ -468,7 +498,6 @@ static void wp_delete_subscription(const char *account, const char *endpoint)
 	sqlite3_finalize(st);
 }
 
-/* Which subscription a push request was for: "<account> <endpoint>". */
 static char *wp_subscription_ref(const char *account, const char *endpoint)
 {
 	size_t n = strlen(account) + strlen(endpoint) + 2;
@@ -485,17 +514,24 @@ static void wp_push_result_cb(OutgoingWebRequest *request,
 {
 	char *ref = response->ptr;
 	char *endpoint = ref ? strchr(ref, ' ') : NULL;
+	json_t *result;
+	json_error_t jerr;
+	int status;
 
 	if (response->errorbuf)
 		unreal_log(ULOG_WARNING, "webpush", "WP_SEND_FAILED", NULL,
 		           "push POST to backend failed: $err",
 		           log_data_string("err", response->errorbuf));
 	else if (endpoint && response->memory &&
-	         (strstr(response->memory, "\"status\":404") ||
-	          strstr(response->memory, "\"status\":410")))
+	         (result = json_loads(response->memory, JSON_REJECT_DUPLICATES, &jerr)))
 	{
-		*endpoint++ = '\0';
-		wp_delete_subscription(ref, endpoint);
+		status = json_object_get_integer(result, "status", 0);
+		if (status == 404 || status == 410)
+		{
+			*endpoint++ = '\0';
+			wp_delete_subscription(ref, endpoint);
+		}
+		json_decref(result);
 	}
 	safe_free(ref);
 }
@@ -503,32 +539,31 @@ static void wp_push_result_cb(OutgoingWebRequest *request,
 static void wp_vapid_key_cb(OutgoingWebRequest *request,
                             OutgoingWebResponse *response)
 {
-	const char *start;
-	char key[256];
-	size_t len;
+	json_t *result = NULL;
+	json_error_t jerr;
+	const char *key = NULL;
 
-	if (response->errorbuf || !response->memory)
+	if (!response->errorbuf && response->memory)
+		result = json_loads(response->memory, JSON_REJECT_DUPLICATES, &jerr);
+	if (result)
+		key = json_object_get_string(result, "publicKey");
+	if (key && *key && strlen(key) < 256)
+		wp_set_vapid_key(key);
+	else
 	{
 		unreal_log(ULOG_WARNING, "webpush", "WP_VAPID_FAILED", NULL,
-		           "could not fetch the VAPID key from the backend: $err",
-		           log_data_string("err", response->errorbuf ? response->errorbuf : "empty response"));
-		return;
+		           "could not fetch the VAPID key from the backend, retrying in 30s: $err",
+		           log_data_string("err", response->errorbuf ? response->errorbuf : "no publicKey in the reply"));
+		/* The backend often starts after us, so we ask again until it answers. */
+		EventAdd(wp_module, "webpush_vapid_key_retry", wp_vapid_key_retry, NULL, 30000, 1);
 	}
-	start = strstr(response->memory, "\"publicKey\":\"");
-	if (!start)
-		return;
-	start += strlen("\"publicKey\":\"");
-	len = strcspn(start, "\"");
-	if (len == 0 || len >= sizeof(key))
-		return;
-	strlcpy(key, start, len + 1);
-	wp_set_vapid_key(key);
+	if (result)
+		json_decref(result);
 }
 
 EVENT(wp_vapid_key_retry)
 {
-	if (!vapid_public)
-		wp_fetch_vapid_key();
+	wp_fetch_vapid_key();
 }
 
 static void wp_fetch_vapid_key(void)
@@ -539,15 +574,13 @@ static void wp_fetch_vapid_key(void)
 	snprintf(url, sizeof(url), "%s/push/vapid-key", cfg.backend_url);
 	safe_strdup(req->url, url);
 	req->http_method = HTTP_METHOD_GET;
-	req->callback = wp_vapid_key_cb;
+	safe_strdup(req->apicallback, "webpush_vapid_key");
 	req->max_redirects = 0;
 	req->connect_timeout = 5;
 	req->transfer_timeout = 10;
 	url_start_async(req);
 }
 
-/* POST one push to the backend.  Fire-and-forget; the result callback
- * logs failures and prunes subscriptions the push service dropped. */
 static void wp_send_push(const char *account, const char *endpoint,
                          const char *p256dh, const char *auth,
                          const char *payload)
@@ -587,7 +620,7 @@ static void wp_send_push(const char *account, const char *endpoint,
 	req->http_method = HTTP_METHOD_POST;
 	safe_strdup(req->body, body);
 	req->headers = headers;
-	req->callback = wp_push_result_cb;
+	safe_strdup(req->apicallback, "webpush_push_result");
 	req->callback_data = wp_subscription_ref(account, endpoint);
 	req->max_redirects = 0;
 	req->connect_timeout = 5;
