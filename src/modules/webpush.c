@@ -124,13 +124,17 @@ static int wp_capability_visible(Client *client)
 	return cfg.backend_url && cfg.backend_key && vapid_public;
 }
 
+static int wp_wants_fetched_key(void)
+{
+	return cfg.backend_url && cfg.backend_key && !(cfg.vapid_key && *cfg.vapid_key);
+}
+
 static void wp_generic_free(ModData *m)
 {
 	safe_free(m->ptr);
 }
 
-/* Clients connected before the key arrived get CAP NEW and the VAPID token
- * now, so they can subscribe without reconnecting. */
+/* We announce the key to clients already connected so they can subscribe without reconnecting. */
 static void wp_announce_vapid_key(void)
 {
 	Client *client;
@@ -543,6 +547,8 @@ static void wp_vapid_key_cb(OutgoingWebRequest *request,
 	json_error_t jerr;
 	const char *key = NULL;
 
+	if (!wp_wants_fetched_key())
+		return;
 	if (!response->errorbuf && response->memory)
 		result = json_loads(response->memory, JSON_REJECT_DUPLICATES, &jerr);
 	if (result)
@@ -555,7 +561,8 @@ static void wp_vapid_key_cb(OutgoingWebRequest *request,
 		           "could not fetch the VAPID key from the backend, retrying in 30s: $err",
 		           log_data_string("err", response->errorbuf ? response->errorbuf : "no publicKey in the reply"));
 		/* The backend often starts after us, so we ask again until it answers. */
-		EventAdd(wp_module, "webpush_vapid_key_retry", wp_vapid_key_retry, NULL, 30000, 1);
+		if (!EventFind("webpush_vapid_key_retry"))
+			EventAdd(wp_module, "webpush_vapid_key_retry", wp_vapid_key_retry, NULL, 30000, 1);
 	}
 	if (result)
 		json_decref(result);
@@ -568,9 +575,12 @@ EVENT(wp_vapid_key_retry)
 
 static void wp_fetch_vapid_key(void)
 {
-	OutgoingWebRequest *req = safe_alloc(sizeof(OutgoingWebRequest));
+	OutgoingWebRequest *req;
 	char url[512];
 
+	if (!wp_wants_fetched_key())
+		return;
+	req = safe_alloc(sizeof(OutgoingWebRequest));
 	snprintf(url, sizeof(url), "%s/push/vapid-key", cfg.backend_url);
 	safe_strdup(req->url, url);
 	req->http_method = HTTP_METHOD_GET;
@@ -587,7 +597,8 @@ static void wp_send_push(const char *account, const char *endpoint,
 {
 	OutgoingWebRequest *req;
 	char url[512];
-	char body[BUFSIZE + 1024];
+	/* We size for every byte escaping to a six-byte \u sequence so the JSON always closes. */
+	char body[6 * (WEBPUSH_ENDPOINT_MAX + 2 * BUFSIZE) + 256];
 	NameValuePrioList *headers = NULL;
 
 	if (!cfg.backend_url || !cfg.backend_key)
