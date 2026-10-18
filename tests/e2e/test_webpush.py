@@ -83,15 +83,12 @@ def backend(network):
 
 @pytest.fixture
 def configured_ircd(network, backend):
-    c = IrcdContainer(network=network).up()
+    env = {"WEBPUSH_BACKEND_URL": f"https://{BACKEND_HOST}", "WEBPUSH_BACKEND_KEY": "k"}
+    c = IrcdContainer(network=network, env=env).up()
     try:
         c.wait_ready()
         # The https client loads its CA bundle once at boot, so we restart for it to trust the backend.
         c.append_file(f"{CONF}/tls/curl-ca-bundle.crt", backend)
-        c.append_file(
-            f"{CONF}/obbyircd.conf",
-            f"set {{ webpush {{ backend-url 'https://{BACKEND_HOST}'; backend-key \"k\"; }}; }};\n",
-        )
         c.restart()
         yield c
     finally:

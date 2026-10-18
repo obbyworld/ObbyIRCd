@@ -92,6 +92,9 @@ ${RPC_CONFIG}
 /* Optional external TURN service (set VOICE_TURN_EXTERNAL_URLS). */
 ${VOICE_TURN_CONFIG}
 
+/* Optional web push through obby-api (set WEBPUSH_BACKEND_URL and WEBPUSH_BACKEND_KEY). */
+${WEBPUSH_CONFIG}
+
 set {
     kline-address "${ADMIN_EMAIL}";
     modes-on-connect "+iwx";
