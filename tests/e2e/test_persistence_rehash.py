@@ -1,8 +1,8 @@
-"""Multi-session keeps working after a REHASH.
+"""Permanent modules keep their command overrides after a REHASH.
 
-Persistence is a permanent module: a REHASH reloads the modules that own
-NICK, JOIN, MODE and the other commands it overrides for sessions, while
-persistence itself stays loaded.
+A REHASH reloads the modules that own NICK, JOIN, BATCH and the other
+commands that persistence and pushbot override, while those two modules
+stay loaded.
 """
 
 import asyncio
@@ -57,6 +57,18 @@ async def test_session_keeps_the_account_nick_after_rehash(ircd, account):
 
     await head.send("WHOIS multi")
     assert " 311 " in await head.expect(lambda l: " 311 " in l or " 401 " in l, timeout=10)
+
+
+async def test_bot_commands_batch_is_accepted_after_rehash(ircd, account):
+    _, _, head = account
+    ircd.rehash()
+    await asyncio.sleep(3)
+
+    await head.send("BATCH +cmds draft/bot-cmds multi")
+    await head.send("BATCH -cmds")
+    await head.send("PING batchdone")
+    reply = await head.expect(lambda l: "UNKNOWN_TYPE" in l or ("PONG" in l and "batchdone" in l), timeout=10)
+    assert "UNKNOWN_TYPE" not in reply
 
 
 async def test_oper_session_leaves_the_oper_count_right(ircd, account):
