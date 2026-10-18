@@ -134,13 +134,10 @@ async def test_no_double_replay_on_rehash(persistent_ircd):
 
     _restart_and_wait(persistent_ircd)
 
-    subprocess.check_call([
-        "docker", "exec", persistent_ircd.name,
-        "sh", "-c", "kill -HUP $(pgrep obbyircd)"
-    ])
+    persistent_ircd.rehash()
     time.sleep(3)
 
-    log = _docker_logs(persistent_ircd.name)
+    log =_docker_logs(persistent_ircd.name)
     reads = log.count("metadata entries")
     assert reads == 1, f"metadata-db read fired {reads}x, want 1 (sentinel broken):\n{log[-2000:]}"
 
@@ -203,6 +200,36 @@ async def test_offline_persistent_user_keeps_profile(persistent_ircd):
     await watcher.expect(lambda l: " 366 " in l, timeout=10)
     assert await _profile_seen_by(watcher, "ghostuser", list(profile)) == profile
     await watcher.__aexit__(None, None, None)
+
+
+async def _stored_metadata_on_login(ircd: IrcdContainer, account: str) -> dict[str, str]:
+    user = await _profile_client(ircd, account, account)
+    watcher = await _profile_client(ircd, "watcher")
+    for c in (user, watcher):
+        await c.send(f"JOIN #{account}")
+        await c.expect(lambda l: " 366 " in l, timeout=10)
+    seen = await _profile_seen_by(watcher, account, ["avatar"])
+    await user.__aexit__(None, None, None)
+    await watcher.__aexit__(None, None, None)
+    return seen
+
+
+async def test_stored_user_metadata_survives_rehash(persistent_ircd):
+    """A REHASH reloads metadata-db, and the stored user metadata comes back
+    on the next login, before and after a restart."""
+    stored = {"avatar": "https://example.invalid/r.png"}
+    await _register_account(persistent_ircd, "rehashed")
+    user = await _profile_client(persistent_ircd, "rehashed", "rehashed")
+    await user.send(f"METADATA * SET avatar :{stored['avatar']}")
+    await user.expect(lambda l: " 761 " in l and "avatar" in l)
+    await user.__aexit__(None, None, None)
+
+    persistent_ircd.rehash()
+    time.sleep(3)
+    assert await _stored_metadata_on_login(persistent_ircd, "rehashed") == stored
+
+    _restart_and_wait(persistent_ircd)
+    assert await _stored_metadata_on_login(persistent_ircd, "rehashed") == stored
 
 
 async def test_profile_keeps_keys_an_edit_did_not_touch(persistent_ircd):
