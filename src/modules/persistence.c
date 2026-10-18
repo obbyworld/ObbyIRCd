@@ -117,17 +117,14 @@ static int persist_db_dirty = 0;
  * UnrealIRCd's event loop is single-threaded so this static is safe. */
 static Client *current_session_sender = NULL;
 
-/* Command overrides for session clients */
-static CommandOverride *ovr_privmsg = NULL;
-static CommandOverride *ovr_notice = NULL;
-static CommandOverride *ovr_tagmsg = NULL;
-static CommandOverride *ovr_join = NULL;
-static CommandOverride *ovr_part = NULL;
-static CommandOverride *ovr_away = NULL;
-static CommandOverride *ovr_nick = NULL;
-static CommandOverride *ovr_mode = NULL;
-static CommandOverride *ovr_setname = NULL;
-static CommandOverride *ovr_oper = NULL;
+static Module *persist_module = NULL;
+
+/* The core decrements the oper count when an oper leaves, so we have to
+ * increment it for every oper we create without the OPER command. */
+static int counts_as_oper(long umodes)
+{
+	return (umodes & UMODE_OPER) && !(umodes & UMODE_HIDEOPER);
+}
 
 /* ===================================================================
  * Forward declarations
@@ -295,21 +292,22 @@ MOD_INIT()
 	return MOD_SUCCESS;
 }
 
-MOD_LOAD()
+/* A REHASH reloads the modules that own these commands but never runs
+ * our MOD_LOAD again, so we have to re-add the overrides after every rehash. */
+static int add_session_overrides(void)
 {
-	/* Command overrides: proxy session client commands through canonical */
-	ovr_privmsg = CommandOverrideAdd(modinfo->handle, "PRIVMSG", 0, session_msg_override);
-	ovr_notice = CommandOverrideAdd(modinfo->handle, "NOTICE", 0, session_msg_override);
+	CommandOverrideAdd(persist_module, "PRIVMSG", 0, session_msg_override);
+	CommandOverrideAdd(persist_module, "NOTICE", 0, session_msg_override);
 	/* TAGMSG goes through its own handler (not PRIVMSG), so it needs its
 	 * own override; otherwise a session client's TAGMSG to a channel the
 	 * canonical is in trips ERR_CANNOTSENDTOCHAN. The most visible
 	 * symptom is the voice-channels rtc TAGMSG hitting +n on ^/$
 	 * channels for any authenticated user. */
-	ovr_tagmsg = CommandOverrideAdd(modinfo->handle, "TAGMSG", 0, session_msg_override);
-	ovr_join = CommandOverrideAdd(modinfo->handle, "JOIN", 0, session_join_override);
-	ovr_part = CommandOverrideAdd(modinfo->handle, "PART", 0, session_part_override);
-	ovr_away = CommandOverrideAdd(modinfo->handle, "AWAY", 0, session_away_override);
-	ovr_nick = CommandOverrideAdd(modinfo->handle, "NICK", 0, session_nick_override);
+	CommandOverrideAdd(persist_module, "TAGMSG", 0, session_msg_override);
+	CommandOverrideAdd(persist_module, "JOIN", 0, session_join_override);
+	CommandOverrideAdd(persist_module, "PART", 0, session_part_override);
+	CommandOverrideAdd(persist_module, "AWAY", 0, session_away_override);
+	CommandOverrideAdd(persist_module, "NICK", 0, session_nick_override);
 	/* MODE / SETNAME / OPER on a session must run as the canonical
 	 * client so the change applies to the account's network-visible
 	 * identity (and so cmd_umode doesn't trip ERR_USERSDONTMATCH
@@ -317,9 +315,17 @@ MOD_LOAD()
 	 * session, since session nicks are removed from the hash).
 	 * Umode + oper privilege changes then sync back to every
 	 * session via the HOOKTYPE_UMODE_CHANGE handler. */
-	ovr_mode = CommandOverrideAdd(modinfo->handle, "MODE", 0, session_canonical_swap_override);
-	ovr_setname = CommandOverrideAdd(modinfo->handle, "SETNAME", 0, session_canonical_swap_override);
-	ovr_oper = CommandOverrideAdd(modinfo->handle, "OPER", 0, session_canonical_swap_override);
+	CommandOverrideAdd(persist_module, "MODE", 0, session_canonical_swap_override);
+	CommandOverrideAdd(persist_module, "SETNAME", 0, session_canonical_swap_override);
+	CommandOverrideAdd(persist_module, "OPER", 0, session_canonical_swap_override);
+	return 0;
+}
+
+MOD_LOAD()
+{
+	persist_module = modinfo->handle;
+	add_session_overrides();
+	HookAdd(modinfo->handle, HOOKTYPE_REHASH_COMPLETE, 0, add_session_overrides);
 	away_notify_cap = ClientCapabilityBit("away-notify");
 	persist_load_db();
 	return MOD_SUCCESS;
@@ -574,6 +580,8 @@ static void do_create_ghost(PersistEntry *e)
 	irccounts.me_clients++;
 	if (IsInvisible(ghost))
 		irccounts.invisible++;
+	if (counts_as_oper(ghost->umodes))
+		irccounts.operators++;
 	if (ghost->uplink && ghost->uplink->server)
 		ghost->uplink->server->users++;
 
@@ -1784,6 +1792,9 @@ static void sync_umodes_to_session(Client *canonical, Client *sess)
 
 	old = sess->umodes;
 	sess->umodes = canonical->umodes;
+
+	if (counts_as_oper(sess->umodes) != counts_as_oper(old))
+		irccounts.operators += counts_as_oper(sess->umodes) ? 1 : -1;
 
 	/* Mirror snomask string */
 	if (canonical->user->snomask)
