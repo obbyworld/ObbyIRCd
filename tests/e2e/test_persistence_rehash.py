@@ -67,8 +67,10 @@ async def test_bot_commands_batch_is_accepted_after_rehash(ircd, account):
     await head.send("BATCH +cmds draft/bot-cmds multi")
     await head.send("BATCH -cmds")
     await head.send("PING batchdone")
-    reply = await head.expect(lambda l: "UNKNOWN_TYPE" in l or ("PONG" in l and "batchdone" in l), timeout=10)
-    assert "UNKNOWN_TYPE" not in reply
+    reply = await head.expect(
+        lambda l: "FAIL BATCH" in l or " 421 " in l or ("PONG" in l and "batchdone" in l), timeout=10
+    )
+    assert "PONG" in reply, reply
 
 
 async def test_oper_session_leaves_the_oper_count_right(ircd, account):
