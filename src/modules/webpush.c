@@ -57,9 +57,11 @@ static struct cfgstruct cfg;
 static sqlite3 *wp_db = NULL;
 static Module *wp_module = NULL;
 static char *vapid_public = NULL;
+static char *topic_key = NULL;
 static long CAP_WEBPUSH = 0L;
 static long CAP_SOJU_WEBPUSH = 0L;
 static int is_retry_scheduled = 0;
+static int wp_dm_batch_unpushed = 0;
 
 /* Forward decls */
 static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
@@ -71,6 +73,9 @@ static int wp_usermsg(Client *client, Client *to, MessageTag *mtags,
 static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
                       const char *member_modes, const char *target,
                       MessageTag *mtags, const char *text, SendType sendtype);
+static int wp_chanmsg_multiline(Client *client, Channel *channel, int sendflags,
+                                const char *member_modes, const char *target,
+                                MessageTag *mtags, MLine *lines, SendType sendtype);
 CMD_FUNC(cmd_webpush);
 static void wp_fetch_vapid_key(void);
 EVENT(wp_vapid_key_retry);
@@ -95,6 +100,12 @@ MOD_INIT()
 	MARK_AS_OFFICIAL_MODULE(modinfo);
 	wp_module = modinfo->handle;
 	LoadPersistentPointer(modinfo, vapid_public, wp_generic_free);
+	LoadPersistentPointer(modinfo, topic_key, wp_generic_free);
+	if (!topic_key)
+	{
+		topic_key = safe_alloc(SIPHASH_KEY_LENGTH);
+		siphash_generate_key(topic_key);
+	}
 
 	if (wp_open_db() != 0)
 		return MOD_FAILED;
@@ -114,6 +125,7 @@ MOD_INIT()
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, wp_configrun);
 	HookAdd(modinfo->handle, HOOKTYPE_USERMSG, 0, wp_usermsg);
 	HookAdd(modinfo->handle, HOOKTYPE_CHANMSG, 0, wp_chanmsg);
+	HookAdd(modinfo->handle, HOOKTYPE_CHANMSG_MULTILINE, 0, wp_chanmsg_multiline);
 
 	return MOD_SUCCESS;
 }
@@ -181,6 +193,7 @@ MOD_UNLOAD()
 	safe_free(cfg.backend_key);
 	safe_free(cfg.vapid_key);
 	SavePersistentPointer(modinfo, vapid_public);
+	SavePersistentPointer(modinfo, topic_key);
 	return MOD_SUCCESS;
 }
 
@@ -635,7 +648,7 @@ static void wp_fetch_vapid_key(void)
 
 static void wp_send_push(const char *account, const char *endpoint,
                          const char *p256dh, const char *auth,
-                         const char *payload)
+                         const char *topic, const char *payload)
 {
 	OutgoingWebRequest *req;
 	char url[512];
@@ -659,6 +672,8 @@ static void wp_send_push(const char *account, const char *endpoint,
 	json_append_string(body, sizeof(body), auth);
 	strlcat(body, ",\"payload\":", sizeof(body));
 	json_append_string(body, sizeof(body), payload);
+	strlcat(body, ",\"topic\":", sizeof(body));
+	json_append_string(body, sizeof(body), topic);
 	{
 		char ttlbuf[64];
 		snprintf(ttlbuf, sizeof(ttlbuf), ",\"ttl\":%d}", cfg.ttl);
@@ -717,22 +732,27 @@ static void wp_build_payload(char *buf, size_t n, Client *sender,
 		         cmd, target, text ? text : "");
 }
 
-/* Push `payload` to every stored subscription for `account`. */
-static void wp_push_to_account(const char *account, const char *payload)
+/* Push services keep only the newest undelivered push per topic, so we give
+ * each chat its own topic and the push service delivers the latest one. */
+static void wp_push_to_account(const char *account, const char *chat,
+                               const char *payload)
 {
+	char topic[17];
 	sqlite3_stmt *st = NULL;
 	const char *sql =
 	    "SELECT endpoint, p256dh, auth FROM webpush_subscriptions WHERE account=?";
 	if (!wp_db || sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) != SQLITE_OK)
 		return;
 	sqlite3_bind_text(st, 1, account, -1, SQLITE_TRANSIENT);
+	snprintf(topic, sizeof(topic), "%016llx",
+	         (unsigned long long)siphash_nocase(chat, topic_key));
 	while (sqlite3_step(st) == SQLITE_ROW)
 	{
 		const char *endpoint = (const char *)sqlite3_column_text(st, 0);
 		const char *p256dh = (const char *)sqlite3_column_text(st, 1);
 		const char *auth = (const char *)sqlite3_column_text(st, 2);
 		if (endpoint && p256dh && auth)
-			wp_send_push(account, endpoint, p256dh, auth, payload);
+			wp_send_push(account, endpoint, p256dh, auth, topic, payload);
 	}
 	sqlite3_finalize(st);
 }
@@ -742,10 +762,19 @@ static int wp_usermsg(Client *client, Client *to, MessageTag *mtags,
 {
 	char payload[BUFSIZE];
 
-	/* DMs to an account-holder only.  TAGMSG carries no body worth
-	 * pushing; skip it.  Self-messages don't warrant a push. */
+	/* DMs to an account-holder only. */
 	if (!IsUser(to) || !IsLoggedIn(to))
 		return 0;
+	/* Multiline replays a DM batch line by line with history_inhibit set and
+	 * the batch tags on its first line, so we push its first non-empty line. */
+	if (history_inhibit)
+	{
+		if (mtags)
+			wp_dm_batch_unpushed = 1;
+		if (!wp_dm_batch_unpushed || !text || !*text)
+			return 0;
+		wp_dm_batch_unpushed = 0;
+	}
 	if (sendtype == SEND_TYPE_TAGMSG)
 		return 0;
 	if (IsUser(client) && IsLoggedIn(client) &&
@@ -756,7 +785,7 @@ static int wp_usermsg(Client *client, Client *to, MessageTag *mtags,
 
 	const char *cmd = (sendtype == SEND_TYPE_NOTICE) ? "NOTICE" : "PRIVMSG";
 	wp_build_payload(payload, sizeof(payload), client, to->name, mtags, cmd, text);
-	wp_push_to_account(to->user->account, payload);
+	wp_push_to_account(to->user->account, client->name, payload);
 	return 0;
 }
 
@@ -784,27 +813,47 @@ static int wp_text_highlights_nick(const char *text, const char *nick)
 	return 0;
 }
 
+static int wp_lines_highlight_nick(MLine *lines, const char *nick)
+{
+	for (MLine *line = lines; line; line = line->next)
+		if (wp_text_highlights_nick(line->text, nick))
+			return 1;
+	return 0;
+}
+
 /* Channel highlight push: when a channel message mentions an
  * account-holder member by nick, push it to that account's devices.
  * The SW suppresses the notification if a window is focused, so this
  * is safe to fire even for users actively in the channel. */
-static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
-                      const char *member_modes, const char *target,
-                      MessageTag *mtags, const char *text, SendType sendtype)
+static void wp_push_channel_highlights(Client *client, Channel *channel,
+                                       MessageTag *mtags, MLine *lines,
+                                       SendType sendtype)
 {
 	Member *m;
+	char text[BUFSIZE] = "";
 	char payload[BUFSIZE];
 
-	if (sendtype == SEND_TYPE_TAGMSG || !text || !*text)
-		return 0;
+	if (sendtype == SEND_TYPE_TAGMSG || !lines)
+		return;
 	if (!wp_db || !cfg.backend_url || !channel)
-		return 0;
+		return;
+
+	for (MLine *line = lines; line; line = line->next)
+	{
+		if (line != lines && !line->concat)
+			strlcat(text, " ", sizeof(text));
+		strlcat(text, line->text, sizeof(text));
+	}
+	if (!*text)
+		return;
 
 	const char *cmd = (sendtype == SEND_TYPE_NOTICE) ? "NOTICE" : "PRIVMSG";
-
 	for (m = channel->members; m; m = m->next)
 	{
 		Client *acptr = m->client;
+		/* We skip shadow members so each account gets one push. */
+		if (m->memb_flags & MEMB_FLAG_SHADOW)
+			continue;
 		if (!acptr || !IsUser(acptr) || !IsLoggedIn(acptr))
 			continue;
 		if (acptr == client)
@@ -813,11 +862,31 @@ static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
 		if (IsUser(client) && IsLoggedIn(client) &&
 		    !strcasecmp(client->user->account, acptr->user->account))
 			continue;
-		if (!wp_text_highlights_nick(text, acptr->name))
+		if (!wp_lines_highlight_nick(lines, acptr->name))
 			continue;
 		wp_build_payload(payload, sizeof(payload), client, channel->name,
 		                 mtags, cmd, text);
-		wp_push_to_account(acptr->user->account, payload);
+		wp_push_to_account(acptr->user->account, channel->name, payload);
 	}
+}
+
+static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
+                      const char *member_modes, const char *target,
+                      MessageTag *mtags, const char *text, SendType sendtype)
+{
+	MLine line = {.next = NULL, .text = (char *)text, .concat = 0};
+
+	/* Multiline replays a batch line by line with history_inhibit set, and we
+	 * push that batch once from its multiline hook. */
+	if (!history_inhibit && text)
+		wp_push_channel_highlights(client, channel, mtags, &line, sendtype);
+	return 0;
+}
+
+static int wp_chanmsg_multiline(Client *client, Channel *channel, int sendflags,
+                                const char *member_modes, const char *target,
+                                MessageTag *mtags, MLine *lines, SendType sendtype)
+{
+	wp_push_channel_highlights(client, channel, mtags, lines, sendtype);
 	return 0;
 }
