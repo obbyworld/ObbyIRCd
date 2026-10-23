@@ -312,6 +312,21 @@ static void history_send_result_line(Client *client, HistoryLogLine *l, const ch
 	}
 }
 
+/** Copy the source of a stored IRC line (the part after ':' up to the first
+ * space) into buf, or the server name when the line has no prefix.
+ */
+static void history_line_source(char *buf, size_t buflen, const char *line)
+{
+	const char *end;
+
+	if (*line != ':' || !(end = strchr(line, ' ')))
+	{
+		strlcpy(buf, me.name, buflen);
+		return;
+	}
+	strlncpy(buf, line + 1, buflen, end - line - 1);
+}
+
 /** Send a multiline batch from history as a nested draft/multiline batch.
  * Used for clients that support both draft/multiline and batch.
  */
@@ -319,10 +334,14 @@ static void history_send_result_multiline(Client *client, HistoryLogLine *head,
                                           const char *outer_batch, const char *object)
 {
 	char inner_batch[BATCHLEN + 1];
+	char source[NICKLEN + USERLEN + HOSTLEN + 4];
 	HistoryLogLine *l;
 	MessageTag *m;
 
 	generate_batch_id(inner_batch);
+	/* Clients take the sender of a multiline message from its BATCH line, so we
+	 * open and close the batch as the sender, the way it was delivered live. */
+	history_line_source(source, sizeof(source), head->line);
 
 	/* BATCH open: head's mtags (time, msgid, ...) + @batch=outer */
 	m = safe_alloc(sizeof(MessageTag));
@@ -330,7 +349,7 @@ static void history_send_result_multiline(Client *client, HistoryLogLine *head,
 	safe_strdup(m->value, outer_batch);
 	AddListItem(m, head->mtags);
 	sendto_one(client, head->mtags, ":%s BATCH +%s draft/multiline %s",
-	           me.name, inner_batch, object);
+	           source, inner_batch, object);
 	DelListItem(m, head->mtags);
 	free_message_tags(m);
 
@@ -359,7 +378,7 @@ static void history_send_result_multiline(Client *client, HistoryLogLine *head,
 	m = safe_alloc(sizeof(MessageTag));
 	safe_strdup(m->name, "batch");
 	safe_strdup(m->value, outer_batch);
-	sendto_one(client, m, ":%s BATCH -%s", me.name, inner_batch);
+	sendto_one(client, m, ":%s BATCH -%s", source, inner_batch);
 	free_message_tags(m);
 }
 
