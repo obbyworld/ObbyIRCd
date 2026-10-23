@@ -105,7 +105,7 @@ int write_metadatadb(void);
 int write_metadata_entry(FILE *fd, const char *tmpfname, struct metadata *metadata, char *name, time_t last_seen);
 int ghost_created(Client *ghost);
 int read_metadatadb(void);
-void free_metadata_storage(void);
+void free_metadata_storage(ModData *m);
 int how_many_metadata_channel(Channel *channel, ModDataInfo *channelmd);
 int how_many_metadata_user(Client *client, ModDataInfo *usermd);
 void store_metadata(char *account, struct metadata *metadata, time_t last_seen);
@@ -133,6 +133,7 @@ MOD_TEST()
 MOD_INIT()
 {
 	LoadPersistentLong(modinfo, metadatadb_next_event);
+	LoadPersistentPointer(modinfo, metadata_storage, free_metadata_storage);
 	setcfg();
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, metadatadb_configrun);
 	return MOD_SUCCESS;
@@ -185,7 +186,7 @@ MOD_LOAD()
 	return MOD_SUCCESS;
 }
 
-void free_metadata_storage(void)
+void free_metadata_storage(ModData *m)
 {
 	struct metadata_storage *curr = metadata_storage, *prev = NULL;
 	while (curr)
@@ -203,8 +204,8 @@ MOD_UNLOAD()
 {
 	SavePersistentLong(modinfo, metadatadb_next_event);
 	write_metadatadb();
+	SavePersistentPointer(modinfo, metadata_storage);
 	freecfg();
-	free_metadata_storage();
 	return MOD_SUCCESS;
 }
 
