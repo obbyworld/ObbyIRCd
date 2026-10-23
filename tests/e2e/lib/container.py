@@ -89,6 +89,17 @@ class IrcdContainer:
         )
         return result.stdout + result.stderr
 
+    def rehash(self):
+        subprocess.check_call(
+            ["docker", "exec", self.name, "sh", "-c", "kill -HUP $(pgrep obbyircd)"]
+        )
+
+    def is_running(self) -> bool:
+        out = subprocess.check_output(
+            ["docker", "inspect", "-f", "{{.State.Running}}", self.name], text=True
+        )
+        return out.strip() == "true"
+
     def wait_ready(self, timeout=120):
         deadline = time.time() + timeout
         while time.time() < deadline:

@@ -662,6 +662,9 @@ static int pb_on_rehash_complete(void)
 	 * conf bots stay live until restart -- handling that delta cleanly
 	 * needs an explicit destroy path and is a phase-2 enhancement. */
 	pb_apply_pending_bots();
+	/* A REHASH reloads the module that owns BATCH but never runs our
+	 * MOD_LOAD again, so we have to re-add the override after every rehash. */
+	CommandOverrideAdd(modinfo_ref->handle, "BATCH", 0, pb_override_batch);
 	return 0;
 }
 
