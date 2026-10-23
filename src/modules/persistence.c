@@ -139,6 +139,7 @@ static void restore_channels(Client *client, PersistEntry *e);
 static int is_ghost_client(Client *client);
 static int is_session_client(Client *client);
 static PersistEntry *find_entry_for_session(Client *client);
+static PersistEntry *find_entry_for_canonical(Client *client);
 static void add_session(PersistEntry *e, Client *client);
 static void remove_session(PersistEntry *e, Client *client);
 static void promote_session(PersistEntry *e);
@@ -602,10 +603,21 @@ static void do_create_ghost(PersistEntry *e)
 	           log_data_string("account", e->account));
 }
 
+/* We remove the client from its channels without notifying the members. */
+static void leave_channels_silently(Client *client)
+{
+	Membership *mb, *mb_next;
+
+	for (mb = client->user->channel; mb; mb = mb_next)
+	{
+		mb_next = mb->next;
+		remove_user_from_channel_withmb(client, mb->channel, mb, 1);
+	}
+}
+
 static void destroy_ghost(PersistEntry *e, const char *reason)
 {
 	Client *ghost;
-	Membership *mp;
 
 	if (!e || !e->ghost)
 		return;
@@ -619,8 +631,7 @@ static void destroy_ghost(PersistEntry *e, const char *reason)
 		           log_data_string("account", e->account),
 		           log_data_string("reason", reason));
 
-	while ((mp = ghost->user->channel))
-		remove_user_from_channel_withmb(ghost, mp->channel, mp, 1);
+	leave_channels_silently(ghost);
 
 	if (reason && find_user(ghost->name, NULL) == ghost)
 		RunHook(HOOKTYPE_GHOST_RELEASED, ghost);
@@ -772,6 +783,16 @@ static void canonical_md_refresh_group(PersistEntry *e)
 /* A canonical that quits without handing over must not stay referenced:
  * its sessions would keep an "account_canonical" pointer to a freed Client,
  * so we point them back at themselves. */
+static PersistEntry *find_entry_for_canonical(Client *client)
+{
+	PersistEntry *e;
+
+	for (e = persist_list; e; e = e->next)
+		if (e->canonical == client)
+			return e;
+	return NULL;
+}
+
 static void forget_canonical(Client *client)
 {
 	PersistEntry *e;
@@ -838,8 +859,9 @@ static void promote_session(PersistEntry *e)
 	new_canonical = sess->client;
 	safe_free(sess);
 
-	/* Session was removed from nick hash in setup_session; re-add now
-	 * that it becomes canonical. client->name is already e->nick. */
+	/* Sessions hold no nick hash slot and may carry the account name, so
+	 * we give the promoted client the nick the canonical had. */
+	strlcpy(new_canonical->name, e->nick, sizeof(new_canonical->name));
 	add_to_client_hash_table(new_canonical->name, new_canonical);
 
 	/* No longer a session */
@@ -1164,7 +1186,6 @@ static void send_status(Client *client, PersistEntry *e)
 static int persist_local_quit(Client *client, MessageTag *mtags, const char *comment)
 {
 	PersistEntry *e;
-	Membership *mb, *mb_next;
 	MessageTag *away_mtags;
 
 	/* Ghosts exit normally without triggering new ghost creation */
@@ -1174,14 +1195,7 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 	/* Session clients: detach from sessions list only, no ghost */
 	if (is_session_client(client))
 	{
-		Membership *mb, *mb_next;
-		/* Strip from all channels silently so normal quit processing
-		 * does not broadcast QUIT to channel members. */
-		for (mb = client->user->channel; mb; mb = mb_next)
-		{
-			mb_next = mb->next;
-			remove_user_from_channel_withmb(client, mb->channel, mb, 1);
-		}
+		leave_channels_silently(client);
 		e = find_entry_for_session(client);
 		if (e)
 			remove_session(e, client);
@@ -1193,6 +1207,21 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 
 	if (!IsUser(client) || !MyUser(client))
 		return 0;
+
+	/* Sessions attach whatever the persistence setting, so we hand the
+	 * nick and channels to one of them. */
+	e = find_entry_for_canonical(client);
+	if (e && e->num_sessions > 0)
+	{
+		e->canonical = NULL;
+		save_client_to_entry(client, e);
+		del_from_client_hash_table(client->name, client);
+		promote_session(e);
+		leave_channels_silently(client);
+		*client->name = '\0';
+		persist_db_mark_dirty();
+		return 0;
+	}
 
 	if (!IsLoggedIn(client))
 	{
@@ -1206,8 +1235,14 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 		/* persistence is OFF for this account but a prior session with
 		 * persistence ON may have left e->canonical pointing at us.
 		 * Clear it now so a subsequent reconnect's session-attach check
-		 * doesn't latch onto a use-after-free Client pointer. */
+		 * doesn't latch onto a use-after-free Client pointer. Accounts without
+		 * persistence keep no saved channels, so we clear what a hand-off stored. */
 		forget_canonical(client);
+		if (e && e->num_channels)
+		{
+			e->num_channels = 0;
+			persist_db_mark_dirty();
+		}
 		return 0;
 	}
 
@@ -1229,41 +1264,25 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 	/* Free the nick hash slot */
 	del_from_client_hash_table(client->name, client);
 
-	if (e->num_sessions > 0)
-	{
-		/* Promote first session to canonical — seamless hand-off */
-		promote_session(e);
-	} else
-	{
-		/* No sessions — create ghost */
-		do_create_ghost(e);
+	do_create_ghost(e);
 
-		/* Without channels there is no ghost, so the user really leaves and
-		 * we give the nick back for the normal quit to announce. */
-		if (!e->ghost)
-		{
-			add_to_client_hash_table(client->name, client);
-			persist_db_mark_dirty();
-			return 0;
-		}
-
-		if (e->ghost)
-		{
-			away_mtags = NULL;
-			new_message(e->ghost, NULL, &away_mtags);
-			sendto_local_common_channels(e->ghost, NULL, away_notify_cap, away_mtags,
-			                             ":%s AWAY :%s", e->ghost->name,
-			                             "User is offline (persistent)");
-			free_message_tags(away_mtags);
-		}
+	/* Without channels there is no ghost, so the user really leaves and
+	 * we give the nick back for the normal quit to announce. */
+	if (!e->ghost)
+	{
+		add_to_client_hash_table(client->name, client);
+		persist_db_mark_dirty();
+		return 0;
 	}
 
-	/* Strip real client from all channels so exit_one_client sends no QUIT */
-	for (mb = client->user->channel; mb; mb = mb_next)
-	{
-		mb_next = mb->next;
-		remove_user_from_channel_withmb(client, mb->channel, mb, 1);
-	}
+	away_mtags = NULL;
+	new_message(e->ghost, NULL, &away_mtags);
+	sendto_local_common_channels(e->ghost, NULL, away_notify_cap, away_mtags,
+	                             ":%s AWAY :%s", e->ghost->name,
+	                             "User is offline (persistent)");
+	free_message_tags(away_mtags);
+
+	leave_channels_silently(client);
 
 	/* Blank nick so exit_one_client skips the hash removal */
 	*client->name = '\0';
