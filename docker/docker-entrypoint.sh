@@ -100,6 +100,21 @@ else
     export VOICE_TURN_CONFIG=""
 fi
 
+# The URL stays single-quoted: a double-quoted URL in the conf is downloaded
+# as a remote include when the config loads.
+if [ -n "${WEBPUSH_BACKEND_URL:-}" ] && [ -n "${WEBPUSH_BACKEND_KEY:-}" ]; then
+    case "$WEBPUSH_BACKEND_URL" in
+        *"'"*)
+            echo "ERROR: WEBPUSH_BACKEND_URL contains a single quote, refuse to render conf" >&2
+            exit 1
+            ;;
+    esac
+    export WEBPUSH_CONFIG="set { webpush { backend-url '${WEBPUSH_BACKEND_URL}'; backend-key \"$(voice_dq_escape "${WEBPUSH_BACKEND_KEY}")\"; }; };"
+    echo "Web push backend: ${WEBPUSH_BACKEND_URL}"
+else
+    export WEBPUSH_CONFIG=""
+fi
+
 if [ -n "${INVITE_BASE_URL:-}" ]; then
     export INVITE_CONFIG="set { invitation { base-url \"${INVITE_BASE_URL}\"; }; };"
     echo "Invite base URL: ${INVITE_BASE_URL}"

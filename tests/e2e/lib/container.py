@@ -16,11 +16,13 @@ class IrcdContainer:
         env: dict | None = None,
         bind_data: bool = False,
         with_voice_bridge: bool = False,
+        network: str | None = None,
     ):
         self.image = image or os.environ.get("OBBYIRCD_IMAGE", "obbyircd:e2e")
         self.name = f"obbyircd-e2e-{secrets.token_hex(4)}"
         self.bind_data = bind_data
         self.with_voice_bridge = with_voice_bridge
+        self.network = network
         self.voice_bridge_volume = (
             f"voicebridge-{secrets.token_hex(4)}" if with_voice_bridge else None
         )
@@ -60,6 +62,8 @@ class IrcdContainer:
                 cmd += ["-v", f"{self.data_root}/{sub}:/home/obbyircd/obby/{sub}"]
         if self.voice_bridge_volume:
             cmd += ["-v", f"{self.voice_bridge_volume}:/run/obbyirc"]
+        if self.network:
+            cmd += ["--network", self.network]
         for k, v in self.env.items():
             cmd += ["-e", f"{k}={v}"]
         cmd.append(self.image)
@@ -89,16 +93,31 @@ class IrcdContainer:
         )
         return result.stdout + result.stderr
 
-    def rehash(self):
-        subprocess.check_call(
-            ["docker", "exec", self.name, "sh", "-c", "kill -HUP $(pgrep obbyircd)"]
+    def append_file(self, path: str, text: str):
+        subprocess.run(
+            ["docker", "exec", "-i", self.name, "sh", "-c", f'cat >> "{path}"'],
+            input=text, check=True, capture_output=True, text=True,
         )
+
+    def restart(self, timeout=120):
+        starts = self.logs().count("ObbyIRCd started.")
+        subprocess.run(["docker", "restart", self.name], check=True, capture_output=True)
+        deadline = time.time() + timeout
+        while self.logs().count("ObbyIRCd started.") <= starts:
+            if time.time() > deadline or not self.is_running():
+                raise TimeoutError(f"never restarted: {self.logs()[-2000:]}")
+            time.sleep(1)
 
     def is_running(self) -> bool:
         out = subprocess.check_output(
             ["docker", "inspect", "-f", "{{.State.Running}}", self.name], text=True
         )
         return out.strip() == "true"
+
+    def rehash(self):
+        subprocess.check_call(
+            ["docker", "exec", self.name, "sh", "-c", "kill -HUP $(pgrep obbyircd)"]
+        )
 
     def wait_ready(self, timeout=120):
         deadline = time.time() + timeout

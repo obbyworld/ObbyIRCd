@@ -1,9 +1,11 @@
-/* src/modules/webpush.c - IRCv3 soju.im/webpush extension.
+/* src/modules/webpush.c - IRCv3 draft/webpush (and soju.im/webpush).
  *
  * Implements the IRC-protocol half of Web Push (RFC 8030/8291/8292):
  *
- *   * advertises the `soju.im/webpush` capability
- *   * advertises `VAPID=<base64url-public-key>` in ISUPPORT
+ *   * advertises the `draft/webpush` and `soju.im/webpush` capabilities
+ *     once a backend is configured
+ *   * advertises `VAPID=<base64url-public-key>` in ISUPPORT, taken from
+ *     set::webpush::vapid-key or fetched from the backend
  *   * handles `WEBPUSH REGISTER <endpoint> <keys>` and
  *     `WEBPUSH UNREGISTER <endpoint>` (keys = message-tag form:
  *     `p256dh=...;auth=...`), storing subscriptions per account in
@@ -21,9 +23,9 @@
  * Config:
  *   set {
  *     webpush {
- *       backend-url "http://127.0.0.1:8080";  // hosted-backend base
+ *       backend-url 'https://api.example.com';  // hosted-backend base, https
  *       backend-key "<IRC_SERVER_KEY>";        // X-ObsidianIRC-Key
- *       vapid-key "<base64url public key>";    // from /push/vapid-key
+ *       vapid-key "<base64url public key>";    // optional, else /push/vapid-key
  *       ttl 86400;                             // optional, push TTL secs
  *     }
  *   }
@@ -50,8 +52,16 @@ struct cfgstruct {
 };
 static struct cfgstruct cfg;
 
+#define WEBPUSH_ENDPOINT_MAX 1024
+
 static sqlite3 *wp_db = NULL;
-long CAP_WEBPUSH = 0L;
+static Module *wp_module = NULL;
+static char *vapid_public = NULL;
+static char *topic_key = NULL;
+static long CAP_WEBPUSH = 0L;
+static long CAP_SOJU_WEBPUSH = 0L;
+static int is_retry_scheduled = 0;
+static int wp_dm_batch_unpushed = 0;
 
 /* Forward decls */
 static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
@@ -63,7 +73,17 @@ static int wp_usermsg(Client *client, Client *to, MessageTag *mtags,
 static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
                       const char *member_modes, const char *target,
                       MessageTag *mtags, const char *text, SendType sendtype);
+static int wp_chanmsg_multiline(Client *client, Channel *channel, int sendflags,
+                                const char *member_modes, const char *target,
+                                MessageTag *mtags, MLine *lines, SendType sendtype);
 CMD_FUNC(cmd_webpush);
+static void wp_fetch_vapid_key(void);
+EVENT(wp_vapid_key_retry);
+static int wp_capability_visible(Client *client);
+static void wp_delete_subscription(const char *account, const char *endpoint);
+static void wp_vapid_key_cb(OutgoingWebRequest *request, OutgoingWebResponse *response);
+static void wp_push_result_cb(OutgoingWebRequest *request, OutgoingWebResponse *response);
+static void wp_generic_free(ModData *m);
 
 MOD_TEST()
 {
@@ -78,32 +98,89 @@ MOD_INIT()
 	ClientCapabilityInfo c;
 
 	MARK_AS_OFFICIAL_MODULE(modinfo);
+	wp_module = modinfo->handle;
+	LoadPersistentPointer(modinfo, vapid_public, wp_generic_free);
+	LoadPersistentPointer(modinfo, topic_key, wp_generic_free);
+	if (!topic_key)
+	{
+		topic_key = safe_alloc(SIPHASH_KEY_LENGTH);
+		siphash_generate_key(topic_key);
+	}
 
 	if (wp_open_db() != 0)
 		return MOD_FAILED;
 	wp_create_tables();
 
 	memset(&c, 0, sizeof(c));
-	c.name = "soju.im/webpush";
+	c.name = "draft/webpush";
+	c.visible = wp_capability_visible;
 	ClientCapabilityAdd(modinfo->handle, &c, &CAP_WEBPUSH);
+	c.name = "soju.im/webpush";
+	ClientCapabilityAdd(modinfo->handle, &c, &CAP_SOJU_WEBPUSH);
 
 	CommandAdd(modinfo->handle, "WEBPUSH", cmd_webpush, MAXPARA, CMD_USER);
+	RegisterApiCallbackWebResponse(modinfo->handle, "webpush_vapid_key", wp_vapid_key_cb);
+	RegisterApiCallbackWebResponse(modinfo->handle, "webpush_push_result", wp_push_result_cb);
 
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, wp_configrun);
 	HookAdd(modinfo->handle, HOOKTYPE_USERMSG, 0, wp_usermsg);
 	HookAdd(modinfo->handle, HOOKTYPE_CHANMSG, 0, wp_chanmsg);
+	HookAdd(modinfo->handle, HOOKTYPE_CHANMSG_MULTILINE, 0, wp_chanmsg_multiline);
 
 	return MOD_SUCCESS;
 }
 
+/* Clients only see push once we can deliver it: a backend to send through
+ * and a VAPID key for them to subscribe against. */
+static int wp_capability_visible(Client *client)
+{
+	return cfg.backend_url && cfg.backend_key && vapid_public;
+}
+
+static int wp_wants_fetched_key(void)
+{
+	return cfg.backend_url && cfg.backend_key && !(cfg.vapid_key && *cfg.vapid_key);
+}
+
+static void wp_generic_free(ModData *m)
+{
+	safe_free(m->ptr);
+}
+
+/* We announce the key to clients already connected so they can subscribe without reconnecting. */
+static void wp_announce_vapid_key(void)
+{
+	Client *client;
+	char token[300];
+
+	send_cap_notify(1, "draft/webpush");
+	send_cap_notify(1, "soju.im/webpush");
+	snprintf(token, sizeof(token), "VAPID=%s", vapid_public);
+	list_for_each_entry(client, &lclient_list, lclient_node)
+		if (IsUser(client))
+			sendnumeric(client, RPL_ISUPPORT, token);
+}
+
+static void wp_set_vapid_key(const char *key)
+{
+	int changed = !vapid_public || strcmp(vapid_public, key);
+
+	safe_strdup(vapid_public, key);
+	ISupportSetFmt(wp_module, "VAPID", "%s", key);
+	if (changed)
+		wp_announce_vapid_key();
+}
+
 MOD_LOAD()
 {
-	/* Advertise the server VAPID public key so clients can build a
-	 * PushManager subscription against it.  Only set when configured;
-	 * without it the cap is still advertised but clients can't
-	 * subscribe (they'll see no VAPID token and skip registration). */
 	if (cfg.vapid_key && *cfg.vapid_key)
-		ISupportSetFmt(modinfo->handle, "VAPID", "%s", cfg.vapid_key);
+		wp_set_vapid_key(cfg.vapid_key);
+	else if (cfg.backend_url && cfg.backend_key)
+	{
+		if (vapid_public)
+			ISupportSetFmt(wp_module, "VAPID", "%s", vapid_public);
+		wp_fetch_vapid_key();
+	}
 	return MOD_SUCCESS;
 }
 
@@ -115,6 +192,8 @@ MOD_UNLOAD()
 	safe_free(cfg.backend_url);
 	safe_free(cfg.backend_key);
 	safe_free(cfg.vapid_key);
+	SavePersistentPointer(modinfo, vapid_public);
+	SavePersistentPointer(modinfo, topic_key);
 	return MOD_SUCCESS;
 }
 
@@ -144,6 +223,11 @@ static int wp_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 			{
 				config_error("%s:%i: set::webpush::%s requires a value",
 				             cep->file->filename, cep->line_number, cep->name);
+				errors++;
+			} else if (!strcmp(cep->name, "backend-url") && strncmp(cep->value, "https://", 8))
+			{
+				config_error("%s:%i: set::webpush::backend-url must be an https:// URL",
+				             cep->file->filename, cep->line_number);
 				errors++;
 			}
 		} else if (!strcmp(cep->name, "ttl"))
@@ -291,6 +375,16 @@ CMD_FUNC(cmd_webpush)
 		const char *endpoint = parv[2];
 		char *p256dh = NULL, *errk_auth = NULL;
 
+		/* Push services are public HTTPS endpoints; the backend refuses
+		 * anything else, so we turn it away here with a clear error. */
+		if (strncmp(endpoint, "https://", 8) || strlen(endpoint) > WEBPUSH_ENDPOINT_MAX)
+		{
+			sendto_one(client, NULL,
+			           ":%s FAIL WEBPUSH INVALID_PARAMS REGISTER :Invalid endpoint",
+			           me.name);
+			return;
+		}
+
 		if (BadPtr(parv[3]) || !wp_parse_keys(parv[3], &p256dh, &errk_auth))
 		{
 			sendto_one(client, NULL,
@@ -343,16 +437,7 @@ CMD_FUNC(cmd_webpush)
 	if (!strcasecmp(parv[1], "UNREGISTER"))
 	{
 		const char *endpoint = parv[2];
-		sqlite3_stmt *st = NULL;
-		const char *sql =
-		    "DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=?";
-		if (wp_db && sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) == SQLITE_OK)
-		{
-			sqlite3_bind_text(st, 1, client->user->account, -1, SQLITE_TRANSIENT);
-			sqlite3_bind_text(st, 2, endpoint, -1, SQLITE_TRANSIENT);
-			sqlite3_step(st);
-			sqlite3_finalize(st);
-		}
+		wp_delete_subscription(client->user->account, endpoint);
 		/* Echo success unconditionally -- UNREGISTER is idempotent. */
 		sendto_one(client, NULL, ":%s WEBPUSH UNREGISTER %s", me.name, endpoint);
 		return;
@@ -418,26 +503,157 @@ static void json_append_string(char *dst, size_t dstsize, const char *src)
 	dst[len] = '\0';
 }
 
-/* Result callback: only surfaces failures.  Successful pushes are
- * silent to avoid log spam (one line per delivered message). */
+static void wp_delete_subscription(const char *account, const char *endpoint)
+{
+	sqlite3_stmt *st = NULL;
+	const char *sql =
+	    "DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=?";
+	if (!wp_db || sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) != SQLITE_OK)
+		return;
+	sqlite3_bind_text(st, 1, account, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 2, endpoint, -1, SQLITE_TRANSIENT);
+	sqlite3_step(st);
+	sqlite3_finalize(st);
+}
+
+typedef struct WebPushRef {
+	char *account;
+	char *endpoint;
+	char *p256dh;
+	char *auth;
+} WebPushRef;
+
+static WebPushRef *wp_push_ref(const char *account, const char *endpoint,
+                               const char *p256dh, const char *auth)
+{
+	WebPushRef *ref = safe_alloc(sizeof(WebPushRef));
+	safe_strdup(ref->account, account);
+	safe_strdup(ref->endpoint, endpoint);
+	safe_strdup(ref->p256dh, p256dh);
+	safe_strdup(ref->auth, auth);
+	return ref;
+}
+
+static void wp_free_push_ref(WebPushRef *ref)
+{
+	if (!ref)
+		return;
+	safe_free(ref->account);
+	safe_free(ref->endpoint);
+	safe_free(ref->p256dh);
+	safe_free(ref->auth);
+	safe_free(ref);
+}
+
+/* We match the keys too, so a late failure for an old registration keeps a newer one on the same endpoint. */
+static void wp_prune_subscription(const WebPushRef *ref)
+{
+	sqlite3_stmt *st = NULL;
+	const char *sql =
+	    "DELETE FROM webpush_subscriptions WHERE account=? AND endpoint=? AND p256dh=? AND auth=?";
+	if (!wp_db || sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) != SQLITE_OK)
+		return;
+	sqlite3_bind_text(st, 1, ref->account, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 2, ref->endpoint, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 3, ref->p256dh, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(st, 4, ref->auth, -1, SQLITE_TRANSIENT);
+	sqlite3_step(st);
+	sqlite3_finalize(st);
+}
+
+/* Result callback: surfaces transport failures, and drops a subscription
+ * the push service reports as gone (404/410, relayed by the backend), so
+ * we stop pushing to a browser that unsubscribed. */
 static void wp_push_result_cb(OutgoingWebRequest *request,
                               OutgoingWebResponse *response)
 {
+	WebPushRef *ref = response->ptr;
+	json_t *result;
+	json_error_t jerr;
+	int status;
+
 	if (response->errorbuf)
 		unreal_log(ULOG_WARNING, "webpush", "WP_SEND_FAILED", NULL,
 		           "push POST to backend failed: $err",
 		           log_data_string("err", response->errorbuf));
+	else if (ref && response->memory &&
+	         (result = json_loads(response->memory, JSON_REJECT_DUPLICATES, &jerr)))
+	{
+		status = json_object_get_integer(result, "status", 0);
+		if (status == 404 || status == 410)
+			wp_prune_subscription(ref);
+		json_decref(result);
+	}
+	wp_free_push_ref(ref);
 }
 
-/* POST one push to the backend.  Fire-and-forget; the result callback
- * logs transport failures.  (TODO: prune subscriptions on a 404/410
- * from the push service, which the backend relays in its JSON body.) */
-static void wp_send_push(const char *endpoint, const char *p256dh,
-                         const char *auth, const char *payload)
+static void wp_vapid_key_cb(OutgoingWebRequest *request,
+                            OutgoingWebResponse *response)
+{
+	char *requested_url = response->ptr;
+	json_t *result = NULL;
+	json_error_t jerr;
+	const char *key = NULL;
+	int current = wp_wants_fetched_key() && requested_url && !strcmp(requested_url, cfg.backend_url);
+
+	safe_free(requested_url);
+	if (!current)
+		return;
+	if (!response->errorbuf && response->memory)
+		result = json_loads(response->memory, JSON_REJECT_DUPLICATES, &jerr);
+	if (result)
+		key = json_object_get_string(result, "publicKey");
+	if (key && *key && strlen(key) < 256)
+		wp_set_vapid_key(key);
+	else
+	{
+		unreal_log(ULOG_WARNING, "webpush", "WP_VAPID_FAILED", NULL,
+		           "could not fetch the VAPID key from the backend, retrying in 30s: $err",
+		           log_data_string("err", response->errorbuf ? response->errorbuf : "no publicKey in the reply"));
+		/* The backend often starts after us, so we ask again until it answers. */
+		if (!is_retry_scheduled)
+		{
+			is_retry_scheduled = 1;
+			EventAdd(wp_module, "webpush_vapid_key_retry", wp_vapid_key_retry, NULL, 30000, 1);
+		}
+	}
+	if (result)
+		json_decref(result);
+}
+
+EVENT(wp_vapid_key_retry)
+{
+	is_retry_scheduled = 0;
+	wp_fetch_vapid_key();
+}
+
+static void wp_fetch_vapid_key(void)
 {
 	OutgoingWebRequest *req;
 	char url[512];
-	char body[BUFSIZE + 1024];
+
+	if (!wp_wants_fetched_key())
+		return;
+	req = safe_alloc(sizeof(OutgoingWebRequest));
+	snprintf(url, sizeof(url), "%s/push/vapid-key", cfg.backend_url);
+	safe_strdup(req->url, url);
+	req->http_method = HTTP_METHOD_GET;
+	safe_strdup(req->apicallback, "webpush_vapid_key");
+	req->callback_data = raw_strdup(cfg.backend_url);
+	req->max_redirects = 0;
+	req->connect_timeout = 5;
+	req->transfer_timeout = 10;
+	url_start_async(req);
+}
+
+static void wp_send_push(const char *account, const char *endpoint,
+                         const char *p256dh, const char *auth,
+                         const char *topic, const char *payload)
+{
+	OutgoingWebRequest *req;
+	char url[512];
+	/* We size for every byte escaping to a six-byte \u sequence so the JSON always closes. */
+	char body[6 * (WEBPUSH_ENDPOINT_MAX + 2 * BUFSIZE) + 256];
 	NameValuePrioList *headers = NULL;
 
 	if (!cfg.backend_url || !cfg.backend_key)
@@ -456,6 +672,8 @@ static void wp_send_push(const char *endpoint, const char *p256dh,
 	json_append_string(body, sizeof(body), auth);
 	strlcat(body, ",\"payload\":", sizeof(body));
 	json_append_string(body, sizeof(body), payload);
+	strlcat(body, ",\"topic\":", sizeof(body));
+	json_append_string(body, sizeof(body), topic);
 	{
 		char ttlbuf[64];
 		snprintf(ttlbuf, sizeof(ttlbuf), ",\"ttl\":%d}", cfg.ttl);
@@ -470,7 +688,8 @@ static void wp_send_push(const char *endpoint, const char *p256dh,
 	req->http_method = HTTP_METHOD_POST;
 	safe_strdup(req->body, body);
 	req->headers = headers;
-	req->callback = wp_push_result_cb;
+	safe_strdup(req->apicallback, "webpush_push_result");
+	req->callback_data = wp_push_ref(account, endpoint, p256dh, auth);
 	req->max_redirects = 0;
 	req->connect_timeout = 5;
 	req->transfer_timeout = 10;
@@ -478,8 +697,9 @@ static void wp_send_push(const char *endpoint, const char *p256dh,
 }
 
 /* Build the push payload: one IRC message, no trailing CRLF, message
- * tags dropped except msgid (per spec).  Shape:
- *   [@msgid=<id> ]:<nick>!<user>@<host> <CMD> <target> :<text>
+ * tags dropped except msgid and time, which let the client open the chat at
+ * that message.  Shape:
+ *   [@msgid=<id>;time=<ts> ]:<nick>!<user>@<host> <CMD> <target> :<text>
  * `target` is the recipient nick (DM) or the channel name (highlight).
  */
 static void wp_build_payload(char *buf, size_t n, Client *sender,
@@ -487,12 +707,24 @@ static void wp_build_payload(char *buf, size_t n, Client *sender,
                              const char *cmd, const char *text)
 {
 	MessageTag *mid = find_mtag(mtags, "msgid");
+	MessageTag *sent = find_mtag(mtags, "time");
 	const char *src_user = IsUser(sender) ? sender->user->username : "*";
 	const char *src_host = IsUser(sender) ? GetHost(sender) : me.name;
+	char tags[256] = "";
 
 	if (mid && mid->value)
-		snprintf(buf, n, "@msgid=%s :%s!%s@%s %s %s :%s",
-		         mid->value, sender->name, src_user, src_host,
+		snprintf(tags, sizeof(tags), "msgid=%s", mid->value);
+	if (sent && sent->value)
+	{
+		if (*tags)
+			strlcat(tags, ";", sizeof(tags));
+		strlcat(tags, "time=", sizeof(tags));
+		strlcat(tags, sent->value, sizeof(tags));
+	}
+
+	if (*tags)
+		snprintf(buf, n, "@%s :%s!%s@%s %s %s :%s",
+		         tags, sender->name, src_user, src_host,
 		         cmd, target, text ? text : "");
 	else
 		snprintf(buf, n, ":%s!%s@%s %s %s :%s",
@@ -500,22 +732,27 @@ static void wp_build_payload(char *buf, size_t n, Client *sender,
 		         cmd, target, text ? text : "");
 }
 
-/* Push `payload` to every stored subscription for `account`. */
-static void wp_push_to_account(const char *account, const char *payload)
+/* Push services keep only the newest undelivered push per topic, so we give
+ * each chat its own topic and the push service delivers the latest one. */
+static void wp_push_to_account(const char *account, const char *chat,
+                               const char *payload)
 {
+	char topic[17];
 	sqlite3_stmt *st = NULL;
 	const char *sql =
 	    "SELECT endpoint, p256dh, auth FROM webpush_subscriptions WHERE account=?";
 	if (!wp_db || sqlite3_prepare_v2(wp_db, sql, -1, &st, NULL) != SQLITE_OK)
 		return;
 	sqlite3_bind_text(st, 1, account, -1, SQLITE_TRANSIENT);
+	snprintf(topic, sizeof(topic), "%016llx",
+	         (unsigned long long)siphash_nocase(chat, topic_key));
 	while (sqlite3_step(st) == SQLITE_ROW)
 	{
 		const char *endpoint = (const char *)sqlite3_column_text(st, 0);
 		const char *p256dh = (const char *)sqlite3_column_text(st, 1);
 		const char *auth = (const char *)sqlite3_column_text(st, 2);
 		if (endpoint && p256dh && auth)
-			wp_send_push(endpoint, p256dh, auth, payload);
+			wp_send_push(account, endpoint, p256dh, auth, topic, payload);
 	}
 	sqlite3_finalize(st);
 }
@@ -525,10 +762,19 @@ static int wp_usermsg(Client *client, Client *to, MessageTag *mtags,
 {
 	char payload[BUFSIZE];
 
-	/* DMs to an account-holder only.  TAGMSG carries no body worth
-	 * pushing; skip it.  Self-messages don't warrant a push. */
+	/* DMs to an account-holder only. */
 	if (!IsUser(to) || !IsLoggedIn(to))
 		return 0;
+	/* Multiline replays a DM batch line by line with history_inhibit set and
+	 * the batch tags on its first line, so we push its first non-empty line. */
+	if (history_inhibit)
+	{
+		if (mtags)
+			wp_dm_batch_unpushed = 1;
+		if (!wp_dm_batch_unpushed || !text || !*text)
+			return 0;
+		wp_dm_batch_unpushed = 0;
+	}
 	if (sendtype == SEND_TYPE_TAGMSG)
 		return 0;
 	if (IsUser(client) && IsLoggedIn(client) &&
@@ -539,7 +785,7 @@ static int wp_usermsg(Client *client, Client *to, MessageTag *mtags,
 
 	const char *cmd = (sendtype == SEND_TYPE_NOTICE) ? "NOTICE" : "PRIVMSG";
 	wp_build_payload(payload, sizeof(payload), client, to->name, mtags, cmd, text);
-	wp_push_to_account(to->user->account, payload);
+	wp_push_to_account(to->user->account, client->name, payload);
 	return 0;
 }
 
@@ -567,27 +813,47 @@ static int wp_text_highlights_nick(const char *text, const char *nick)
 	return 0;
 }
 
+static int wp_lines_highlight_nick(MLine *lines, const char *nick)
+{
+	for (MLine *line = lines; line; line = line->next)
+		if (wp_text_highlights_nick(line->text, nick))
+			return 1;
+	return 0;
+}
+
 /* Channel highlight push: when a channel message mentions an
  * account-holder member by nick, push it to that account's devices.
  * The SW suppresses the notification if a window is focused, so this
  * is safe to fire even for users actively in the channel. */
-static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
-                      const char *member_modes, const char *target,
-                      MessageTag *mtags, const char *text, SendType sendtype)
+static void wp_push_channel_highlights(Client *client, Channel *channel,
+                                       MessageTag *mtags, MLine *lines,
+                                       SendType sendtype)
 {
 	Member *m;
+	char text[BUFSIZE] = "";
 	char payload[BUFSIZE];
 
-	if (sendtype == SEND_TYPE_TAGMSG || !text || !*text)
-		return 0;
+	if (sendtype == SEND_TYPE_TAGMSG || !lines)
+		return;
 	if (!wp_db || !cfg.backend_url || !channel)
-		return 0;
+		return;
+
+	for (MLine *line = lines; line; line = line->next)
+	{
+		if (line != lines && !line->concat)
+			strlcat(text, " ", sizeof(text));
+		strlcat(text, line->text, sizeof(text));
+	}
+	if (!*text)
+		return;
 
 	const char *cmd = (sendtype == SEND_TYPE_NOTICE) ? "NOTICE" : "PRIVMSG";
-
 	for (m = channel->members; m; m = m->next)
 	{
 		Client *acptr = m->client;
+		/* We skip shadow members so each account gets one push. */
+		if (m->memb_flags & MEMB_FLAG_SHADOW)
+			continue;
 		if (!acptr || !IsUser(acptr) || !IsLoggedIn(acptr))
 			continue;
 		if (acptr == client)
@@ -596,11 +862,31 @@ static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
 		if (IsUser(client) && IsLoggedIn(client) &&
 		    !strcasecmp(client->user->account, acptr->user->account))
 			continue;
-		if (!wp_text_highlights_nick(text, acptr->name))
+		if (!wp_lines_highlight_nick(lines, acptr->name))
 			continue;
 		wp_build_payload(payload, sizeof(payload), client, channel->name,
 		                 mtags, cmd, text);
-		wp_push_to_account(acptr->user->account, payload);
+		wp_push_to_account(acptr->user->account, channel->name, payload);
 	}
+}
+
+static int wp_chanmsg(Client *client, Channel *channel, int sendflags,
+                      const char *member_modes, const char *target,
+                      MessageTag *mtags, const char *text, SendType sendtype)
+{
+	MLine line = {.next = NULL, .text = (char *)text, .concat = 0};
+
+	/* Multiline replays a batch line by line with history_inhibit set, and we
+	 * push that batch once from its multiline hook. */
+	if (!history_inhibit && text)
+		wp_push_channel_highlights(client, channel, mtags, &line, sendtype);
+	return 0;
+}
+
+static int wp_chanmsg_multiline(Client *client, Channel *channel, int sendflags,
+                                const char *member_modes, const char *target,
+                                MessageTag *mtags, MLine *lines, SendType sendtype)
+{
+	wp_push_channel_highlights(client, channel, mtags, lines, sendtype);
 	return 0;
 }
