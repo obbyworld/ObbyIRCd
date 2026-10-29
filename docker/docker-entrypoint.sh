@@ -115,19 +115,38 @@ else
     export WEBPUSH_CONFIG=""
 fi
 
+case "${INVITE_BASE_URL:-}${INVITE_WEB_URL:-}" in
+    *"'"*)
+        echo "ERROR: INVITE_BASE_URL or INVITE_WEB_URL contains a single quote, refuse to render conf" >&2
+        exit 1
+        ;;
+esac
+
+# The URL stays single-quoted: a double-quoted URL in the conf is downloaded
+# as a remote include when the config loads.
 if [ -n "${INVITE_BASE_URL:-}" ]; then
-    export INVITE_CONFIG="set { invitation { base-url \"${INVITE_BASE_URL}\"; }; };"
+    export INVITE_CONFIG="set { invitation { base-url '${INVITE_BASE_URL}'; }; };"
     echo "Invite base URL: ${INVITE_BASE_URL}"
 else
     export INVITE_CONFIG=""
 fi
 
 if [ -n "${INVITE_PAGE_PORT:-}" ]; then
+    invite_web_url_line=""
+    if [ -n "${INVITE_WEB_URL:-}" ]; then
+        invite_web_url_line="
+    web-url '${INVITE_WEB_URL}';"
+    fi
     export INVITE_PAGE_CONFIG="listen {
     ip *;
     port ${INVITE_PAGE_PORT};
     options { invite-page; };
-};"
+};
+set { invite-page {
+    network-name \"$(voice_dq_escape "$NETWORK_NAME")\";
+    irc-host \"$(voice_dq_escape "${INVITE_IRC_HOST:-$SERVER_NAME}")\";
+    irc-port ${INVITE_IRC_PORT:-$SSL_PORT};${invite_web_url_line}
+}; };"
     echo "Invite page listener: port ${INVITE_PAGE_PORT}"
 else
     export INVITE_PAGE_CONFIG=""
