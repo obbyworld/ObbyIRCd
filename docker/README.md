@@ -70,6 +70,11 @@ path to use a bind mount instead of a named volume.
 | `RPC_PASSWORD`    | *(unset)*              | Set to enable JSON-RPC over `RPC_PORT`. |
 | `RPC_PORT`        | `8600`                 | Internal only. |
 | `CLOAK_KEY1/2/3`  | *(generated)*          | Set explicitly for stable cloaks across restarts / linked nodes. |
+| `INVITE_BASE_URL` | *(unset)*              | Prefix of invite links, e.g. `https://invite.example.com/i/`. |
+| `INVITE_PAGE_PORT` | *(unset)*             | Port of the invite page listener. Put a TLS reverse proxy in front, and add the port under `ports:` in `compose.yaml` or put the proxy on the Compose network. |
+| `INVITE_IRC_HOST` | `SERVER_NAME`          | Host the invite page links to. |
+| `INVITE_IRC_PORT` | `SSL_PORT`             | Port the invite page links to. |
+| `INVITE_WEB_URL`  | *(unset)*              | Web client the invite page offers as "Join via web". |
 
 ## obbyscript scripts
 

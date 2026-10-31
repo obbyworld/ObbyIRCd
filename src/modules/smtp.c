@@ -27,6 +27,12 @@
 #include "unrealircd.h"
 #include "smtp.h"
 
+#if defined(__GNUC__)
+/* We resolve with ares_gethostbyname like src/dns.c, so we keep newer
+ * c-ares deprecations as warnings. */
+ #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 ModuleHeader MOD_HEADER = {
     "smtp",
     "1.0",

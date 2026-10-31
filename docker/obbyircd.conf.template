@@ -82,8 +82,10 @@ ${INVITE_CONFIG}
 /* Invite-page HTTP listener: served by the in-tree webserver via
  * `options { invite-page; }`. Renders a join-the-network splash with
  * connect details when someone opens the INVITELINK URL in a browser.
- * Set INVITE_PAGE_PORT (default unset = no listener). Put a reverse
- * proxy with TLS in front of it in production. */
+ * Set INVITE_PAGE_PORT (default unset = no listener). The page links to
+ * INVITE_IRC_HOST:INVITE_IRC_PORT (default SERVER_NAME:SSL_PORT) and offers
+ * INVITE_WEB_URL as "Join via web" when set. Put a reverse proxy with TLS
+ * in front of it in production. */
 ${INVITE_PAGE_CONFIG}
 
 /* Optional JSON-RPC (set RPC_PASSWORD). */
