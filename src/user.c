@@ -691,8 +691,8 @@ int is_handshake_finished(Client *client)
 
 /** Should we show connection info to the user?
  * This depends on the set::show-connect-info setting but also
- * on various other properties, such as serversonly ports,
- * websocket, etc.
+ * on various other properties, such as serversonly ports and
+ * listeners that speak HTTP (websocket, rpc, invite page).
  * If someone needs it, then we can also call a hook here. Just tell us.
  */
 int should_show_connect_info(Client *client)
@@ -700,7 +700,7 @@ int should_show_connect_info(Client *client)
 	if (SHOWCONNECTINFO &&
 	    !client->server &&
 	    !IsServersOnlyListener(client->local->listener) &&
-	    !client->local->listener->websocket_options)
+	    !client->local->listener->webserver)
 	{
 		return 1;
 	}
