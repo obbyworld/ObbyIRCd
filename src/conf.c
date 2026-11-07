@@ -4846,37 +4846,39 @@ int _test_proxy(ConfigFile *conf, ConfigEntry *ce)
 			if (proxy_type == 0)
 			{
 				config_error("%s:%i: unknown proxy::type '%s'. "
-				             "Only the following types are supported: 'webirc', 'old' or 'web'.",
+				             "Only the following types are supported: 'webirc', 'old', "
+				             "'forwarded', 'x-forwarded' or 'cloudflare'. "
+				             "See https://www.unrealircd.org/docs/Proxy_block",
 				             cep->file->filename, cep->line_number, cep->value);
 				errors++;
 			}
 		} else
 		{
 			config_error_unknown(cep->file->filename, cep->line_number,
-			                     "webirc", cep->name);
+			                     ce->name, cep->name);
 			errors++;
 		}
 	}
 	if (!has_mask)
 	{
-		config_error_missing(ce->file->filename, ce->line_number,
-		                     "webirc::mask");
+		config_error("%s:%d: %s::mask is missing",
+		             ce->file->filename, ce->line_number, ce->name);
 		errors++;
 	}
 
 	if (!has_password && (proxy_type == PROXY_WEBIRC))
 	{
-		config_error_missing(ce->file->filename, ce->line_number,
-		                     "webirc::password");
+		config_error("%s:%d: %s::password is missing",
+		             ce->file->filename, ce->line_number, ce->name);
 		errors++;
 	}
 
 	if (has_password && (proxy_type == PROXY_WEBIRC_PASS))
 	{
-		config_error("%s:%i: webirc block has type set to 'old' but has a password set. "
+		config_error("%s:%i: %s block has type set to 'old' but has a password set. "
 		             "Passwords are not used with type 'old'. Either remove the password or "
 		             "use the 'webirc' method instead.",
-		             ce->file->filename, ce->line_number);
+		             ce->file->filename, ce->line_number, ce->name);
 		errors++;
 	}
 
@@ -5560,7 +5562,6 @@ void conf_listen_configure(const char *ip, int port, SocketType socket_type, int
 		listen->tls_options = NULL;
 	}
 	safe_free_webserver(listen->webserver);
-	free_entire_name_list(listen->websocket_origin);
 	listen->websocket_options = 0;
 	// NOTE: duplicate code overlap with listen_cleanup()
 
@@ -6595,6 +6596,37 @@ int _test_help(ConfigFile *conf, ConfigEntry *ce)
 	return errors;
 }
 
+/** Returns 1 if this link block does not verify the certificate of the
+ * other side and outgoing connects should be refused.
+ */
+static int is_outgoing_link_without_certificate_verification(ConfigItem_link *link)
+{
+	if (!link->outgoing.hostname)
+		return 0;
+
+	if (!strcmp(link->outgoing.hostname, "127.0.0.1") || !strcmp(link->outgoing.hostname, "::1") ||
+	    !strcasecmp(link->outgoing.hostname, "localhost"))
+	{
+		return 0;
+	}
+
+	if ((link->outgoing.options & CONNECT_OUTGOING_INSECURE) ||
+	    (link->options & CONNECT_NO_CERTIFICATE_VERIFICATION) ||
+	    link->verify_certificate)
+	{
+		return 0;
+	}
+
+	if ((link->auth->type == AUTHTYPE_TLS_CLIENTCERT) ||
+	    (link->auth->type == AUTHTYPE_TLS_CLIENTCERTFP) ||
+	    (link->auth->type == AUTHTYPE_SPKIFP))
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
 int _conf_link(ConfigFile *conf, ConfigEntry *ce)
 {
 	ConfigEntry *cep, *cepp, *ceppp;
@@ -6683,6 +6715,29 @@ int _conf_link(ConfigFile *conf, ConfigEntry *ce)
 	/* The default is 'hub *', unless you specify leaf or hub manually. */
 	if (!link->hub && !link->leaf)
 		safe_strdup(link->hub, "*");
+
+	if (is_outgoing_link_without_certificate_verification(link))
+	{
+#if 0
+		link->outgoing_without_certificate_verification = 1;
+		unreal_log(ULOG_WARNING, "config", "CONFIG_LINK_WITHOUT_CERTIFICATE_VERIFICATION", NULL,
+		           "$file:$line_number: Link block '$link_block' does not verify the certificate of the other side.\n"
+		           "Outgoing connects to $link_block will be refused because it allows a man-in-the-middle attack.\n"
+		           "Please follow this guide to link securely: https://www.unrealircd.org/docs/Linking_servers_(genlinkblock)",
+		           log_data_string("file", ce->file->filename),
+		           log_data_integer("line_number", ce->line_number),
+		           log_data_link_block(link));
+#else
+		/* This is for 6.2.8: only warn, don't set the flag yet */
+		unreal_log(ULOG_WARNING, "config", "CONFIG_LINK_WITHOUT_CERTIFICATE_VERIFICATION", NULL,
+		           "$file:$line_number: Link block '$link_block' does not verify the certificate of the other side.\n"
+		           "In a future UnrealIRCd release (Q1 2027), outgoing connects to $link_block will be refused because it allows a man-in-the-middle attack.\n"
+		           "Please follow this guide to link securely: https://www.unrealircd.org/docs/Linking_servers_(genlinkblock)",
+		           log_data_string("file", ce->file->filename),
+		           log_data_integer("line_number", ce->line_number),
+		           log_data_link_block(link));
+#endif
+	}
 
 	/* An outgoing link with no link::outgoing::tls-options of its own uses the
 	 * shared set::server-linking context at connect time
@@ -7298,10 +7353,11 @@ void test_tlsblock(ConfigFile *conf, ConfigEntry *cep, int *totalerrors)
 
 	for (cepp = cep->items; cepp; cepp = cepp->next)
 	{
-		if (!strcmp(cepp->name, "renegotiate-timeout"))
+		if (!strcmp(cepp->name, "renegotiate-timeout") || !strcmp(cepp->name, "renegotiate-bytes"))
 		{
-		} else if (!strcmp(cepp->name, "renegotiate-bytes"))
-		{
+			config_warn("%s:%i: %s no longer exists, this setting is now ignored. "
+			            "TLS renegotiations are always refused nowadays.",
+			            cepp->file->filename, cepp->line_number, config_var(cepp));
 		} else if (!strcmp(cepp->name, "ciphers") || !strcmp(cepp->name, "server-cipher-list"))
 		{
 			CheckNull(cepp);
@@ -7591,8 +7647,6 @@ void conf_tlsblock(ConfigFile *conf, ConfigEntry *cep, TLSOptions *tlsoptions, T
 		safe_strdup(tlsoptions->outdated_protocols, inherit_from->outdated_protocols);
 		safe_strdup(tlsoptions->outdated_ciphers, inherit_from->outdated_ciphers);
 		tlsoptions->options = inherit_from->options;
-		tlsoptions->renegotiate_bytes = inherit_from->renegotiate_bytes;
-		tlsoptions->renegotiate_timeout = inherit_from->renegotiate_timeout;
 		tlsoptions->sts_port = inherit_from->sts_port;
 		tlsoptions->sts_duration = inherit_from->sts_duration;
 		tlsoptions->sts_preload = inherit_from->sts_preload;
@@ -7672,12 +7726,6 @@ void conf_tlsblock(ConfigFile *conf, ConfigEntry *cep, TLSOptions *tlsoptions, T
 		} else if (!strcmp(cepp->name, "outdated-ciphers"))
 		{
 			safe_strdup(tlsoptions->outdated_ciphers, cepp->value);
-		} else if (!strcmp(cepp->name, "renegotiate-bytes"))
-		{
-			tlsoptions->renegotiate_bytes = config_checkval(cepp->value, CFG_SIZE);
-		} else if (!strcmp(cepp->name, "renegotiate-timeout"))
-		{
-			tlsoptions->renegotiate_timeout = config_checkval(cepp->value, CFG_TIME);
 		} else if (!strcmp(cepp->name, "options"))
 		{
 			tlsoptions->options = 0;
@@ -11432,7 +11480,6 @@ void listen_cleanup()
 				free_tls_options(listener->tls_options);
 				/* listener->ssl_ctx is already freed by close_listener() */
 				safe_free_webserver(listener->webserver);
-				free_entire_name_list(listener->websocket_origin);
 				// NOTE: duplicate code overlap with conf_listen_configure() - but not 100% identical
 				safe_free(listener);
 			} else

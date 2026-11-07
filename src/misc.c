@@ -1554,7 +1554,7 @@ int is_silenced_default_handler(Client *client, Client *acptr)
 	return 0;
 }
 
-int spamreport_default_handler(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by, const char *source, const char *reason, TKL *spamfilter, int flags)
+int spamreport_default_handler(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by, const char *source, const char *reason, TKL *tkl, int flags)
 {
 	return -1;
 }
@@ -1709,7 +1709,7 @@ const char *get_central_api_key_default_handler(void)
 	return NULL;
 }
 
-int central_spamreport_default_handler(Client *target, Client *by, const char *source, const char *reason, TKL *spamfilter, NameValuePrioList *details, const char *url)
+int central_spamreport_default_handler(Client *target, Client *by, const char *source, const char *reason, TKL *tkl, NameValuePrioList *details, const char *url)
 {
 	return 0;
 }
@@ -2510,6 +2510,26 @@ void skip_whitespace(char **p)
 {
 	for (; **p == ' ' || **p == '\t'; *p = *p + 1)
 		;
+}
+
+/** Strip whitespace (if any) from the end of the string */
+void strip_trailing_whitespace(char *str)
+{
+	char *p = str + strlen(str);
+
+	while ((p > str) && ((p[-1] == ' ') || (p[-1] == '\t')))
+		*--p = '\0';
+}
+
+/** Strip CR/LF and remove whitespace at the start and end of a line.
+ * This modifies 'str' and returns a pointer into it.
+ */
+char *cleanline(char *str)
+{
+	stripcrlf(str);
+	skip_whitespace(&str);
+	strip_trailing_whitespace(str);
+	return str;
 }
 
 /** Keep reading '*p' until we hit any of the 'stopchars'.

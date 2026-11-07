@@ -343,6 +343,16 @@ SSL_CTX *init_ctx(TLSOptions *tlsoptions, int server)
 	SSL_CTX_set_options(ctx, SSL_OP_NO_RX_CERTIFICATE_COMPRESSION);
 #endif
 
+#ifdef SSL_OP_NO_RENEGOTIATION
+	/* No TLS renegotiations. OpenSSL 3.0.0 and later already do this by default */
+	if (server)
+		SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+#elif defined(SSL_OP_NO_CLIENT_RENEGOTIATION)
+	/* Same, but for LibreSSL <4.1.0 which doesn't have SSL_OP_NO_RENEGOTIATION */
+	if (server)
+		SSL_CTX_set_options(ctx, SSL_OP_NO_CLIENT_RENEGOTIATION);
+#endif
+
 	/* Let's first check the simple case of file exist. That's because the
 	 * SSL_CTX_use_certificate_chain_file() later on works but produces like
 	 * four lines of output, which is a bit verbose for such a simple case.
@@ -1022,7 +1032,6 @@ void unreal_tls_client_handshake(int fd, int revents, void *data)
 {
 	Client *client = data;
 	SSL_CTX *ctx = (client->server && client->server->conf) ? tls_ctx_for_outgoing_link(client->server->conf) : ctx_client;
-	TLSOptions *tlsoptions = get_tls_options_for_client(client);
 
 	if (!ctx)
 	{
@@ -1044,18 +1053,6 @@ void unreal_tls_client_handshake(int fd, int revents, void *data)
 	SSL_set_fd(client->local->ssl, client->local->fd);
 	SSL_set_connect_state(client->local->ssl);
 	SSL_set_nonblocking(client->local->ssl);
-
-	if (tlsoptions->renegotiate_bytes > 0)
-	{
-		BIO_set_ssl_renegotiate_bytes(SSL_get_rbio(client->local->ssl), tlsoptions->renegotiate_bytes);
-		BIO_set_ssl_renegotiate_bytes(SSL_get_wbio(client->local->ssl), tlsoptions->renegotiate_bytes);
-	}
-
-	if (tlsoptions->renegotiate_timeout > 0)
-	{
-		BIO_set_ssl_renegotiate_timeout(SSL_get_rbio(client->local->ssl), tlsoptions->renegotiate_timeout);
-		BIO_set_ssl_renegotiate_timeout(SSL_get_wbio(client->local->ssl), tlsoptions->renegotiate_timeout);
-	}
 
 	if (client->server && client->server->conf)
 	{
@@ -1329,11 +1326,11 @@ static int fatal_tls_error(int ssl_error, int where, int my_errno, Client *clien
 	if (errtmp)
 	{
 		SET_ERRNO(errtmp);
-		safe_strdup(client->local->error_str, strerror(errtmp));
+		safe_strdup(client->local->deadsocket_quit_reason, strerror(errtmp));
 	} else
 	{
 		SET_ERRNO(P_EIO);
-		safe_strdup(client->local->error_str, ssl_errstr);
+		safe_strdup(client->local->deadsocket_quit_reason, ssl_errstr);
 	}
 
 	return -1;

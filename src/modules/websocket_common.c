@@ -38,6 +38,7 @@ int websocket_send_pong(Client *client, const char *buf, int len);
 const char *websocket_mdata_serialize(ModData *m);
 void websocket_mdata_unserialize(const char *str, ModData *m);
 void websocket_mdata_free(ModData *m);
+int websocket_whois(Client *client, Client *target, NameValuePrioList **list);
 
 /* Global variables */
 ModDataInfo *websocket_md;
@@ -72,6 +73,8 @@ MOD_INIT()
 	mreq.type = MODDATATYPE_CLIENT;
 	mreq.priority = -999996;
 	websocket_md = ModDataAdd(modinfo->handle, mreq);
+
+	HookAdd(modinfo->handle, HOOKTYPE_WHOIS, 0, websocket_whois);
 
 	/* Unload last, since we manage sockets */
 	ModuleSetOptions(modinfo->handle, MOD_OPT_PRIORITY, WEBSOCKET_MODULE_PRIORITY_UNLOAD);
@@ -495,31 +498,59 @@ void websocket_mdata_free(ModData *m)
 		safe_free(wsu->handshake_key);
 		safe_free(wsu->lefttoparse);
 		safe_free(wsu->sec_websocket_protocol);
+		safe_free(wsu->origin);
 		safe_free(m->ptr);
 	}
 }
 
-/** This only serializes wsu->type atm */
+/** Serializes wsu->type and wsu->origin (if set), eg "2;webchat.example.net" */
 const char *websocket_mdata_serialize(ModData *m)
 {
-	static char buf[32];
+	static char buf[512];
 	WebSocketUser *wsu = m->ptr;
 
 	if (!wsu)
 		return NULL; /* not set */
 
-	snprintf(buf, sizeof(buf), "%d", wsu->type);
+	if (wsu->origin)
+		snprintf(buf, sizeof(buf), "%d;%s", wsu->type, wsu->origin);
+	else
+		snprintf(buf, sizeof(buf), "%d", wsu->type);
 	return buf;
 }
 
-/** This only sets wsu->type atm */
+/** Sets wsu->type and wsu->origin (if present and valid) */
 void websocket_mdata_unserialize(const char *str, ModData *m)
 {
 	WebSocketUser *wsu;
+	char buf[512];
+	char *type, *origin, *p = NULL;
+
 	if (m->ptr)
 		websocket_mdata_free(m);
 	if (BadPtr(str))
 		return; /* empty/freed */
 	m->ptr = wsu = safe_alloc(sizeof(WebSocketUser));
-	wsu->type = atoi(str);
+
+	strlcpy(buf, str, sizeof(buf));
+	type = strtoken_noskip(&p, buf, ";");
+	wsu->type = atoi(type);
+	origin = strtoken_noskip(&p, NULL, ";");
+	if (origin && (valid_host(origin, 1) || is_valid_ip(origin)))
+		safe_strdup(wsu->origin, origin);
+}
+
+/** Show the websocket origin in WHOIS */
+int websocket_whois(Client *client, Client *target, NameValuePrioList **list)
+{
+	if (whois_get_policy(client, target, "websocket") <= WHOIS_CONFIG_DETAILS_NONE)
+		return 0;
+
+	if (!WSU(target) || !WSU(target)->origin)
+		return 0;
+
+	add_nvplist_numeric_fmt(list, 40000, "websocket", client, RPL_WHOISGATEWAY,
+	                        "%s * * :is connecting from WebSocket origin %s",
+	                        target->name, WSU(target)->origin);
+	return 0;
 }

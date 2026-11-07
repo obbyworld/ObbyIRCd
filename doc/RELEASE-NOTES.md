@@ -4,6 +4,10 @@ UnrealIRCd 6.2.8-git
 This is the git version (development version) for future UnrealIRCd 6.2.8.
 This is work in progress and may not always be a stable version.
 
+NOTE: Current git now contains the security fixes that went into 6.2.7.1.
+But current git is not the same as 6.2.7.1, it contains more fixes, changes,
+enhancements, that will in the future be released as 6.2.8.
+
 ### Enhancements:
 * A ton of spamreport changes:
   * A spamreport block can now report automatically, via the new option
@@ -28,6 +32,18 @@ This is work in progress and may not always be a stable version.
     `$reason` and `$spamfilter_id` in the URL.
 
 ### Changes:
+* Link blocks with `link::outgoing` that use a password (not spkifp/certfp/cert)
+  will now raise a warning. We have already been warning about this since
+  2017 at link time so this should not be a surprise for anyone.
+  In Q1 2027 this will become an error.
+  * Link blocks without spkifp/certfp/cert allow a
+    [man-in-the-middle attack](https://en.wikipedia.org/wiki/Man-in-the-middle_attack).
+  * Please refer to our [linking guide](https://www.unrealircd.org/docs/Linking_servers_(genlinkblock))
+    on how to link two unrealircd servers securely. It's very simple.
+  * Link blocks without an outgoing section, or link blocks that link
+    to localhost, are exempt. You can also manually exempt a link block via
+    link::options::no-certificate-verification. Only do so if you insist to
+    link without cert validation, for example when you are linking over a VPN.
 * We continue the gradual transition from `geoip_classic` to `geoip_mmdb`.
   Now also for `./Config -quick` (and thus `./unrealircd upgrade`).
   This because we will stop database updates for classic in mid-2027.
@@ -46,6 +62,36 @@ This is work in progress and may not always be a stable version.
 * New hook `HOOKTYPE_KILLED_CLIENT`, called when a local user is killed.
 * In `HOOKTYPE_BANNED_CLIENT` there is now a `TKL *tkl` parameter (this
   is NULL when a ban is not a TKL, such as a realname ban).
+* The function `take_action()` changed and has two more parameters.
+
+UnrealIRCd 6.2.7.1
+-------------------
+
+This is a security release. It fixes a CRITICAL bug that allows any
+ordinary user to execute commands with server or IRCOp authority.
+It also fixes several crashes, hangs, and a bug where it was possible
+to "decloak" a user (reveal the user's IP address).
+
+All these bugs were found during an extensive internal audit with the
+help of AI.
+
+NOTE: These fixes are also available through one 'hot-patch', so you can
+fix your existing UnrealIRCd 6 without a restart (except on Windows).
+See the security advisory for details.
+
+### Fixes:
+* CRITICAL issue that can be abused by any normal user to execute
+  commands with server or IRCOp authority. This means any ordinary user
+  can KILL, GLINE, and do many more bad things.
+* A normal user could "decloak" another user, revealing the IP address
+  of the victim.
+* Another leak of the IP address
+* Blacklist recheck could hang the server
+* Crash on CHGIDENT from Services, which a normal user can trigger
+* Counting error which could cause a "This server is full" message to
+  every new connect, until the server is restarted.
+* Limit the number of bans Services can set, to 2x set::maxbans
+* Potential flood issue with TLS renegotiations
 
 UnrealIRCd 6.2.7
 -----------------

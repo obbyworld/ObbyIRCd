@@ -179,6 +179,9 @@ int webserver_packet_in(Client *client, const char *readbuf, int *length)
 	if (!WEB(client))
 		return 1; /* "normal" IRC client */
 
+	if (IsDead(client) || IsDeadSocket(client))
+		return -1; /* client is being terminated, don't process any data */
+
 	if (!WEBSERVER(client))
 		return 0; /* handler is gone!? */
 
@@ -300,8 +303,8 @@ int webserver_handshake_helper(char *buffer, int len, char **key, char **value, 
 		if (*p == ':')
 		{
 			*p++ = '\0';
-			if (*p++ != ' ')
-				break; /* missing mandatory space after ':' */
+			/* Optional whitespace before the value (RFC 9112) */
+			skip_whitespace(&p);
 
 			v = p; /* SET VALUE */
 			nextptr = NULL; /* set to "we are done" in case next for loop fails */
@@ -317,6 +320,7 @@ int webserver_handshake_helper(char *buffer, int len, char **key, char **value, 
 					break;
 				}
 			}
+			strip_trailing_whitespace(v);
 			/* A key-value pair was succesfully parsed, return it */
 			*key = k;
 			*value = v;
@@ -421,6 +425,13 @@ int webserver_handle_request_header(Client *client, const char *readbuf, int *le
 			}
 			if (!strcasecmp(key, "Content-Length"))
 			{
+				/* Only digits, and only one Content-Length header (RFC 9110 section 8.6) */
+				if (!str_is_all_digits(value) || (strlen(value) > 18) || (WEB(client)->content_length >= 0))
+				{
+					webserver_send_response(client, 400, "Invalid Content-Length");
+					safe_free(netbuf);
+					return -1; /* dead */
+				}
 				WEB(client)->content_length = atoll(value);
 			} else if (!strcasecmp(key, "Transfer-Encoding"))
 			{
@@ -492,6 +503,36 @@ int webserver_handle_request_header(Client *client, const char *readbuf, int *le
 	return 0; /* don't let UnrealIRCd process this */
 }
 
+/** Returns the HTTP status code text, eg "Not Found" for 404 */
+static const char *webserver_status_code_text(int status)
+{
+	switch (status)
+	{
+		case 200:
+			return "OK";
+		case 201:
+			return "Created";
+		case 400:
+			return "Bad Request";
+		case 401:
+			return "Unauthorized";
+		case 403:
+			return "Forbidden";
+		case 404:
+			return "Not Found";
+		case 416:
+			return "Range Not Satisfiable";
+		case 431:
+			return "Request Header Fields Too Large";
+		case 500:
+			return "Internal Server Error";
+		case 501:
+			return "Not Implemented";
+		default:
+			return "???";
+	}
+}
+
 /** Send a HTTP(S) response.
  * @param client	Client to send to
  * @param status	HTTP status code
@@ -501,30 +542,10 @@ int webserver_handle_request_header(Client *client, const char *readbuf, int *le
 void _webserver_send_response(Client *client, int status, char *msg)
 {
 	char buf[512];
-	char *statusmsg = "???";
-
-	if (status == 200)
-		statusmsg = "OK";
-	else if (status == 201)
-		statusmsg = "Created";
-	else if (status == 500)
-		statusmsg = "Internal Server Error";
-	else if (status == 400)
-		statusmsg = "Bad Request";
-	else if (status == 401)
-		statusmsg = "Unauthorized";
-	else if (status == 403)
-		statusmsg = "Forbidden";
-	else if (status == 404)
-		statusmsg = "Not Found";
-	else if (status == 416)
-		statusmsg = "Range Not Satisfiable";
-	else if (status == 431)
-		statusmsg = "Request Header Fields Too Large";
 
 	snprintf(buf, sizeof(buf),
 	         "HTTP/1.1 %d %s\r\nServer: %s\r\nConnection: close\r\n\r\n",
-	         status, statusmsg, WEB_SOFTWARE);
+	         status, webserver_status_code_text(status), WEB_SOFTWARE);
 	if (msg)
 	{
 		strlcat(buf, msg, sizeof(buf));
@@ -602,12 +623,19 @@ int webserver_handle_body_append_buffer(Client *client, const char *buf, int len
 int _webserver_handle_body(Client *client, WebRequest *web, const char *readbuf, int pktsize)
 {
 	char *buf;
-	long long n;
+	long long n, remaining;
 	char *free_this_buffer = NULL;
 
 	if (WEB(client)->transfer_encoding == TRANSFER_ENCODING_NONE)
 	{
-		if (!webserver_handle_body_append_buffer(client, readbuf, pktsize))
+		if (WEB(client)->content_length >= 0)
+		{
+			/* Don't read beyond Content-Length, anything after it is ignored */
+			remaining = WEB(client)->content_length - WEB(client)->request_buffer_size;
+			if (pktsize > remaining)
+				pktsize = remaining;
+		}
+		if ((pktsize > 0) && !webserver_handle_body_append_buffer(client, readbuf, pktsize))
 			return 0;
 
 		if ((WEB(client)->content_length >= 0) &&
@@ -798,13 +826,26 @@ void do_parse_forwarded_header(const char *input, HTTPForwardedHeader *forwarded
 void do_parse_x_forwarded_for_header(const char *input, HTTPForwardedHeader *forwarded)
 {
 	char *buf = NULL;
-	char *name, *value, *p = NULL;
+	char *name, *value, *p = NULL, *x;
 
 	safe_strdup(buf, input);
 
 	for (name = strtoken(&p, buf, ","); name; name = strtoken(&p, NULL, ","))
 	{
 		skip_whitespace(&name);
+		if ((*name == '[') && (x = strchr(name, ']')))
+		{
+			/* IPv6 between brackets, we cut off at the ']' */
+			name++;
+			*x = '\0';
+		} else if ((x = strchr(name, ':')) && !strchr(x + 1, ':'))
+		{
+			/* A string with only one ':', so not IPv6 (which always has more).
+			 * This can only mean an IPv4 address with a port, eg 192.0.2.10:51200.
+			 * Cut off the port part, we only care about the IP.
+			 */
+			*x = '\0';
+		}
 		strlcpy(forwarded->ip, name, sizeof(forwarded->ip));
 	}
 
@@ -813,9 +854,9 @@ void do_parse_x_forwarded_for_header(const char *input, HTTPForwardedHeader *for
 
 void do_parse_x_forwarded_proto_header(const char *value, HTTPForwardedHeader *forwarded)
 {
-	if (!strcmp(value, "https"))
+	if (!strcasecmp(value, "https") || !strcasecmp(value, "wss"))
 		forwarded->secure = 1;
-	else if (!strcmp(value, "http"))
+	else if (!strcasecmp(value, "http") || !strcasecmp(value, "ws"))
 		forwarded->secure = 0;
 }
 
