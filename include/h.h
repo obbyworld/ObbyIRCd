@@ -919,7 +919,7 @@ extern MODVAR void (*sendnotice_tkl_add)(TKL *tkl);
 extern MODVAR void (*free_tkl)(TKL *tkl);
 extern MODVAR void (*tkl_del_line)(TKL *tkl);
 extern MODVAR void (*tkl_check_local_remove_shun)(TKL *tmp);
-extern MODVAR int (*find_tkline_match)(Client *cptr, int skip_soft);
+extern MODVAR int (*find_tkline_match)(Client *cptr, int flags);
 extern MODVAR void (*tkl_hit)(Client *client, TKL *tkl);
 extern MODVAR void (*remove_config_tkls)(int flag);
 extern MODVAR void (*config_tkl_hits_restore)(void);
@@ -930,7 +930,7 @@ extern MODVAR TKL *(*find_tkline_match_zap)(Client *cptr);
 extern MODVAR void (*tkl_stats)(Client *cptr, int type, const char *para, int *cnt);
 extern MODVAR void (*tkl_sync)(Client *client);
 extern MODVAR void (*cmd_tkl)(ClientContext *clictx, Client *client, MessageTag *recv_mtags, int parc, const char *parv[]);
-extern MODVAR int (*take_action)(Client *client, BanAction *actions, const char *reason, long duration, int take_action_flags, int *stopped);
+extern MODVAR int (*take_action)(Client *client, BanAction *actions, const char *source, const char *reason, long duration, int take_action_flags, int *stopped, TKL *spamfilter);
 extern MODVAR int (*match_spamfilter)(Client *client, const char *str_in, int type, const char *cmd, const char *target, int flags, ClientContext *clictx, TKL **rettk);
 extern MODVAR int (*match_spamfilter_mtags)(Client *client, MessageTag *mtags, const char *cmd);
 extern MODVAR void (*run_deferred_rule_only_spamfilters)(Client *client);
@@ -1013,7 +1013,7 @@ extern MODVAR int (*websocket_create_packet_simple)(int opcode, const char **buf
 extern MODVAR const char *(*check_deny_link)(ConfigItem_link *link, int auto_connect);
 extern MODVAR void (*mtag_add_issued_by)(MessageTag **mtags, Client *client, MessageTag *recv_mtags);
 extern MODVAR void (*cancel_ident_lookup)(Client *client);
-extern MODVAR int (*spamreport)(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by, const char *source, const char *reason, TKL *spamfilter, int flags);
+extern MODVAR int (*spamreport)(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by, const char *source, const char *reason, TKL *tkl, int flags);
 extern MODVAR int (*crule_test)(const char *rule);
 extern MODVAR CRuleNode *(*crule_parse)(const char *rule);
 extern MODVAR int (*crule_eval)(crule_context *context, CRuleNode *rule);
@@ -1027,7 +1027,7 @@ extern MODVAR void (*crule_free)(CRuleNode **);
 extern MODVAR const char *(*crule_errstring)(int errcode);
 extern MODVAR void (*ban_act_set_reputation)(Client *client, BanAction *action);
 extern MODVAR const char *(*get_central_api_key)(void);
-extern MODVAR int (*central_spamreport)(Client *target, Client *by, const char *source, const char *reason, TKL *spamfilter, NameValuePrioList *details, const char *url);
+extern MODVAR int (*central_spamreport)(Client *target, Client *by, const char *source, const char *reason, TKL *tkl, NameValuePrioList *details, const char *url);
 extern MODVAR int (*central_spamreport_enabled)(void);
 extern MODVAR void (*sasl_succeeded)(Client *client);
 extern MODVAR void (*sasl_failed)(Client *client);
@@ -1114,10 +1114,10 @@ extern int websocket_create_packet_ex_default_handler(int opcode, char **buf, in
 extern int websocket_create_packet_simple_default_handler(int opcode, const char **buf, int *len);
 extern void mtag_add_issued_by_default_handler(MessageTag **mtags, Client *client, MessageTag *recv_mtags);
 extern void cancel_ident_lookup_default_handler(Client *client);
-extern int spamreport_default_handler(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by, const char *source, const char *reason, TKL *spamfilter, int flags);
+extern int spamreport_default_handler(Client *client, const char *ip, NameValuePrioList *details, const char *spamreport_block, Client *by, const char *source, const char *reason, TKL *tkl, int flags);
 extern void ban_act_set_reputation_default_handler(Client *client, BanAction *action);
 extern const char *get_central_api_key_default_handler(void);
-extern int central_spamreport_default_handler(Client *target, Client *by, const char *source, const char *reason, TKL *spamfilter, NameValuePrioList *details, const char *url);
+extern int central_spamreport_default_handler(Client *target, Client *by, const char *source, const char *reason, TKL *tkl, NameValuePrioList *details, const char *url);
 extern int central_spamreport_enabled_default_handler(void);
 extern void sasl_succeeded_default_handler(Client *client);
 extern void sasl_failed_default_handler(Client *client);
@@ -1345,6 +1345,7 @@ extern NameList *duplicate_name_list(NameList *e);
 extern NameList *find_name_list(NameList *list, const char *name);
 extern NameList *find_name_list_match(NameList *list, const char *name);
 extern NameList *find_name_list_integer(NameList *list, int v);
+extern int read_name_list_file(const char *fname, NameList **list, const char **error);
 extern int minimum_msec_since_last_run(struct timeval *tv_old, long minimum);
 extern int unrl_utf8_validate(const char *str, const char **end);
 extern char *unrl_utf8_make_valid(const char *str, char *outputbuf, size_t outputbuflen, int strict_length_check);
@@ -1436,8 +1437,9 @@ extern void strtoupper_safe(char *dst, const char *src, int size);
 extern int running_interactively(void);
 extern int terminal_supports_color(void);
 extern void skip_whitespace(char **p);
+extern void strip_trailing_whitespace(char *str);
+extern char *cleanline(char *str);
 extern void read_until(char **p, char *stopchars);
-extern int is_ip_valid(const char *ip);
 extern int is_file_readable(const char *file, const char *dir);
 /* json.c */
 extern int log_json_filter;
@@ -1558,10 +1560,10 @@ extern const char *log_type_valtostring(LogType v);
 #ifdef DEBUGMODE
  /* In debug mode we include file/linenumber. We put this arg at the end, however
   * there is an issue if unreal_log() is used with a parameter like xyz ? log_data_string("zzz") : NULL,
-  * since then our log_data_source() would be beyond NULL and thus would never be freed,
+  * since then our log_data_source_code() would be beyond NULL and thus would never be freed,
   * so we allocate and handle that differently. File/line would still be lost but at
   * least there is no memory leak. Alternative solution is to specify first couple of
-  * parameters explicitly, put log_data_source() at the beginning of the argument list
+  * parameters explicitly, put log_data_source_code() at the beginning of the argument list
   * and then use non-portable ## __VA_ARGS__ for the remainder.
   */
  #define unreal_log(level, sys, id, ...) \
@@ -1569,7 +1571,7 @@ extern const char *log_type_valtostring(LogType v);
 	 { \
 		 if (!log_throttled((sys), (id))) \
 		 { \
-			 LogData *lds = log_data_source(__FILE__, __LINE__, __FUNCTION__); \
+			 LogData *lds = log_data_source_code(__FILE__, __LINE__, __FUNCTION__); \
 			 do_unreal_log((level), (sys), (id), __VA_ARGS__, lds, NULL); \
 			 log_data_free(lds); \
 		 } \
@@ -1579,7 +1581,7 @@ extern const char *log_type_valtostring(LogType v);
 	 { \
 		 if (!log_throttled((sys), (id))) \
 		 { \
-			 LogData *lds = log_data_source(__FILE__, __LINE__, __FUNCTION__); \
+			 LogData *lds = log_data_source_code(__FILE__, __LINE__, __FUNCTION__); \
 			 do_unreal_log_raw((level), (sys), (id), __VA_ARGS__, lds, NULL); \
 			 log_data_free(lds); \
 		 } \
@@ -1609,7 +1611,7 @@ extern LogData *log_data_integer(const char *key, int64_t integer);
 extern LogData *log_data_timestamp(const char *key, time_t ts);
 extern LogData *log_data_client(const char *key, Client *client);
 extern LogData *log_data_channel(const char *key, Channel *channel);
-extern LogData *log_data_source(const char *file, int line, const char *function);
+extern LogData *log_data_source_code(const char *file, int line, const char *function);
 extern LogData *log_data_socket_error(int fd);
 extern LogData *log_data_link_block(ConfigItem_link *link);
 extern LogData *log_data_tkl(const char *key, TKL *tkl);
@@ -1713,6 +1715,7 @@ extern int str_starts_with_case_sensitive(const char *haystack, const char *need
 extern int str_ends_with_case_sensitive(const char *haystack, const char *needle);
 extern int str_starts_with_case_insensitive(const char *haystack, const char *needle);
 extern int str_ends_with_case_insensitive(const char *haystack, const char *needle);
+extern int str_is_all_digits(const char *str);
 extern void init_dynamic_set_block(DynamicSetBlock *s);
 extern void free_dynamic_set_block(DynamicSetBlock *s);
 extern int test_dynamic_set_block_item(ConfigFile *conf, const char *security_group, ConfigEntry *cep);

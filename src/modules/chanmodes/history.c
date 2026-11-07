@@ -211,9 +211,16 @@ int history_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 									long v;
 									CheckNull(cep5);
 									v = config_checkval(cep5->value, CFG_TIME);
-									if (v < 1)
+									if (v < 60)
 									{
-										config_error("%s:%i: set::history::channel::max-storage-per-channel::registered::time must be a positive number.",
+										config_error("%s:%i: set::history::channel::max-storage-per-channel::registered::time must be at least 1 minute.",
+										             cep5->file->filename, cep5->line_number);
+										errors++;
+										continue;
+									}
+									if (v > INT_MAX)
+									{
+										config_error("%s:%i: set::history::channel::max-storage-per-channel::registered::time is too large.",
 										             cep5->file->filename, cep5->line_number);
 										errors++;
 										continue;
@@ -248,9 +255,16 @@ int history_config_test(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 									long v;
 									CheckNull(cep5);
 									v = config_checkval(cep5->value, CFG_TIME);
-									if (v < 1)
+									if (v < 60)
 									{
-										config_error("%s:%i: set::history::channel::max-storage-per-channel::unregistered::time must be a positive number.",
+										config_error("%s:%i: set::history::channel::max-storage-per-channel::unregistered::time must be at least 1 minute.",
+										             cep5->file->filename, cep5->line_number);
+										errors++;
+										continue;
+									}
+									if (v > INT_MAX)
+									{
+										config_error("%s:%i: set::history::channel::max-storage-per-channel::unregistered::time is too large.",
 										             cep5->file->filename, cep5->line_number);
 										errors++;
 										continue;
@@ -413,8 +427,7 @@ int history_config_run(ConfigFile *cf, ConfigEntry *ce, int type)
   */
 int history_parse_chanmode(Channel *channel, const char *param, int *lines, long *t)
 {
-	char buf[64], *p, *q;
-	char contains_non_digit = 0;
+	char buf[64], *p;
 
 	/* Work on a copy */
 	strlcpy(buf, param, sizeof(buf));
@@ -433,18 +446,10 @@ int history_parse_chanmode(Channel *channel, const char *param, int *lines, long
 
 	/* Parse time value */
 	/* If it is all digits then it is in minutes */
-	for (q = p; *q; q++)
-	{
-		if (!isdigit(*q))
-		{
-			contains_non_digit = 1;
-			break;
-		}
-	}
-	if (contains_non_digit)
-		*t = config_checkval(p, CFG_TIME);
-	else
+	if (str_is_all_digits(p))
 		*t = atoi(p) * 60;
+	else
+		*t = config_checkval(p, CFG_TIME);
 
 	/* Sanity checking... */
 	if (*lines < 1)

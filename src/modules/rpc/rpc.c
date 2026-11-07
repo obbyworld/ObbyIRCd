@@ -73,6 +73,7 @@ int rpc_config_run_rpc_user(ConfigFile *cf, ConfigEntry *ce, int type);
 int rpc_config_test_rpc_class(ConfigFile *cf, ConfigEntry *ce, int type, int *errs);
 int rpc_config_run_rpc_class(ConfigFile *cf, ConfigEntry *ce, int type);
 int rpc_client_accept(Client *client);
+int rpc_accept_check_match(Client *client);
 int rpc_pre_local_handshake_timeout(Client *client, const char **comment);
 void rpc_client_handshake_unix_socket(Client *client);
 void rpc_client_handshake_web(Client *client);
@@ -165,6 +166,7 @@ MOD_INIT()
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, rpc_config_run_rpc_user);
 	HookAdd(modinfo->handle, HOOKTYPE_CONFIGRUN, 0, rpc_config_run_rpc_class);
 	HookAdd(modinfo->handle, HOOKTYPE_HANDSHAKE, -5000, rpc_client_accept);
+	HookAdd(modinfo->handle, HOOKTYPE_ACCEPT, 0, rpc_accept_check_match);
 	HookAdd(modinfo->handle, HOOKTYPE_PRE_LOCAL_HANDSHAKE_TIMEOUT, 0, rpc_pre_local_handshake_timeout);
 	HookAdd(modinfo->handle, HOOKTYPE_RAWPACKET_IN, INT_MIN, rpc_packet_in_unix_socket);
 	HookAdd(modinfo->handle, HOOKTYPE_SERVER_QUIT, 0, rpc_handle_server_quit);
@@ -453,6 +455,22 @@ int rpc_config_test_rpc_user(ConfigFile *cf, ConfigEntry *ce, int type, int *err
 	return errors ? -1 : 1;
 }
 
+/** rpc-user::match may only contain ip and mask items, because it is checked on accept(), before TLS */
+static int rpc_match_is_ip_only(SecurityGroup *s)
+{
+	NameValuePrioList *p;
+
+	for (p = s->printable_list; p; p = p->next)
+	{
+		if (strcmp(p->name, "ip") && strcmp(p->name, "mask") && strcmp(p->name, "include-mask") &&
+		    strcmp(p->name, "exclude-ip") && strcmp(p->name, "exclude-mask"))
+		{
+			return 0;
+		}
+	}
+	return 1;
+}
+
 int rpc_config_run_rpc_user(ConfigFile *cf, ConfigEntry *ce, int type)
 {
 	ConfigEntry *cep;
@@ -471,6 +489,12 @@ int rpc_config_run_rpc_user(ConfigFile *cf, ConfigEntry *ce, int type)
 		if (!strcmp(cep->name, "match") || !strcmp(cep->name, "mask"))
 		{
 			conf_match_block(cf, cep, &e->match);
+			if (!rpc_match_is_ip_only(e->match))
+			{
+				config_warn("%s:%d: rpc-user %s: match can only use ip and mask items. "
+				            "It is used as an IP filter before accepting any HTTPS connection",
+				            cep->file->filename, cep->line_number, e->name);
+			}
 		} else if (!strcmp(cep->name, "password"))
 		{
 			AuthBlockToAuthConfig(cep, &e->auth);
@@ -683,14 +707,20 @@ int rpc_handle_webrequest(Client *client, WebRequest *web)
 	{
 		if (web->method != HTTP_METHOD_POST)
 		{
-			webserver_send_response(client, 200, "To use the UnrealIRCd RPC API you need to make a POST request. See https://www.unrealircd.org/docs/RPC\n");
+			webserver_send_response(client, 200, "To use the UnrealIRCd RPC API you need to make a POST request. See https://www.unrealircd.org/docs/RPC");
 			return 0;
 		}
-		webserver_send_response(client, 200, NULL); /* continue.. */
-		return 1; /* accept */
+		if ((web->content_length <= 0) && (web->transfer_encoding != TRANSFER_ENCODING_CHUNKED))
+		{
+			webserver_send_response(client, 400, "Empty POST request. JSON expected.");
+			return 0;
+		}
+		/* Allow the same request size as JSON-RPC over websocket (the webserver default is 4k) */
+		web->config_max_request_buffer_size = 16384;
+		return 1; /* accept, the 200 is sent once the body is complete */
 	}
 
-	webserver_send_response(client, 404, "Page not found.\n");
+	webserver_send_response(client, 404, "Page not found.");
 	return 0;
 }
 
@@ -703,7 +733,7 @@ int rpc_handle_webrequest_websocket(Client *client, WebRequest *web)
 
 	if (!websocket_md)
 	{
-		webserver_send_response(client, 405, "Websockets are disabled on this server (module 'websocket_common' not loaded).\n");
+		webserver_send_response(client, 501, "Websockets are disabled on this server (module 'websocket_common' not loaded).");
 		return 0;
 	}
 
@@ -762,10 +792,14 @@ int rpc_handle_webrequest_data(Client *client, WebRequest *web, const char *buf,
 		return rpc_handle_body_websocket(client, web, buf, len);
 	}
 
+	/* Already handled, ignore any data that comes after the body (such as a stray CRLF) */
+	if (web->request_body_complete)
+		return 0;
+
 	/* We only handle POST to /api -- reject all the rest */
 	if (strcmp(web->uri, "/api") || (web->method != HTTP_METHOD_POST))
 	{
-		webserver_send_response(client, 404, "Page not found\n");
+		webserver_send_response(client, 404, "Page not found");
 		return 0;
 	}
 
@@ -773,7 +807,7 @@ int rpc_handle_webrequest_data(Client *client, WebRequest *web, const char *buf,
 	// NB: chunked transfers?
 	if (!webserver_handle_body(client, web, buf, len))
 	{
-		webserver_send_response(client, 400, "Error handling POST body data\n");
+		webserver_send_response(client, 400, "Error handling POST body data");
 		return 0;
 	}
 
@@ -782,10 +816,11 @@ int rpc_handle_webrequest_data(Client *client, WebRequest *web, const char *buf,
 	{
 		if (!web->request_buffer)
 		{
-			webserver_send_response(client, 500, "Error while processing POST body data\n");
+			webserver_send_response(client, 400, "Empty POST request. JSON expected.");
 			return 0;
 		}
 		//config_status("GOT: '%s'", buf);
+		webserver_send_response(client, 200, NULL);
 		rpc_call_text(client, web->request_buffer, web->request_buffer_size);
 		send_queued(client);
 		webserver_close_client(client);
@@ -1245,6 +1280,24 @@ int rpc_client_accept(Client *client)
 	return 0;
 }
 
+/** Called on accept(), before TLS: close the connection right away if no rpc-user { } block matches */
+int rpc_accept_check_match(Client *client)
+{
+	RPCUser *r;
+
+	if (!RPC_PORT(client) || (client->local->listener->socket_type == SOCKET_TYPE_UNIX))
+		return HOOK_CONTINUE;
+
+	for (r = rpcusers; r; r = r->next)
+	{
+		if (user_allowed_by_security_group(client, r->match))
+			return HOOK_CONTINUE;
+	}
+
+	dead_socket(client, "Access denied");
+	return 2; /* HOOK_DENY_ALWAYS: close now, without a TLS handshake */
+}
+
 /** Called upon handshake of unix socket (direct JSON usage, no auth) */
 void rpc_client_handshake_unix_socket(Client *client)
 {
@@ -1263,33 +1316,12 @@ void rpc_client_handshake_unix_socket(Client *client)
 /** Called upon handshake, after TLS is ready (before any HTTP header parsing) */
 void rpc_client_handshake_web(Client *client)
 {
-	RPCUser *r;
-	char found = 0;
-
 	/* Explicitly mark as RPC, since the TLS layer may
 	 * have set us to SetUnknown() after the TLS handshake.
 	 */
 	SetRPC(client);
 	if (!client->rpc)
 		client->rpc = safe_alloc(sizeof(RPCClient));
-
-	/* Is the client allowed by any rpc-user { } block?
-	 * If not, reject the client immediately, before
-	 * processing any HTTP data.
-	 */
-	for (r = rpcusers; r; r = r->next)
-	{
-		if (user_allowed_by_security_group(client, r->match))
-		{
-			found = 1;
-			break;
-		}
-	}
-	if (!found)
-	{
-		webserver_send_response(client, 401, "Access denied");
-		return;
-	}
 
 	/* Allow incoming data to be read from now on.. */
 	fd_setselect(client->local->fd, FD_SELECT_READ, read_packet, client);
@@ -1299,6 +1331,11 @@ void rpc_client_handshake_web(Client *client)
 
 int rpc_pre_local_handshake_timeout(Client *client, const char **comment)
 {
+	/* Don't hang up RPC connections on a UNIX socket */
+	if (IsRPC(client) && client->local->listener &&
+	    (client->local->listener->socket_type == SOCKET_TYPE_UNIX))
+		return HOOK_ALLOW;
+
 	/* Don't hang up websocket connections */
 	if (IsRPC(client) && WSU(client) && WSU(client)->handshake_completed)
 	{

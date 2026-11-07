@@ -107,12 +107,12 @@ int match_tkls(Client *client)
 		}
 	}
 
-	if (loop.do_bancheck_spamf_user && IsUser(client) && find_spamfilter_user(client, SPAMFLAG_NOWARN))
+	if (loop.do_bancheck_spamf_user && IsUser(client) && find_spamfilter_user(client, SPAMFLAG_RESCAN))
 		return 1;
 
 	if (loop.do_bancheck_spamf_away && IsUser(client) &&
 	    client->user->away != NULL &&
-	    match_spamfilter(client, client->user->away, SPAMF_AWAY, "AWAY", NULL, SPAMFLAG_NOWARN, NULL, NULL))
+	    match_spamfilter(client, client->user->away, SPAMF_AWAY, "AWAY", NULL, SPAMFLAG_RESCAN, NULL, NULL))
 	{
 		return 1;
 	}
@@ -128,8 +128,7 @@ EVENT(handshake_timeout)
 	list_for_each_entry_safe(client, next, &unknown_list, lclient_node)
 	{
 		if (client->local->creationtime &&
-		    ((TStime() - client->local->creationtime) > iConf.handshake_timeout) &&
-		    !(client->local->listener && (client->local->listener->socket_type == SOCKET_TYPE_UNIX)))
+		    ((TStime() - client->local->creationtime) > iConf.handshake_timeout))
 		{
 			Hook *h;
 			int n = HOOK_CONTINUE;
@@ -259,8 +258,7 @@ EVENT(check_deadsockets)
 		/* No need to notify opers here. It's already done when dead socket is set */
 		if (IsDeadSocket(client))
 		{
-			ClearDeadSocket(client); /* CPR. So we send the error. */
-			exit_client(client, NULL, client->local->error_str ? client->local->error_str : "Dead socket");
+			deadsocket_exit(client, 0);
 			continue;
 		}
 	}
