@@ -327,6 +327,7 @@ static int pb_hook_local_part(Client *client, Channel *channel, MessageTag *mtag
                               const char *comment);
 static int pb_hook_local_kick(Client *client, Client *victim, Channel *channel,
                               MessageTag *mtags, const char *comment);
+static int pb_hook_local_quit(Client *client, MessageTag *mtags, const char *comment);
 static int pb_hook_usermsg(Client *client, Client *to, MessageTag *mtags,
                            const char *text, SendType sendtype);
 static json_t *pb_json_client(Client *c);
@@ -610,6 +611,7 @@ MOD_INIT()
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_JOIN, 0, pb_hook_local_join);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_PART, 0, pb_hook_local_part);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_KICK, 0, pb_hook_local_kick);
+	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 0, pb_hook_local_quit);
 	CommandAdd(modinfo->handle, "PUSHBOT", cmd_pushbot, MAXPARA, CMD_USER);
 
 	/* Phase 9: JSON-RPC parity */
@@ -5108,6 +5110,18 @@ static int pb_hook_local_part(Client *client, Channel *channel, MessageTag *mtag
 		json_object_set_new(d, "reason", json_string(comment ? comment : ""));
 		pb_dispatch_event(b, "CHANNEL_PART", d);
 	}
+	return 0;
+}
+
+/* An oper can KILL a bot's client, so we drop the bot's pointer here or the
+ * next event for that bot reaches a freed client. */
+static int pb_hook_local_quit(Client *client, MessageTag *mtags, const char *comment)
+{
+	PbBot *b;
+
+	for (b = bots; b; b = b->next)
+		if (b->ghost == client)
+			b->ghost = NULL;
 	return 0;
 }
 

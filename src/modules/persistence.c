@@ -1188,9 +1188,15 @@ static int persist_local_quit(Client *client, MessageTag *mtags, const char *com
 	PersistEntry *e;
 	MessageTag *away_mtags;
 
-	/* Ghosts exit normally without triggering new ghost creation */
+	/* An oper can KILL a ghost, so we drop its entry's pointer here or the
+	 * next login of that account reclaims a freed client. */
 	if (is_ghost_client(client))
+	{
+		for (e = persist_list; e; e = e->next)
+			if (e->ghost == client)
+				e->ghost = NULL;
 		return 0;
+	}
 
 	/* Session clients: detach from sessions list only, no ghost */
 	if (is_session_client(client))
