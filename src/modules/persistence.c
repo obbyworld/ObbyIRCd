@@ -1371,6 +1371,10 @@ static int persist_account_login(Client *client, MessageTag *mtags)
 	if (e->canonical && !IsDead(e->canonical) &&
 	    IsUser(e->canonical) && !is_ghost_client(e->canonical))
 	{
+		/* A client that logs in after registering already has its own nick
+		 * and channels, so it stays a separate client of the account. */
+		if (IsRegistered(client))
+			return 0;
 		if (e->num_sessions >= PERSIST_MAX_SESSIONS)
 		{
 			unreal_log(ULOG_INFO, "persistence", "PERSIST_SESSION_LIMIT", client,

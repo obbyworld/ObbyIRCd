@@ -1,24 +1,9 @@
 """An oper can KILL a persistent ghost, and the account can log in again."""
 
-import asyncio
-
-from lib.accounts import connect, register_account, sasl_plain
+from lib.accounts import connect, register_account, sasl_plain, wait_for_ghost
 
 CAPS = ["sasl", "draft/persistence"]
 PASSWORD = "testpw1234"
-
-
-async def wait_for_ghost(observer, nick):
-    """A ghost answers WHOIS as away while offline, so we wait for that before killing it."""
-    for _ in range(20):
-        await observer.send(f"WHOIS {nick}")
-        line = await observer.expect(
-            lambda l: " 318 " in l or (" 301 " in l and "persistent" in l), timeout=5
-        )
-        if " 301 " in line:
-            return
-        await asyncio.sleep(0.25)
-    raise AssertionError(f"{nick} never became a persistent ghost")
 
 
 async def test_login_after_an_oper_killed_the_ghost(ircd):
