@@ -76,9 +76,135 @@ static inline void log_sasl_fail(Client *client,
 	           log_data_string("reason", reason ? reason : "?"));
 }
 
+/* We count wrong passwords and second-factor codes per address and per
+ * account, so many connections cannot share one guessing budget. A private or
+ * loopback address is a proxy or NAT carrying many people, so we only count
+ * public addresses. Over the account cap we still accept a correct password
+ * from a public address with no failures, so guessing at an account cannot
+ * lock its owner out. A completed login clears its account's count. */
+#define LOGIN_FAIL_WINDOW          900
+#define LOGIN_FAIL_MAX_PER_IP      10
+#define LOGIN_FAIL_MAX_PER_ACCOUNT 30
+
+typedef struct LoginFailures LoginFailures;
+struct LoginFailures {
+	LoginFailures *prev, *next;
+	char key[ACCOUNTLEN + HOSTLEN + 8];
+	int count;
+	time_t since;
+};
+static LoginFailures *login_failures = NULL;
+
+static void login_failures_free(ModData *m)
+{
+	LoginFailures *f, *next;
+
+	for (f = m->ptr; f; f = next)
+	{
+		next = f->next;
+		safe_free(f);
+	}
+	m->ptr = NULL;
+}
+
+static int is_shared_address(const char *ip)
+{
+	int second;
+
+	if (!ip)
+		return 1;
+	if (!strncmp(ip, "127.", 4) || !strncmp(ip, "10.", 3) ||
+	    !strncmp(ip, "192.168.", 8) || !strcmp(ip, "::1") ||
+	    !strncasecmp(ip, "fc", 2) || !strncasecmp(ip, "fd", 2) ||
+	    !strncasecmp(ip, "fe80:", 5))
+		return 1;
+	if (!strncmp(ip, "172.", 4))
+	{
+		second = atoi(ip + 4);
+		return second >= 16 && second <= 31;
+	}
+	return 0;
+}
+
+static LoginFailures *login_failures_find(const char *prefix, const char *name)
+{
+	char key[ACCOUNTLEN + HOSTLEN + 8];
+	LoginFailures *f, *next;
+
+	snprintf(key, sizeof(key), "%s:%s", prefix, name);
+	for (f = login_failures; f; f = next)
+	{
+		next = f->next;
+		if (TStime() - f->since >= LOGIN_FAIL_WINDOW)
+		{
+			DelListItem(f, login_failures);
+			safe_free(f);
+			continue;
+		}
+		if (!strcasecmp(f->key, key))
+			return f;
+	}
+	return NULL;
+}
+
+static void login_failures_add(const char *prefix, const char *name)
+{
+	LoginFailures *f = login_failures_find(prefix, name);
+
+	if (!f)
+	{
+		f = safe_alloc(sizeof(LoginFailures));
+		snprintf(f->key, sizeof(f->key), "%s:%s", prefix, name);
+		f->since = TStime();
+		AddListItem(f, login_failures);
+	}
+	f->count++;
+}
+
+static int login_is_throttled(Client *client, const char *account)
+{
+	const char *ip = GetIP(client);
+	int is_shared = is_shared_address(ip);
+	LoginFailures *by_ip = is_shared ? NULL : login_failures_find("ip", ip);
+	LoginFailures *by_account;
+
+	if (by_ip && by_ip->count >= LOGIN_FAIL_MAX_PER_IP)
+		return 1;
+	if (BadPtr(account))
+		return 0;
+	by_account = login_failures_find("account", account);
+	if (!by_account || by_account->count < LOGIN_FAIL_MAX_PER_ACCOUNT)
+		return 0;
+	return is_shared || by_ip;
+}
+
+/* `account` is set only for accounts that exist, so made-up names add no entries. */
+static void login_failed(Client *client, const char *account)
+{
+	if (!is_shared_address(GetIP(client)))
+		login_failures_add("ip", GetIP(client));
+	if (!BadPtr(account))
+		login_failures_add("account", account);
+}
+
+/* Every completed login runs this hook, after any second factor. */
+static int login_clears_failures(Client *client, MessageTag *mtags)
+{
+	LoginFailures *f;
+
+	if (IsLoggedIn(client) && (f = login_failures_find("account", client->user->account)))
+	{
+		DelListItem(f, login_failures);
+		safe_free(f);
+	}
+	return 0;
+}
+
+
 CMD_FUNC(register_account);
 CMD_FUNC(list_accounts);
 CMD_FUNC(cmd_identify);
+CMD_FUNC(cmd_regain);
 CMD_FUNC(cmd_logout);
 CMD_FUNC(cmd_verify);
 CMD_FUNC(cmd_2fa);
@@ -91,6 +217,7 @@ typedef struct ScramState_ ScramState;
 static ModDataInfo *scram_md;
 static void scram_md_free(ModData *m);
 static int scram_make_credentials(Account *acc, const char *password);
+static void password_verified(Account *acc, const char *password);
 
 /* 2FA forward decls (impl in 2FA section below) */
 typedef struct TwoFAEnroll_ {
@@ -420,6 +547,9 @@ MOD_INIT()
 	           CMD_USER | CMD_UNREGISTERED);
 	CommandAdd(modinfo->handle, CMD_LISTACC, list_accounts, MAXPARA, CMD_OPER);
 	CommandAdd(modinfo->handle, CMD_IDENTIFY, cmd_identify, MAXPARA, CMD_USER);
+	CommandAdd(modinfo->handle, CMD_REGAIN, cmd_regain, MAXPARA, CMD_USER);
+	HookAdd(modinfo->handle, HOOKTYPE_ACCOUNT_LOGIN, 0, login_clears_failures);
+	LoadPersistentPointer(modinfo, login_failures, login_failures_free);
 	CommandAdd(modinfo->handle, CMD_LOGOUT, cmd_logout, MAXPARA, CMD_USER);
 	CommandAdd(modinfo->handle, CMD_VERIFY, cmd_verify, MAXPARA,
 	           CMD_USER | CMD_UNREGISTERED);
@@ -476,6 +606,7 @@ MOD_LOAD()
 
 MOD_UNLOAD()
 {
+	SavePersistentPointer(modinfo, login_failures);
 	obsidian_close_database();
 	safe_free(iConf.sasl_server);
 	iConf.sasl_server = NULL;
@@ -3248,6 +3379,8 @@ static void scram_handle_client_first(Client *client, const char *msg, size_t ms
 	if (!scram_parse_client_first(msg, &bare, &username, &cnonce))
 		goto fail;
 
+	if (login_is_throttled(client, username))
+		goto fail;
 	account = find_account(username);
 	if (!account || !account->scram_salt || !account->scram_stored_key ||
 	    account->scram_iterations <= 0)
@@ -3417,7 +3550,10 @@ static void scram_handle_client_final(Client *client, const char *msg, size_t ms
 	if (!SHA256(client_key, SCRAM_KEY_BYTES, computed_stored))
 		goto fail;
 	if (CRYPTO_memcmp(computed_stored, stored_key, SCRAM_KEY_BYTES) != 0)
+	{
+		login_failed(client, acc->name);
 		goto fail;
+	}
 
     /* ServerSignature = HMAC(ServerKey, AuthMessage) */
 	if (!HMAC(EVP_sha256(), server_key, SCRAM_KEY_BYTES,
@@ -3775,34 +3911,22 @@ static int authenticate_attempt(Client *client, int first, const char *param)
 			return 0;
 		}
 
+		if (login_is_throttled(client, username))
+		{
+			client->local->sasl_sent_time = 0;
+			add_fake_lag(client, 7000);
+			log_sasl_fail(client, "PLAIN", username, "rate_limited");
+			sendnumeric(client, ERR_SASLFAIL);
+			DelSaslType(client);
+			return 0;
+		}
+
 		Account *account = find_account(username);
 		if (account &&
 		    verify_password_for_scheme(account->password_scheme,
 		                               account->password, password))
 		{
-            /* Regenerate SCRAM credentials on every successful PLAIN
-             * verify: migrated accounts may carry a SCRAM verifier from
-             * a different derivation (e.g. Ergo) that this server's
-             * SCRAM-SHA-256 verifier won't accept. Rederiving from the
-             * verified plaintext guarantees the on-disk SCRAM is
-             * consistent with how we'd compute it locally. */
-			if (scram_make_credentials(account, password))
-				update_account_scram(account);
-            /* Migrated non-argon2id accounts get rolled forward on first
-             * successful login: rehash with argon2id and persist. Best
-             * effort -- failure is logged but doesn't abort login. */
-			if (account->password_scheme && strcmp(account->password_scheme, "argon2id"))
-			{
-				const char *new_hash = Auth_Hash(AUTHTYPE_ARGON2, password);
-				if (new_hash)
-				{
-					free(account->password);
-					account->password = strdup(new_hash);
-					free(account->password_scheme);
-					account->password_scheme = strdup("argon2id");
-					update_account_password(account);
-				}
-			}
+			password_verified(account, password);
 
             /* If 2FA is enforced, withhold the success reply and ask the
              * client to do a second-factor SASL exchange. */
@@ -3827,6 +3951,7 @@ static int authenticate_attempt(Client *client, int first, const char *param)
 			DelSaslType(client);
 		} else
 		{
+			login_failed(client, account ? account->name : NULL);
 			client->local->sasl_sent_time = 0;
 			add_fake_lag(client, 7000);
 			log_sasl_fail(client, "PLAIN", username,
@@ -5022,11 +5147,8 @@ CMD_FUNC(cmd_2fa)
  *    - "external" -- SASL EXTERNAL cert fingerprint matched.  Step-up
  *                    via any non-external factor.
  *
- *  If 2FA is enforced AND a non-primary factor exists, withholds
- *  900/903 and emits AUTHENTICATE 2FA-REQUIRED. Returns 1 in that case
- *  (caller MUST NOT log the user in or send 900/903), 0 otherwise. */
-static int twofa_maybe_start_stepup(Client *client, Account *acc,
-                                    const char *primary_factor)
+ *  Returns 1 when 2FA is enforced and a non-primary factor exists. */
+static int twofa_required_after(Account *acc, const char *primary_factor)
 {
 	if (!acc || !acc->twofa_enabled)
 		return 0;
@@ -5037,7 +5159,16 @@ static int twofa_maybe_start_stepup(Client *client, Account *acc,
     /* No factor of a type other than what we just used? Then the
      * primary already proved the strongest thing the user has -- demanding
      * the same proof again would only lock them out. */
-	if (twofa_count_credentials_excluding(acc->id, primary_factor) <= 0)
+	return twofa_count_credentials_excluding(acc->id, primary_factor) > 0;
+}
+
+/* Withholds 900/903 and emits AUTHENTICATE 2FA-REQUIRED when a second factor
+ * is due. Returns 1 in that case (caller MUST NOT log the user in or send
+ * 900/903), 0 otherwise. */
+static int twofa_maybe_start_stepup(Client *client, Account *acc,
+                                    const char *primary_factor)
+{
+	if (!twofa_required_after(acc, primary_factor))
 		return 0;
 
 	twofa_clear_stepup(client);
@@ -5281,8 +5412,10 @@ static int twofa_handle_stepup_authenticate(Client *client, const char *param)
 		return 1;
 	}
 
-	if (!twofa_verify_proof(acc, "totp", (const char *)buf))
+	if (login_is_throttled(client, acc->name) ||
+	    !twofa_verify_proof(acc, "totp", (const char *)buf))
 	{
+		login_failed(client, acc->name);
 		free_account(acc);
 		twofa_clear_stepup(client);
 		DelSaslType(client);
@@ -6924,18 +7057,124 @@ CMD_FUNC(list_accounts)
  * CMD: IDENTIFY <account> <password>
  * Fallback for clients without SASL support.
  * =================================================================== */
-CMD_FUNC(cmd_identify)
+/* A migrated account may carry SCRAM keys from another derivation or a legacy
+ * hash, so we rederive both from the password we just verified. */
+static void password_verified(Account *acc, const char *password)
 {
-	const char *account_name, *password;
+	const char *new_hash;
+
+	if (scram_make_credentials(acc, password))
+		update_account_scram(acc);
+	if (!acc->password_scheme || !strcmp(acc->password_scheme, "argon2id"))
+		return;
+	new_hash = Auth_Hash(AUTHTYPE_ARGON2, password);
+	if (!new_hash)
+		return;
+	safe_free(acc->password);
+	safe_strdup(acc->password, new_hash);
+	safe_free(acc->password_scheme);
+	safe_strdup(acc->password_scheme, "argon2id");
+	update_account_password(acc);
+}
+
+/* Replies with FAIL <cmd> on every refusal and returns 1 on login. */
+static int password_login(Client *client, const char *cmd,
+                          const char *account_name, const char *password)
+{
 	Account *acc;
+	Client *holder;
 
 	if (!obsidian_db && obsidian_open_database(OBSIDIAN_DB) != SQLITE_OK)
 	{
-		sendto_one(client, NULL,
-		           ":%s FAIL IDENTIFY SERVER_BUG :Database unavailable.", me.name);
-		return;
+		sendto_one(client, NULL, ":%s FAIL %s SERVER_BUG :Database unavailable.",
+		           me.name, cmd);
+		return 0;
 	}
+	if (BadPtr(account_name))
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL %s INVALID_ACCOUNT :Account name cannot be empty.",
+		           me.name, cmd);
+		return 0;
+	}
+	/* Only someone logged in to another account keeps the nick from its
+	 * owner's login; the account's own ghosts and sessions and a guest on
+	 * the nick do not. */
+	holder = find_client(account_name, NULL);
+	if (holder && holder != client && holder->user && IsLoggedIn(holder) &&
+	    strcasecmp(holder->user->account, account_name))
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL %s INVALID_ACCOUNT :That account name is currently in use.",
+		           me.name, cmd);
+		return 0;
+	}
+	if (my_find_tkl_nameban(account_name))
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL %s INVALID_ACCOUNT :That account name is banned.",
+		           me.name, cmd);
+		return 0;
+	}
+	if (BadPtr(password))
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL %s INVALID_PASSWORD :Password cannot be empty.",
+		           me.name, cmd);
+		return 0;
+	}
+	if (login_is_throttled(client, account_name))
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL %s RATE_LIMITED :Too many failed logins, try again later.",
+		           me.name, cmd);
+		add_fake_lag(client, 7000);
+		return 0;
+	}
+	acc = find_account(account_name);
+	if (!acc)
+	{
+		login_failed(client, NULL);
+		sendto_one(client, NULL,
+		           ":%s FAIL %s ACCOUNT_NOT_FOUND :Account %s not found.",
+		           me.name, cmd, account_name);
+		add_fake_lag(client, 7000);
+		return 0;
+	}
+	if (!verify_password_for_scheme(acc->password_scheme, acc->password, password))
+	{
+		login_failed(client, acc->name);
+		sendto_one(client, NULL,
+		           ":%s FAIL %s INVALID_PASSWORD :Invalid password for account %s.",
+		           me.name, cmd, acc->name);
+		client->local->sasl_sent_time = 0;
+		add_fake_lag(client, 7000);
+		free_account(acc);
+		return 0;
+	}
+	/* A password alone cannot satisfy a second factor, so these accounts log in over SASL. */
+	if (twofa_required_after(acc, "password"))
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL %s TWOFA_REQUIRED :This account uses two-factor login. Log in with SASL.",
+		           me.name, cmd);
+		free_account(acc);
+		return 0;
+	}
+	password_verified(acc, password);
+	strlcpy(client->user->account, acc->name, sizeof(client->user->account));
+	user_account_login(NULL, client);
+	DelSaslType(client);
+	unreal_log(ULOG_INFO, "account", cmd, client,
+	           "User $client.details identified [account: $account] [email: $email]",
+	           log_data_string("account", acc->name),
+	           log_data_string("email", acc->email));
+	free_account(acc);
+	return !IsDead(client);
+}
 
+CMD_FUNC(cmd_identify)
+{
 	if (parc < 3)
 	{
 		sendto_one(client, NULL,
@@ -6944,108 +7183,153 @@ CMD_FUNC(cmd_identify)
 		           me.name);
 		return;
 	}
-
-	account_name = parv[1];
-	password = parv[2];
-
-	if (!account_name || !*account_name)
-	{
-		sendto_one(client, NULL,
-		           ":%s FAIL IDENTIFY INVALID_ACCOUNT :Account name cannot be empty.",
-		           me.name);
-		return;
-	}
-
-	if (!strcasecmp(account_name, client->user->account))
+	if (!strcasecmp(parv[1], client->user->account))
 	{
 		sendto_one(client, NULL,
 		           ":%s FAIL IDENTIFY ALREADY_IDENTIFIED "
 		           ":You are already identified to account %s.",
-		           me.name, account_name);
+		           me.name, parv[1]);
 		return;
 	}
+	if (password_login(client, "IDENTIFY", parv[1], parv[2]))
+		sendto_one(client, NULL,
+		           ":%s IDENTIFY SUCCESS %s :You have been successfully identified.",
+		           me.name, client->user->account);
+}
 
-    /* Nick collision check */
+static void force_nick_change(Client *client, const char *nick)
+{
+	const char *args[5];
+	char ts[32];
+
+	snprintf(ts, sizeof(ts), "%lld", (long long)TStime());
+	args[0] = NULL;
+	args[1] = client->name;
+	args[2] = nick;
+	args[3] = ts;
+	args[4] = NULL;
+	do_cmd(&me, NULL, "SVSNICK", 4, args);
+}
+
+static void rename_to_guest_nick(Client *client)
+{
+	const char *format = MyConf.guest_nick_format ? MyConf.guest_nick_format : "Guest$d$d$d$d";
+	char nick[NICKLEN + 1];
+	size_t i, len;
+	int tries;
+
+	for (tries = 0; tries < 10; tries++)
 	{
-		Client *found = find_client(account_name, NULL);
-		if (found && found != client)
+		for (i = 0, len = 0; format[i] && len < NICKLEN; i++)
 		{
-			sendto_one(client, NULL,
-			           ":%s FAIL IDENTIFY INVALID_ACCOUNT "
-			           ":That account name is currently in use.",
-			           me.name);
+			if (format[i] == '$' && format[i + 1] == 'd')
+			{
+				nick[len++] = '0' + getrandom8() % 10;
+				i++;
+			} else
+				nick[len++] = format[i];
+		}
+		nick[len] = '\0';
+		if (!find_client(nick, NULL))
+		{
+			force_nick_change(client, nick);
 			return;
 		}
 	}
+	exit_client(client, NULL, "Nick regained by its owner");
+}
 
-	if (my_find_tkl_nameban(account_name))
+static int is_persistence_ghost(Client *client)
+{
+	ModDataInfo *ghost_md = findmoddata_byname("persistence_ghost", MODDATATYPE_CLIENT);
+
+	return ghost_md && moddata_client(client, ghost_md).i;
+}
+
+typedef enum {
+	NICK_FREED,
+	NICK_HELD_BY_GHOST,
+	NICK_HELD_BY_OTHER_ACCOUNT,
+	NICK_HELD_ELSEWHERE,
+} NickRelease;
+
+/* Disconnecting the account's live client can hand the nick to its next
+ * session or turn it into a ghost, so we keep going until the nick is free
+ * or a ghost holds it. */
+static NickRelease free_account_nick(Client *client, const char *nick)
+{
+	Client *holder;
+	int tries;
+
+	for (tries = 0; tries < 16; tries++)
+	{
+		holder = find_client(nick, NULL);
+		if (!holder || holder == client)
+			return NICK_FREED;
+		if (!IsUser(holder) || !MyConnect(holder))
+			return NICK_HELD_ELSEWHERE;
+		if (!IsLoggedIn(holder))
+			rename_to_guest_nick(holder);
+		else if (strcasecmp(holder->user->account, client->user->account))
+			return NICK_HELD_BY_OTHER_ACCOUNT;
+		else if (is_persistence_ghost(holder))
+			return NICK_HELD_BY_GHOST;
+		else
+			exit_client(holder, NULL, "Nick regained by its owner");
+	}
+	return NICK_HELD_ELSEWHERE;
+}
+
+CMD_FUNC(cmd_regain)
+{
+	const char *account_name = parv[1];
+	char nick[NICKLEN + 1];
+	int ishold;
+	NickRelease release;
+
+	if (parc < 2 || BadPtr(account_name))
 	{
 		sendto_one(client, NULL,
-		           ":%s FAIL IDENTIFY INVALID_ACCOUNT :That account name is banned.",
+		           ":%s NOTE REGAIN INVALID_PARAMS "
+		           ":Syntax: /REGAIN <account> [<password>]",
 		           me.name);
 		return;
 	}
-
-	if (!password || !*password)
+	strlcpy(nick, account_name, sizeof(nick));
+	if (!do_nick_name(nick) || strcmp(nick, account_name) ||
+	    strlen(nick) > iConf.nick_length || find_qline(client, nick, &ishold))
 	{
 		sendto_one(client, NULL,
-		           ":%s FAIL IDENTIFY INVALID_PASSWORD :Password cannot be empty.",
-		           me.name);
-		return;
-	}
-
-	acc = find_account(account_name);
-	if (!acc)
-	{
-		sendto_one(client, NULL,
-		           ":%s FAIL IDENTIFY ACCOUNT_NOT_FOUND :Account %s not found.",
+		           ":%s FAIL REGAIN INVALID_NICK %s :That nick cannot be used.",
 		           me.name, account_name);
 		return;
 	}
+	if (strcasecmp(client->user->account, account_name) &&
+	    !password_login(client, "REGAIN", account_name, parc > 2 ? parv[2] : NULL))
+		return;
 
-	if (verify_password_for_scheme(acc->password_scheme, acc->password, password))
+	strlcpy(nick, client->user->account, sizeof(nick));
+	release = strcasecmp(client->name, nick) ? free_account_nick(client, nick) : NICK_FREED;
+	/* Persistence reclaims a ghost on login and gives its channels to this client. */
+	if (release == NICK_HELD_BY_GHOST)
 	{
-        /* Always regenerate SCRAM here: a migrated account's
-         * scram_stored_key may be from a different SCRAM derivation
-         * (e.g. Ergo) that obbyircd's verifier won't accept. Rederiving
-         * locally from the freshly-verified plaintext password
-         * guarantees the SCRAM blob is consistent with how this server
-         * verifies it. */
-		if (scram_make_credentials(acc, password))
-			update_account_scram(acc);
-        /* Roll forward migrated non-argon2id accounts. */
-		if (acc->password_scheme && strcmp(acc->password_scheme, "argon2id"))
-		{
-			const char *new_hash = Auth_Hash(AUTHTYPE_ARGON2, password);
-			if (new_hash)
-			{
-				free(acc->password);
-				acc->password = strdup(new_hash);
-				free(acc->password_scheme);
-				acc->password_scheme = strdup("argon2id");
-				update_account_password(acc);
-			}
-		}
-
-		sendto_one(client, NULL,
-		           ":%s IDENTIFY SUCCESS %s :You have been successfully identified.",
-		           me.name, acc->name);
-		strlcpy(client->user->account, acc->name, sizeof(client->user->account));
-		user_account_login(NULL, client);
-		DelSaslType(client);
-		unreal_log(ULOG_INFO, "account", "IDENTIFY", client,
-		           "User $client.details identified [account: $account] [email: $email]",
-		           log_data_string("account", acc->name),
-		           log_data_string("email", acc->email));
-	} else
-	{
-		sendto_one(client, NULL,
-		           ":%s FAIL IDENTIFY INVALID_PASSWORD :Invalid password for account %s.",
-		           me.name, acc->name);
-		client->local->sasl_sent_time = 0;
-		add_fake_lag(client, 7000);
+		RunHook(HOOKTYPE_ACCOUNT_LOGIN, client, NULL);
+		if (IsDead(client))
+			return;
+		release = free_account_nick(client, nick);
 	}
-	free_account(acc);
+	if (release != NICK_FREED)
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL REGAIN NICK_IN_USE %s :That nick is held by another account or server.",
+		           me.name, nick);
+		return;
+	}
+	if (strcmp(client->name, nick))
+		force_nick_change(client, nick);
+	add_fake_lag(client, 2000);
+	sendto_one(client, NULL, ":%s REGAIN SUCCESS %s :You have regained your nick.",
+	           me.name, nick);
 }
 
 /* ===================================================================
