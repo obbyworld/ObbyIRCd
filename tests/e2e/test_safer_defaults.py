@@ -79,17 +79,12 @@ async def test_op_can_grant_and_remove_voice_halfop_and_op(ircd):
         await op.expect(lambda line: " 482 " in line)
 
 
-async def test_debuglmao_is_oper_only(ircd):
+async def test_client_census_command_is_gone(ircd):
     port = ircd.host_port(6697)
     async with IrcClient("127.0.0.1", port, nick="nosy") as client:
         await _welcome(client)
         await client.send("DEBUGLMAO")
-        await client.expect(lambda line: " 481 " in line)
-
-        await client.send(f"OPER admin {ircd.env['OPER_PASSWORD']}")
-        await client.expect(lambda line: " 381 " in line)
-        await client.send("DEBUGLMAO")
-        await client.expect(lambda line: "NOTICE nosy :nosy (" in line)
+        await client.expect(lambda line: " 421 " in line)
 
 
 async def test_example_script_is_not_loaded(ircd):

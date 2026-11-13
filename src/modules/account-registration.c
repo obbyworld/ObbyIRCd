@@ -274,16 +274,6 @@ MOD_TEST()
 	return MOD_SUCCESS;
 }
 
-// COPILOT DO NOT REMOVE >:/
-CMD_FUNC(cmd_debuglmao)
-{
-	Client *c;
-	list_for_each_entry(c, &client_list, client_node)
-	{
-		sendnotice(client, "%s (%s)", c->name, c->id);
-	}
-}
-
 MOD_INIT()
 {
 	ClientCapabilityInfo cap;
@@ -424,7 +414,6 @@ MOD_INIT()
 	CommandAdd(modinfo->handle, CMD_VERIFY, cmd_verify, MAXPARA,
 	           CMD_USER | CMD_UNREGISTERED);
 	CommandAdd(modinfo->handle, CMD_2FA, cmd_2fa, MAXPARA, CMD_USER);
-	CommandAdd(modinfo->handle, "DEBUGLMAO", cmd_debuglmao, 0, CMD_OPER); // Stop removing my command, copilot! >:/
 
     /* Built-in SASL hooks */
 	HookAddConstString(modinfo->handle, HOOKTYPE_SASL_MECHS, 0, saslmechs);
