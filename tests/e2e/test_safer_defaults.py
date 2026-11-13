@@ -87,9 +87,23 @@ async def test_client_census_command_is_gone(ircd):
         await client.expect(lambda line: " 421 " in line)
 
 
-async def test_example_script_is_not_loaded(ircd):
+async def test_reminder_reaches_its_author(ircd):
     port = ircd.host_port(6697)
-    async with IrcClient("127.0.0.1", port, nick="scripts") as client:
-        await _welcome(client)
-        await client.send("REMINDER 1 hello")
-        await client.expect(lambda line: " 421 " in line and "REMINDER" in line)
+    async with IrcClient("127.0.0.1", port, nick="author") as author:
+        await _welcome(author)
+        await author.send("REMINDER 2 secret")
+        await author.expect(lambda line: "REMINDER: secret" in line, timeout=10)
+
+
+async def test_reminder_skips_whoever_takes_the_nick(ircd):
+    port = ircd.host_port(6697)
+    async with IrcClient("127.0.0.1", port, nick="leaver") as author:
+        await _welcome(author)
+        await author.send("REMINDER 10 secret")
+        await author.expect(lambda line: "Reminder set" in line)
+        await author.send("QUIT")
+        await author.expect(lambda line: line.startswith("ERROR"))
+    async with IrcClient("127.0.0.1", port, nick="leaver") as taker:
+        await _welcome(taker)
+        with pytest.raises(TimeoutError):
+            await taker.expect(lambda line: "secret" in line, timeout=12)

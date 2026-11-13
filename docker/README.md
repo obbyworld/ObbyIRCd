@@ -46,8 +46,9 @@ upgrade.  To bring one up to the current defaults by hand:
 2. In `conf/examples/member-roles.conf`, add `vho` to the end of both
    `can_set` and `can_unset` in the `op` role, so ops can grant and
    remove voice, halfop and op.
-3. Delete `conf/scripts/example.js`.  The image ships it under
-   `conf/examples/scripts/` and it should only load when you copy it in.
+3. Copy `/etc/obbyircd/conf-defaults/scripts/example.js` from the
+   image over `conf/scripts/example.js`, so delayed command results
+   reach only the client that asked.
 
 Then restart the container.
 
@@ -118,10 +119,9 @@ path to use a bind mount instead of a named volume.
 ## obbyscript scripts
 
 The `obbyscript` module (built in, loaded by `modules.default.conf`)
-auto-loads every `.js` file in `conf/scripts/`, which starts empty.
-The image ships `conf/examples/scripts/example.js`, a reference script
-that registers a `/JSINFO` command and demonstrates command/event
-hooks.  Copy it into `conf/scripts/` to load it.
+auto-loads every `.js` file in `conf/scripts/`.  The image ships
+`scripts/example.js` -- a reference script that registers a `/JSINFO`
+command and demonstrates command/event hooks -- as a starting point.
 
 To add or replace scripts at runtime:
 
