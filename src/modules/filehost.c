@@ -9,10 +9,11 @@
  * Config (obbyircd.conf):
  *   filehosts {
  *       host "https://your-filehost.example/";
- *       link-previews yes;
+ *       link-previews no;
  *   };
  *
- * We fetch link previews only with link-previews yes, and only from public addresses.
+ * Link previews are on by default and link-previews no; turns them off.
+ * We fetch previews only from public addresses.
  *
  * Originally written by the obbyworld team as the third-party module
  * "third/o-filehost"; integrated as a native ObbyIRCd module.
@@ -835,6 +836,7 @@ void setconf(void)
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.has_hosts = 0;
 	cfg.has_external = 0;
+	cfg.link_previews = 1;
 	safe_strdup(cfg.isupport_line, "");
 	safe_strdup(cfg.external_isupport_line, "");
 }
@@ -848,6 +850,7 @@ void freeconf(void)
 	safe_free(cfg.isupport_line);
 	safe_free(cfg.external_isupport_line);
 	memset(&cfg, 0, sizeof(cfg));
+	cfg.link_previews = 1;
 }
 
 

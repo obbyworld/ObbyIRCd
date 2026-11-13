@@ -1,4 +1,4 @@
-"""Link previews are opt-in and never fetch internal addresses."""
+"""Link previews are on by default, can be turned off, and never fetch internal addresses."""
 
 import asyncio
 import secrets
@@ -75,7 +75,7 @@ async def post(ircd, urls):
         await asyncio.sleep(5)
 
 
-PREVIEWS_ON = "\nfilehosts { link-previews yes; };\n"
+PREVIEWS_OFF = "\nfilehosts { link-previews no; };\n"
 # A documentation range the fetcher treats as public, so we can serve a public address without internet.
 PUBLIC_SUBNET = "203.0.113.0/24"
 
@@ -90,7 +90,7 @@ def trust_redirector_cert(ircd):
     docker_exec(ircd, "sh", "-c", f"cat /tmp/redir.pem >> {CONF}/tls/curl-ca-bundle.crt")
 
 
-def ircd_with_listener(conf_extra, subnet=None):
+def ircd_with_listener(subnet=None, conf_extra=""):
     # On a user network the container name resolves through Docker DNS to the container's own address.
     network = f"ssrf-e2e-{secrets.token_hex(4)}"
     subnet_args = ["--subnet", subnet] if subnet else []
@@ -100,8 +100,8 @@ def ircd_with_listener(conf_extra, subnet=None):
         c.wait_ready()
         if conf_extra:
             c.append_file(f"{CONF}/obbyircd.conf", conf_extra)
-            trust_redirector_cert(c)
-            c.restart()
+        trust_redirector_cert(c)
+        c.restart()
         docker_exec(c, "python3", "-c", LISTENER, detach=True)
         docker_exec(c, "python3", "-c", REDIRECTOR, detach=True)
         yield c
@@ -111,53 +111,53 @@ def ircd_with_listener(conf_extra, subnet=None):
 
 
 @pytest.fixture
-def public_previews_default():
-    yield from ircd_with_listener("", PUBLIC_SUBNET)
+def public_ircd():
+    yield from ircd_with_listener(PUBLIC_SUBNET)
 
 
 @pytest.fixture
-def public_previews_on():
-    yield from ircd_with_listener(PREVIEWS_ON, PUBLIC_SUBNET)
+def public_previews_off():
+    yield from ircd_with_listener(PUBLIC_SUBNET, PREVIEWS_OFF)
 
 
 @pytest.fixture
-def private_previews_on():
-    yield from ircd_with_listener(PREVIEWS_ON)
+def private_ircd():
+    yield from ircd_with_listener()
 
 
-async def test_previews_are_off_by_default(public_previews_default):
-    await post(public_previews_default, [f"https://{public_previews_default.name}:9443/default"])
-    assert hits(public_previews_default) == ""
+async def test_previews_are_on_by_default(public_ircd):
+    await post(public_ircd, [f"https://{public_ircd.name}:9443/default"])
+    assert hits(public_ircd) != ""
 
 
-async def test_internal_addresses_are_never_fetched(private_previews_on):
-    resolves_to_private = f"https://{private_previews_on.name}:9443/dns"
-    await post(private_previews_on, INTERNAL_URLS + [resolves_to_private])
-    assert hits(private_previews_on) == ""
+async def test_previews_can_be_turned_off(public_previews_off):
+    await post(public_previews_off, [f"https://{public_previews_off.name}:9443/off"])
+    assert hits(public_previews_off) == ""
 
 
-async def test_public_hostname_is_fetched(public_previews_on):
-    await post(public_previews_on, [f"https://{public_previews_on.name}:9443/control"])
-    assert hits(public_previews_on) != ""
+async def test_internal_addresses_are_never_fetched(private_ircd):
+    resolves_to_private = f"https://{private_ircd.name}:9443/dns"
+    await post(private_ircd, INTERNAL_URLS + [resolves_to_private])
+    assert hits(private_ircd) == ""
 
 
-async def test_long_public_hostname_is_fetched(public_previews_on):
+async def test_long_public_hostname_is_fetched(public_ircd):
     long_name = "a" * 40 + "." + "b" * 40
     network = f"ssrf-e2e-{secrets.token_hex(4)}"
     subprocess.run(["docker", "network", "create", "--subnet", "198.51.100.0/24", network], check=True, capture_output=True)
     try:
         subprocess.run(
-            ["docker", "network", "connect", "--alias", long_name, network, public_previews_on.name],
+            ["docker", "network", "connect", "--alias", long_name, network, public_ircd.name],
             check=True, capture_output=True,
         )
-        await post(public_previews_on, [f"https://{long_name}:9443/long"])
-        assert "198.51.100." in hits(public_previews_on)
+        await post(public_ircd, [f"https://{long_name}:9443/long"])
+        assert "198.51.100." in hits(public_ircd)
     finally:
-        subprocess.run(["docker", "network", "disconnect", "-f", network, public_previews_on.name], capture_output=True)
+        subprocess.run(["docker", "network", "disconnect", "-f", network, public_ircd.name], capture_output=True)
         subprocess.run(["docker", "network", "rm", network], capture_output=True)
 
 
-async def test_redirect_to_internal_address_is_not_followed(public_previews_on):
-    await post(public_previews_on, [f"https://{public_previews_on.name}:9444/redirect"])
-    assert "/redirect" in hits(public_previews_on, f"{HITS}-redirector")
-    assert hits(public_previews_on) == ""
+async def test_redirect_to_internal_address_is_not_followed(public_ircd):
+    await post(public_ircd, [f"https://{public_ircd.name}:9444/redirect"])
+    assert "/redirect" in hits(public_ircd, f"{HITS}-redirector")
+    assert hits(public_ircd) == ""
