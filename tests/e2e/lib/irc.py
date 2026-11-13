@@ -35,6 +35,9 @@ class IrcClient:
         await self.send(f"NICK {self.nick}")
         await self.send(f"USER {self.nick} 0 * :{self.nick}")
 
+    async def readline(self) -> bytes:
+        return await self.reader.readline()
+
     async def expect(self, predicate, timeout: float = 15) -> str:
         if isinstance(predicate, str):
             needle = predicate
@@ -45,7 +48,7 @@ class IrcClient:
             if remain <= 0:
                 raise TimeoutError(f"never matched (last: {self.lines[-10:]})")
             try:
-                raw = await asyncio.wait_for(self.reader.readline(), remain)
+                raw = await asyncio.wait_for(self.readline(), remain)
             except asyncio.TimeoutError:
                 raise TimeoutError(f"never matched (last: {self.lines[-10:]})")
             if not raw:

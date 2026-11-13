@@ -52,6 +52,24 @@ listen {
     port $WS_PORT;
     options { websocket { type text; }; };
 };"
+    WS_TRUSTED_PROXIES="${WS_TRUSTED_PROXIES:-}"
+    case "$WS_TRUSTED_PROXIES" in
+        *[!0-9A-Fa-f.:/[:space:]]*)
+            echo "ERROR: WS_TRUSTED_PROXIES may only hold IPs and CIDR ranges, refuse to render conf" >&2
+            exit 1
+            ;;
+    esac
+    if [ -n "$WS_TRUSTED_PROXIES" ]; then
+        ws_proxy_ips=""
+        for ip in $WS_TRUSTED_PROXIES; do
+            ws_proxy_ips="$ws_proxy_ips $ip;"
+        done
+        WS_CONFIG="$WS_CONFIG
+proxy websocket-proxy {
+    type x-forwarded;
+    match { ip {${ws_proxy_ips} } }
+};"
+    fi
 else
     export WS_CONFIG=""
 fi

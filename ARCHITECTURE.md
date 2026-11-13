@@ -48,7 +48,7 @@ preserved everywhere.
 │   │   ├── snomasks.default.conf
 │   │   ├── rpc.modules.default.conf
 │   │   └── examples/example.conf*
-│   ├── scripts/             (obbyscript example .js shipped as scripts/example.js)
+│   ├── scripts/             (obbyscript example .js shipped as examples/scripts/example.js)
 │   └── RELEASE-NOTES.md, tao.of.irc, ...
 ├── extras/
 │   ├── argon2/, c-ares/, jansson/, libsodium/, pcre2/, geoip/   (vendored tarballs)
@@ -223,7 +223,8 @@ API surface (both):
   `mtagsToString`
 
 A reference example ships at `doc/conf/scripts/example.js` and is
-copied to `$CONFDIR/scripts/` on first run; it registers a `/JSINFO`
+copied to `$CONFDIR/examples/scripts/` on first run, outside the
+autoload directory; it registers a `/JSINFO`
 command and exercises a handful of hooks.
 
 ## 7. Persistence model

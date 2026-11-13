@@ -117,13 +117,12 @@ USER root
 # Snapshot the freshly-installed conf tree somewhere outside the volume
 # mount points so first-run can repopulate a fresh volume.  `make
 # install` doesn't ship doc/conf/scripts/, so copy the obbyscript
-# example separately -- the entrypoint also `mkdir -p`s the scripts
-# directory on every start in case the operator wiped it.
-RUN mkdir -p /etc/obbyircd/conf-defaults \
+# example separately.  It goes to examples/scripts/ because obbyscript
+# autoloads every *.js in scripts/ and we only want operators to opt in.
+RUN mkdir -p /etc/obbyircd/conf-defaults/examples/scripts \
     && cp -r /home/obbyircd/obby/conf/. /etc/obbyircd/conf-defaults/ \
-    && mkdir -p /etc/obbyircd/conf-defaults/scripts \
-    && cp -n /tmp/obbyircd-source/doc/conf/scripts/*.js \
-            /etc/obbyircd/conf-defaults/scripts/ 2>/dev/null || true \
+    && cp /tmp/obbyircd-source/doc/conf/scripts/*.js \
+          /etc/obbyircd/conf-defaults/examples/scripts/ \
     && chmod -R a+rX /etc/obbyircd
 
 RUN mkdir -p /home/obbyircd/obby/conf \
