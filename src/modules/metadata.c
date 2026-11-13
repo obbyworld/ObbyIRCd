@@ -1425,6 +1425,8 @@ CMD_FUNC(cmd_metadata_local)
 	{ /* the client requested re-sending of all subbed metadata */
 		CHECKREGISTERED_OR_DIE(client, return);
 		PROCESS_TARGET_OR_DIE(target, user, channel, return);
+		if (!metadata_check_perms(user, channel, client, "*", MODE_GET))
+			return;
 		if (channel)
 			metadata_sync_channel(client, channel);
 		else

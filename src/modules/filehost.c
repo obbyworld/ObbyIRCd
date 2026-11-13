@@ -9,7 +9,10 @@
  * Config (obbyircd.conf):
  *   filehosts {
  *       host "https://your-filehost.example/";
+ *       link-previews yes;
  *   };
+ *
+ * We fetch link previews only with link-previews yes, and only from public addresses.
  *
  * Originally written by the obbyworld team as the third-party module
  * "third/o-filehost"; integrated as a native ObbyIRCd module.
@@ -30,6 +33,7 @@ struct
 	char *external_isupport_line;   /* tokenless hosts -> draft/FILEHOST */
 	MultiLine *external;
 	unsigned short int has_external;
+	int link_previews;
 } cfg;
 
 ModuleHeader MOD_HEADER = {
@@ -148,6 +152,39 @@ MOD_UNLOAD()
 	return MOD_SUCCESS;
 }
 
+static int url_host_is_public(const char *url)
+{
+	char authority[512];
+	char *host;
+	const char *p = strstr(url, "://");
+	char *q;
+	size_t len;
+
+	if (!p)
+		return 0;
+	p += 3;
+	len = strcspn(p, "/?#");
+	if (!len || len >= sizeof(authority))
+		return 0;
+	strlncpy(authority, p, sizeof(authority), len);
+	host = (q = strrchr(authority, '@')) ? q + 1 : authority;
+	if (*host == '[')
+		return 0;
+	if ((q = strchr(host, ':')))
+		*q = '\0';
+	len = strlen(host);
+	while (len && host[len - 1] == '.')
+		host[--len] = '\0';
+	if (!len || len > 253 ||
+	    host[strspn(host, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")] ||
+	    !strcasecmp(host, "localhost") ||
+	    (len > 10 && !strcasecmp(host + len - 10, ".localhost")))
+		return 0;
+	/* We treat a numeric last label as an IP literal, since resolvers accept shortened and decimal IPv4 forms. */
+	q = strrchr(host, '.');
+	return !isdigit((unsigned char)(q ? q[1] : host[0]));
+}
+
 /**
  * Hook function called when a message is sent to a channel
  */
@@ -159,8 +196,7 @@ int link_preview_chanmsg(Client *client, Channel *channel, int sendflags, const 
 	LinkPreviewContext *context;
 	OutgoingWebRequest *request;
 
-	/* Only process PRIVMSG, not NOTICE or TAGMSG */
-	if (sendtype != SEND_TYPE_PRIVMSG)
+	if (!cfg.link_previews || sendtype != SEND_TYPE_PRIVMSG)
 	{
 		return 0;
 	}
@@ -176,6 +212,11 @@ int link_preview_chanmsg(Client *client, Channel *channel, int sendflags, const 
 	if (!url)
 	{
 		return 0; /* No URL found */
+	}
+	if (!url_host_is_public(url))
+	{
+		safe_free(url);
+		return 0;
 	}
 
 	/* Find the msgid tag from the message */
@@ -202,6 +243,7 @@ int link_preview_chanmsg(Client *client, Channel *channel, int sendflags, const 
 	request->http_method = HTTP_METHOD_GET;
 	safe_strdup(request->apicallback, "link_preview_download_complete");
 	request->max_redirects = 3;
+	request->deny_private_addresses = 1;
 	request->callback_data = context;
 	add_nvplist(&request->headers, 0, "User-Agent", "ObbyIRCd-LinkPreview/1.0");
 
@@ -249,6 +291,8 @@ void link_preview_download_complete(OutgoingWebRequest *request, OutgoingWebResp
 	title = extract_title_from_html(response->memory);
 	snippet = extract_snippet_from_html(response->memory);
 	meta_image = extract_meta_image_from_html(response->memory);
+	if (meta_image && !url_host_is_public(meta_image))
+		safe_free(meta_image);
 
 	/* Only send if we got at least a title */
 	if (title && *title)
@@ -258,6 +302,7 @@ void link_preview_download_complete(OutgoingWebRequest *request, OutgoingWebResp
 		{
 			ImageUploadContext *upload_ctx;
 			OutgoingWebRequest *upload_req;
+			json_t *j;
 			char *json_payload;
 			char upload_url[512];
 
@@ -270,9 +315,10 @@ void link_preview_download_complete(OutgoingWebRequest *request, OutgoingWebResp
 			safe_strdup(upload_ctx->title, title);
 			safe_strdup(upload_ctx->snippet, snippet ? snippet : "");
 
-			/* Build JSON payload: {"url": "image_url"} */
-			json_payload = safe_alloc(strlen(meta_image) + 50);
-			snprintf(json_payload, strlen(meta_image) + 50, "{\"url\":\"%s\"}", meta_image);
+			j = json_object();
+			json_object_set_new(j, "url", json_string(meta_image));
+			json_payload = json_dumps(j, JSON_COMPACT);
+			json_decref(j);
 
 			/* Start async upload request */
 			upload_req = safe_alloc(sizeof(OutgoingWebRequest));
@@ -847,6 +893,8 @@ int filehost_configtest(ConfigFile *cf, ConfigEntry *ce, int type, int *errs)
 
 			continue;
 		}
+		if (!strcmp(cep->name, "link-previews"))
+			continue;
 
 		// Anything else is unknown to us =]
 		config_warn("%s:%i: unknown item %s::%s", cep->file->filename, cep->line_number, CONF_FILEHOST, cep->name); // So display just a warning
@@ -880,6 +928,9 @@ int filehost_configrun(ConfigFile *cf, ConfigEntry *ce, int type)
 
 		if (!strcmp(cep->name, "external"))
 			addmultiline(&cfg.external, cep->value);
+
+		if (!strcmp(cep->name, "link-previews"))
+			cfg.link_previews = config_checkval(cep->value, CFG_YESNO);
 	}
 
 	for (MultiLine *m = cfg.hosts; m; m = m->next)

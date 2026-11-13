@@ -557,18 +557,10 @@ static void inv_do_create(Client *client, const char *channel_raw,
 
 	if (channel_raw && *channel_raw)
 	{
-		if (*channel_raw != '#' && *channel_raw != '&' &&
-		    *channel_raw != '^' && *channel_raw != '$')
+		if (!valid_channelname(channel_raw))
 		{
 			sendto_one(client, NULL,
-			           ":%s FAIL INVITELINK INVALID_CHANNEL %s :Channel must start with # & ^ or $.",
-			           me.name, channel_raw);
-			return;
-		}
-		if (strlen(channel_raw) > CHANNELLEN)
-		{
-			sendto_one(client, NULL,
-			           ":%s FAIL INVITELINK INVALID_CHANNEL :Channel name too long.",
+			           ":%s FAIL INVITELINK INVALID_CHANNEL :Invalid channel name.",
 			           me.name);
 			return;
 		}

@@ -124,8 +124,14 @@ MOD_UNLOAD()
 
 int i3react_mtag_is_ok(Client *client, const char *name, const char *value)
 {
+	const char *p;
+
 	if (BadPtr(value) || !strlen(value) || strlen(value) > 10)
 		return 0;
+
+	for (p = value; *p; p++)
+		if ((unsigned char)*p < 0x20 || *p == 0x7f)
+			return 0;
 
 	return 1;
 }

@@ -3179,6 +3179,7 @@ OutgoingWebRequest *duplicate_outgoingwebrequest(OutgoingWebRequest *orig)
 	e->connect_timeout = orig->connect_timeout;
 	e->transfer_timeout = orig->transfer_timeout;
 	e->minimum_tls_version = orig->minimum_tls_version;
+	e->deny_private_addresses = orig->deny_private_addresses;
 	e->max_size = orig->max_size;
 	return e;
 }
