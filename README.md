@@ -44,24 +44,25 @@ Install the required libraries for your distribution before building.
 ```bash
 sudo apt-get install build-essential libssl-dev libpcre2-dev \
     libargon2-dev libsodium-dev libjansson-dev libcurl4-openssl-dev \
-    libsqlite3-dev pkg-config
+    libsqlite3-dev python3-dev pkg-config
 ```
 
 **RHEL / Fedora / AlmaLinux**
 ```bash
 sudo dnf install gcc make openssl-devel pcre2-devel libargon2-devel \
-    libsodium-devel jansson-devel libcurl-devel sqlite-devel pkgconf
+    libsodium-devel jansson-devel libcurl-devel sqlite-devel python3-devel \
+    pkgconf
 ```
 
 **Alpine Linux**
 ```bash
 apk add build-base openssl-dev pcre2-dev argon2-dev libsodium-dev \
-    jansson-dev curl-dev sqlite-dev pkgconf
+    jansson-dev curl-dev sqlite-dev python3-dev pkgconf
 ```
 
 **macOS (Homebrew)**
 ```bash
-brew install openssl pcre2 argon2 libsodium jansson curl sqlite pkg-config
+brew install openssl pcre2 argon2 libsodium jansson curl sqlite python pkg-config
 ```
 
 ### 2. Create a dedicated user
@@ -75,8 +76,8 @@ useradd -r -m -d /home/obbyircd -s /bin/bash obbyircd
 ### 3. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/obbyircd.git
-cd obbyircd
+git clone https://github.com/obbyworld/ObbyIRCd.git
+cd ObbyIRCd
 ```
 
 ### 4. Run the configuration wizard
