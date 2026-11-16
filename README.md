@@ -76,8 +76,8 @@ useradd -r -m -d /home/obbyircd -s /bin/bash obbyircd
 ### 3. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/obbyircd.git
-cd obbyircd
+git clone https://github.com/obbyworld/ObbyIRCd.git
+cd ObbyIRCd
 ```
 
 ### 4. Run the configuration wizard
