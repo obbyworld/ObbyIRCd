@@ -27,7 +27,7 @@ def _ircd(env: dict | None = None) -> IrcdContainer:
 
 
 def _parse_rtc_payload(line: str) -> dict:
-    tag = "+obsidianirc/rtc="
+    tag = "obsidianirc/rtc="
     start = line.index(tag) + len(tag)
     end = line.index(" ", start)
     raw = line[start:end]
@@ -57,7 +57,9 @@ async def test_passthrough_when_unconfigured():
                 await cli.expect(lambda line: " 001 " in line, timeout=30)
                 await stub.wait_ircd_connected()
                 await _push_joined(stub, "passt")
-                line = await cli.expect(lambda line: "+obsidianirc/rtc" in line, timeout=15)
+                line = await cli.expect(
+                    lambda line: line.startswith("@obsidianirc/rtc="), timeout=15
+                )
             payload = _parse_rtc_payload(line)
             assert payload[TURN_KEY] == PLACEHOLDER_TURN
     finally:
@@ -85,7 +87,9 @@ async def _run_rewrite_scenario(secret: str, nick: str):
                 await stub.wait_ircd_connected()
                 before = time.time()
                 await _push_joined(stub, nick)
-                line = await cli.expect(lambda line: "+obsidianirc/rtc" in line, timeout=15)
+                line = await cli.expect(
+                    lambda line: line.startswith("@obsidianirc/rtc="), timeout=15
+                )
             payload = _parse_rtc_payload(line)
             t = payload[TURN_KEY]
             assert t["urls"] == urls

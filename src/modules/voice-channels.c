@@ -8,15 +8,12 @@
  *   obbyworld client            ObbyIRCd                hosted-backend
  *   ─────────────────             ────────                ──────────────
  *   TAGMSG ^vc                    voice-channels.c        voice.go
- *   @+obsidianirc/rtc=…    ─────► (CAN_SEND_TO_CHANNEL    (Unix-socket
- *                                  hook intercepts        bridge JSON)
- *                                  +obsidianirc/rtc;
- *                                  forwards to bridge,
- *                                  denies broadcast so
- *                                  SDP doesn't leak)
+ *   @obsidianirc/rtc=…     ─────► (TAGMSG override        (Unix-socket
+ *                                  forwards the client's  bridge JSON)
+ *                                  tag to the bridge)
  *
  *   :server.name TAGMSG vc        ◄── bridge frame ───
- *   @+obsidianirc/rtc=…             {"op":"signal",
+ *   @obsidianirc/rtc=…              {"op":"signal",
  *                                    "to":"alice|^vc",
  *                                    "payload":…}
  *
@@ -49,7 +46,7 @@ ModuleHeader MOD_HEADER = {
 
 #define VOICE_CHAN_PREFIX  '^'
 #define STREAM_CHAN_PREFIX '$'
-#define VOICE_RTC_TAG      "+obsidianirc/rtc"
+#define VOICE_RTC_TAG      "obsidianirc/rtc"
 #define VOICE_CAP_NAME     "obsidianirc/voice"
 #define VOICE_DEFAULT_SOCK "/tmp/obbyirc-voice.sock"
 
@@ -150,8 +147,8 @@ static int bridge_send_frame(json_t *frame)
 /* ===================================================================
  * Send-side: forward client signaling to the bridge.
  *
- * Called from the CAN_SEND_TO_CHANNEL hook when a client TAGMSG with
- * the +obsidianirc/rtc tag lands on a `^channel`.
+ * Called from the TAGMSG override when a local user sends the
+ * obsidianirc/rtc tag to a voice or stream channel.
  * =================================================================== */
 static void bridge_forward_signal(Client *client, Channel *channel,
                                   const char *payload_json)
@@ -401,44 +398,22 @@ EVENT(bridge_pump_event)
 /* ===================================================================
  * Hooks
  * =================================================================== */
-/* PRE_CHANMSG fires before the channel TAGMSG is broadcast.  We
- * inspect the outgoing mtag list, forward the +obsidianirc/rtc payload
- * to the bridge, and *delete* the tag from the list -- the empty
- * resulting TAGMSG is dropped automatically by message.c's
- * has_client_mtags() guard, so the SDP never reaches other channel
- * members. */
-static int voice_pre_chanmsg(Client *client, Channel *channel,
-                             MessageTag **mtags,
-                             const char *_text, SendType sendtype)
+/* We send a client's rtc tag only to the bridge, so only the server signals clients. */
+CMD_OVERRIDE_FUNC(voice_tagmsg_override)
 {
-	if (!MyUser(client))
-		return 0;
-	if (!is_voice_or_stream_channel(channel->name))
-		return 0;
-	if (sendtype != SEND_TYPE_TAGMSG)
-		return 0;
+	MessageTag *m = find_mtag(recv_mtags, VOICE_RTC_TAG);
+	Channel *channel = parc >= 2 ? find_channel(parv[1]) : NULL;
+	const char *text = "";
+	const char *errmsg = NULL;
 
-
-	MessageTag *prev = NULL;
-	for (MessageTag *m = *mtags; m; m = m->next)
+	if (MyUser(client) && m && m->value && channel &&
+	    is_voice_or_stream_channel(channel->name) &&
+	    can_send_to_channel(client, channel, &text, &errmsg, SEND_TYPE_TAGMSG, clictx))
 	{
-		if (m->name && !strcmp(m->name, VOICE_RTC_TAG) && m->value)
-		{
-			bridge_forward_signal(client, channel, m->value);
-			/* Detach `m` from the list -- has_client_mtags() in
-			 * message.c will then see an empty list and drop the
-			 * TAGMSG before it broadcasts. */
-			if (prev)
-				prev->next = m->next;
-			else
-				*mtags = m->next;
-			m->next = NULL;
-			free_message_tags(m);
-			return 0;
-		}
-		prev = m;
+		bridge_forward_signal(client, channel, m->value);
+		return;
 	}
-	return 0;
+	CALL_NEXT_COMMAND_OVERRIDE();
 }
 
 static int voice_local_part(Client *client, Channel *channel,
@@ -458,8 +433,7 @@ static int voice_local_quit(Client *client, MessageTag *_mtags,
 	return 0;
 }
 
-/* Permit "+obsidianirc/rtc" from anyone -- clients send it, the
- * server module relays it back, and other servers may forward it. */
+/* We accept "obsidianirc/rtc" from clients so the TAGMSG override can read it. */
 static int voice_rtc_mtag_is_ok(Client *_client, const char *_name,
                                 const char *_value)
 {
@@ -490,22 +464,6 @@ static int voice_can_join(Client *client, Channel *channel,
 	         " client capability");
 	*errmsg = fmt;
 	return ERR_NOSUCHCHANNEL;
-}
-
-/* HOOKTYPE_NEW_MESSAGE: copy "+obsidianirc/rtc" from the parsed recv
- * tag list onto the outgoing tag list so PRE_CHANMSG can see it.
- * Without this the tag is parsed and accepted but never propagated
- * past new_message(). */
-static void voice_rtc_new_message(Client *_client, MessageTag *recv_mtags,
-                                  MessageTag **mtag_list,
-                                  const char *_signature)
-{
-	MessageTag *m = find_mtag(recv_mtags, VOICE_RTC_TAG);
-	if (m)
-	{
-		m = duplicate_mtag(m);
-		AddListItem(m, *mtag_list);
-	}
 }
 
 static void free_turn_cfg(void)
@@ -780,9 +738,8 @@ MOD_INIT()
 	ClientCapabilityAdd(modinfo->handle, &cap, &CAP_OBSIDIANIRC_VOICE);
 
 	/* Without registering a MessageTagHandler the parser silently
-	 * drops "+obsidianirc/rtc" from incoming TAGMSGs (message_tag_ok()
-	 * rejects unknown tags from local clients), and PRE_CHANMSG sees
-	 * an empty mtag list. */
+	 * drops "obsidianirc/rtc" from incoming TAGMSGs (message_tag_ok()
+	 * rejects unknown tags from local clients). */
 	MessageTagHandlerInfo mtag;
 	memset(&mtag, 0, sizeof(mtag));
 	mtag.name = VOICE_RTC_TAG;
@@ -790,8 +747,6 @@ MOD_INIT()
 	mtag.flags = MTAG_HANDLER_FLAGS_NO_CAP_NEEDED;
 	MessageTagHandlerAdd(modinfo->handle, &mtag);
 
-	HookAddVoid(modinfo->handle, HOOKTYPE_NEW_MESSAGE, 0, voice_rtc_new_message);
-	HookAdd(modinfo->handle, HOOKTYPE_PRE_CHANMSG, 0, voice_pre_chanmsg);
 	HookAdd(modinfo->handle, HOOKTYPE_CAN_JOIN, 0, voice_can_join);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_PART, 0, voice_local_part);
 	HookAdd(modinfo->handle, HOOKTYPE_LOCAL_QUIT, 0, voice_local_quit);
@@ -811,6 +766,7 @@ MOD_INIT()
 
 MOD_LOAD()
 {
+	CommandOverrideAdd(modinfo->handle, "TAGMSG", 0, voice_tagmsg_override);
 	bridge_connect(); /* best-effort; pump event will retry */
 	return MOD_SUCCESS;
 }
