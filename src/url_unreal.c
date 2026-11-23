@@ -316,6 +316,13 @@ void unreal_https_initiate_connect(Download *handle)
 {
 	int opt;
 
+	if (handle->request->deny_private_addresses &&
+	    is_private_ip((handle->socket_type == SOCKET_TYPE_IPV4) ? handle->ip4 : handle->ip6))
+	{
+		https_cancel(handle, "Refusing to connect to internal address of '%s'", handle->hostname);
+		return;
+	}
+
 	handle->fd = fd_socket(handle->socket_type == SOCKET_TYPE_IPV6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0, "HTTPS");
 	if (handle->fd < 0)
 	{

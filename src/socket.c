@@ -1396,6 +1396,39 @@ int is_valid_ip(const char *ip)
 	return 0; /* not an IP address */
 }
 
+static int is_private_ipv4(const unsigned char *a)
+{
+	return a[0] == 0 || a[0] == 10 || a[0] == 127 || a[0] >= 224 ||
+	       (a[0] == 169 && a[1] == 254) ||
+	       (a[0] == 172 && (a[1] & 0xf0) == 16) ||
+	       (a[0] == 192 && a[1] == 168) ||
+	       (a[0] == 100 && (a[1] & 0xc0) == 64);
+}
+
+/** Check if an IP address is internal: loopback, private, link-local, CGNAT,
+ * unspecified, unique local, multicast or reserved, including IPv4 embedded in IPv6.
+ * @retval 1	Internal address, or not an IP address at all
+ * @retval 0	Public address
+ */
+int is_private_ip(const char *ip)
+{
+	static const unsigned char v4mapped[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
+	static const unsigned char nat64[12] = {0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
+	static const unsigned char zero[12] = {0};
+	unsigned char a[16];
+
+	if (BadPtr(ip))
+		return 1;
+	if (inet_pton(AF_INET, ip, a) == 1)
+		return is_private_ipv4(a);
+	if (inet_pton(AF_INET6, ip, a) != 1)
+		return 1;
+	if (!memcmp(a, v4mapped, 12) || !memcmp(a, nat64, 12))
+		return is_private_ipv4(a + 12);
+	return !memcmp(a, zero, 12) || (a[0] & 0xfe) == 0xfc ||
+	       (a[0] == 0xfe && (a[1] & 0x80) == 0x80) || a[0] == 0xff;
+}
+
 /** Checks if the system is IPv6 capable.
  * IPv6 is always available at compile time (libs, headers), but the OS may
  * not have IPv6 enabled (or ipv6 kernel module not loaded). So we better check..

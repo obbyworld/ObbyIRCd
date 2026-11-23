@@ -6675,6 +6675,8 @@ CMD_FUNC(register_account)
 {
 	const char *name, *email, *password;
 	const char *password_hash;
+	char nickbuf[NICKLEN + 1];
+	int max_name_length;
 	Account *acc;
 
 	if (!obsidian_db && obsidian_open_database(OBSIDIAN_DB) != SQLITE_OK)
@@ -6697,13 +6699,24 @@ CMD_FUNC(register_account)
 	email = parv[2];
 	password = parv[3];
 
+	max_name_length = MIN(MyConf.max_name_length, iConf.nick_length);
 	if ((int)strlen(name) < MyConf.min_name_length ||
-	    (int)strlen(name) > MyConf.max_name_length)
+	    (int)strlen(name) > max_name_length)
 	{
 		sendto_one(client, NULL,
 		           ":%s FAIL REGISTER BAD_ACCOUNT_NAME %s "
 		           ":Account name must be between %d and %d characters.",
-		           me.name, name, MyConf.min_name_length, MyConf.max_name_length);
+		           me.name, name, MyConf.min_name_length, max_name_length);
+		return;
+	}
+
+	strlcpy(nickbuf, name, sizeof(nickbuf));
+	if (!do_nick_name(nickbuf) || strcmp(nickbuf, name))
+	{
+		sendto_one(client, NULL,
+		           ":%s FAIL REGISTER BAD_ACCOUNT_NAME %s "
+		           ":Account name must be a valid nickname.",
+		           me.name, name);
 		return;
 	}
 

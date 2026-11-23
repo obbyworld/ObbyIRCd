@@ -1211,6 +1211,7 @@ extern int unreal_bind(int fd, const char *ip, int port, SocketType socket_type)
 extern int unreal_connect(int fd, const char *ip, int port, SocketType socket_type);
 extern const char *socket_type_valtostr(SocketType t);
 extern int is_valid_ip(const char *str);
+extern int is_private_ip(const char *ip);
 extern int ipv6_capable(void);
 extern int unix_sockets_capable(void);
 extern int set_client_ip(Client *client, const char *ip);

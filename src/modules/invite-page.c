@@ -586,23 +586,8 @@ static char *build_invite_html(const char *channel, const char *inviter)
 	 * or without). We URL-encode the # because clients differ. */
 	if (channel)
 	{
-		const char *raw = channel;
 		char encoded_chan[CHANNELLEN * 4];
-		size_t i = 0;
-		const char *p;
-		for (p = raw; *p && i + 4 < sizeof(encoded_chan); p++)
-		{
-			if (*p == '#' || *p == '&' || *p == '^' || *p == '$')
-			{
-				snprintf(encoded_chan + i, sizeof(encoded_chan) - i,
-				         "%%%02X", (unsigned char)*p);
-				i += 3;
-			} else
-			{
-				encoded_chan[i++] = *p;
-			}
-		}
-		encoded_chan[i] = '\0';
+		urlencode(channel, encoded_chan, sizeof(encoded_chan));
 		snprintf(ircs_link, sizeof(ircs_link),
 		         "ircs://%s:%d/%s", host, port, encoded_chan);
 		snprintf(join_line, sizeof(join_line), "/join %s", channel);
@@ -701,39 +686,20 @@ static char *build_invite_html(const char *channel, const char *inviter)
 	 * yank focus to the desktop IRC app. */
 	n += snprintf(out + n, cap - n,
 	              "<a class=\"btn\" href=\"%s\">Open in IRC client</a>\n",
-	              ircs_link);
+	              html_escape(ircs_link));
 
 	/* Optional secondary "Join via Web" button. Only renders when
 	 * set::invite-page::web-url is configured. When the invite is
 	 * channel-specific, append ?channel=<encoded> (or &channel=...
 	 * if the base URL already carries a query string) so the hosted
-	 * client can auto-join after connecting. Channel-name characters
-	 * are URL-encoded: `#`, `&`, `^`, `$`, space, `?`, `=`, `+`, `%`,
-	 * `/` — everything else is allowed through verbatim. */
+	 * client can auto-join after connecting. */
 	if (cfg.web_url && *cfg.web_url)
 	{
 		char web_join_url[1024];
 		if (channel && *channel)
 		{
 			char encoded[CHANNELLEN * 4];
-			const char *p;
-			size_t ei = 0;
-			for (p = channel; *p && ei + 4 < sizeof(encoded); p++)
-			{
-				unsigned char c = (unsigned char)*p;
-				if (c == '#' || c == '&' || c == '^' || c == '$' ||
-				    c == '?' || c == '=' || c == '+' || c == '%' ||
-				    c == '/' || c == ' ' || c < 0x21 || c > 0x7e)
-				{
-					snprintf(encoded + ei, sizeof(encoded) - ei,
-					         "%%%02X", c);
-					ei += 3;
-				} else
-				{
-					encoded[ei++] = (char)c;
-				}
-			}
-			encoded[ei] = '\0';
+			urlencode(channel, encoded, sizeof(encoded));
 			snprintf(web_join_url, sizeof(web_join_url),
 			         "%s%schannel=%s",
 			         cfg.web_url,

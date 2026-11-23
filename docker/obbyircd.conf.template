@@ -69,7 +69,9 @@ loadmodule "cloak_sha256";
  * reverse proxy in production). */
 ${WS_CONFIG}
 
-/* Add a filehosts { host '<url>'; } block here to enable client uploads. */
+/* Add a filehosts { host '<url>'; } block here to enable client uploads.
+ * Link previews in channels are on by default; add link-previews no;
+ * inside the filehosts block to turn them off. */
 
 /* Invite-link base URL: the obbyworld `invitation` module emits the
  * machine-readable INVITELINK reply with this prefix + the share-id, so

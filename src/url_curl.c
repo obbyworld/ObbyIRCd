@@ -353,6 +353,21 @@ EVENT(url_socket_timeout)
 
 static Event *url_socket_timeout_hdl = NULL;
 
+/* curl calls this for every connection it opens, redirects included, after DNS resolution. */
+static curl_socket_t url_open_public_socket(void *clientp, curlsocktype purpose, struct curl_sockaddr *address)
+{
+	char ipbuf[64];
+	const char *ip = NULL;
+
+	if (address->family == AF_INET)
+		ip = inetntop(AF_INET, &((struct sockaddr_in *)&address->addr)->sin_addr, ipbuf, sizeof(ipbuf));
+	else if (address->family == AF_INET6)
+		ip = inetntop(AF_INET6, &((struct sockaddr_in6 *)&address->addr)->sin6_addr, ipbuf, sizeof(ipbuf));
+	if (is_private_ip(ip))
+		return CURL_SOCKET_BAD;
+	return socket(address->family, address->socktype, address->protocol);
+}
+
 /*
  * Initializes the URL system
  */
@@ -416,6 +431,8 @@ void url_start_async(OutgoingWebRequest *request)
 	AddListItem(handle, downloads);
 
 	curl_easy_setopt(curl, CURLOPT_URL, handle->request->url);
+	if (handle->request->deny_private_addresses)
+		curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, url_open_public_socket);
 	snprintf(user_agent, sizeof(user_agent), "UnrealIRCd %s", VERSIONONLY);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent);
 	if (handle->request->store_in_file)
