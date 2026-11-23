@@ -39,6 +39,7 @@
 #define CMD_LISTACC  "LISTACC"
 #define CMD_IDENTIFY "IDENTIFY"
 #define CMD_LOGOUT   "LOGOUT"
+#define CMD_REGAIN   "REGAIN"
 #define CMD_VERIFY   "VERIFY"
 
 /* Email verification */

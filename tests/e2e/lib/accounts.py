@@ -1,3 +1,4 @@
+import asyncio
 import base64
 
 from lib.irc import IrcClient
@@ -48,3 +49,16 @@ async def connect(host, port, nick, caps, account=None, password=None):
     await c.register()
     await drain_motd(c)
     return c
+
+
+async def wait_for_ghost(observer, nick):
+    """A ghost answers WHOIS as away while offline, so we wait for that before acting on it."""
+    for _ in range(20):
+        await observer.send(f"WHOIS {nick}")
+        line = await observer.expect(
+            lambda l: " 318 " in l or (" 301 " in l and "persistent" in l), timeout=5
+        )
+        if " 301 " in line:
+            return
+        await asyncio.sleep(0.25)
+    raise AssertionError(f"{nick} never became a persistent ghost")
