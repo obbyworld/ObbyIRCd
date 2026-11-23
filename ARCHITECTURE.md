@@ -119,7 +119,7 @@ The `obbyircd.in` template substitutes `@BINDIR@`, `@CONFDIR@`,
 | `obbypy` | Embedded CPython 3 via `libpython3-embed`. Feature parity with `obbyscript` — same hook surface, same send/find APIs. Autoloads `conf/scripts/python/*.py`. Both modules can be loaded simultaneously. |
 | `filehost` | `draft/FILEHOST`. Server-side link preview metadata tags for URLs in channel PRIVMSGs; queries the hosted-backend for OG metadata. |
 | `smtp` | Async SMTP client backing account-registration verification + account-recovery reset mails. Async primitives borrowed from `src/url_unreal.c`. |
-| `voice-channels` | `^`-prefix voice channels bridged to the hosted-backend SFU. AF_UNIX socket at `/run/obbyirc/voice.sock`. Clients send RTC frames using the `+obsidianirc/rtc` message tag. Streamer vs. viewer membership is modelled internally but invisible to IRC. |
+| `voice-channels` | `^`-prefix voice channels bridged to the hosted-backend SFU. AF_UNIX socket at `/run/obbyirc/voice.sock`. Clients send RTC frames using the `obsidianirc/rtc` message tag. Streamer vs. viewer membership is modelled internally but invisible to IRC. |
 | `read-marker` | `draft/read-marker` (MARKREAD per-buffer state) |
 | `emoji` | Network-level custom emoji pack URL via `draft/custom-emoji` ISUPPORT |
 | `react` | `draft/react` (emoji reactions). Imported from `valware/unrealircd-contrib`. |
@@ -151,7 +151,7 @@ draft/metadata-2             draft/metadata-notify-2
 draft/multiline              draft/multiline-concat
 draft/named-modes            draft/no-implicit-names
 draft/persistence            draft/read-marker
-draft/webauthn-rp-id         +obsidianirc/rtc
+draft/webauthn-rp-id         obsidianirc/rtc
 ```
 
 These are the "vendored tags" — they are what makes the obbyworld web

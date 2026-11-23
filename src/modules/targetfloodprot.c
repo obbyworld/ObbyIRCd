@@ -239,9 +239,8 @@ int targetfloodprot_can_send_to_channel(Client *client, Channel *channel, Member
 
 	/* Voice (^) and stream ($) channels carry WebRTC signaling --
 	 * many small TAGMSGs per second per peer for ICE candidates /
-	 * SDP / presence. voice-channels.c strips +obsidianirc/rtc before
-	 * broadcast so other channel members never actually see the
-	 * storm, but the per-channel target-flood counter still ticks up
+	 * SDP / presence. voice-channels.c hands obsidianirc/rtc to the
+	 * bridge, but the per-channel target-flood counter still ticks up
 	 * and rejects the sender. Skip the check entirely. */
 	if (channel->name[0] == '^' || channel->name[0] == '$')
 		return HOOK_CONTINUE;
