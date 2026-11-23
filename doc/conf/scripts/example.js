@@ -290,8 +290,8 @@ var pendingRequests = {};
 registerCommand({
     name: 'CATFACT',
     handler: function() {
-        var clientName = $client.name;
-        pendingRequests['catfact_' + clientName] = clientName;
+        var clientId = $client.id;
+        pendingRequests['catfact_' + clientId] = clientId;
         
         sendNotice($client, 'Fetching a cat fact...');
         httpGet('https://catfact.ninja/fact', 'onCatFactResponse');
@@ -303,10 +303,10 @@ function onCatFactResponse(error, body) {
     // Find which clients requested this
     for (var key in pendingRequests) {
         if (key.indexOf('catfact_') === 0) {
-            var clientName = pendingRequests[key];
+            var clientId = pendingRequests[key];
             delete pendingRequests[key];
             
-            var client = findClient(clientName);
+            var client = findClient(clientId);
             if (!client) continue;
             
             if (error) {
@@ -334,8 +334,8 @@ function onCatFactResponse(error, body) {
 registerCommand({
     name: 'JOKE',
     handler: function() {
-        var clientName = $client.name;
-        pendingRequests['joke_' + clientName] = clientName;
+        var clientId = $client.id;
+        pendingRequests['joke_' + clientId] = clientId;
         
         sendNotice($client, 'Fetching a joke...');
         httpGet('https://official-joke-api.appspot.com/random_joke', 'onJokeResponse');
@@ -346,10 +346,10 @@ registerCommand({
 function onJokeResponse(error, body) {
     for (var key in pendingRequests) {
         if (key.indexOf('joke_') === 0) {
-            var clientName = pendingRequests[key];
+            var clientId = pendingRequests[key];
             delete pendingRequests[key];
             
-            var client = findClient(clientName);
+            var client = findClient(clientId);
             if (!client) continue;
             
             if (error) {
@@ -378,8 +378,8 @@ function onJokeResponse(error, body) {
 registerCommand({
     name: 'DOGPIC',
     handler: function() {
-        var clientName = $client.name;
-        pendingRequests['dogpic_' + clientName] = clientName;
+        var clientId = $client.id;
+        pendingRequests['dogpic_' + clientId] = clientId;
         
         sendNotice($client, 'Fetching a random dog picture...');
         httpGet('https://dog.ceo/api/breeds/image/random', 'onDogPicResponse');
@@ -390,10 +390,10 @@ registerCommand({
 function onDogPicResponse(error, body) {
     for (var key in pendingRequests) {
         if (key.indexOf('dogpic_') === 0) {
-            var clientName = pendingRequests[key];
+            var clientId = pendingRequests[key];
             delete pendingRequests[key];
             
-            var client = findClient(clientName);
+            var client = findClient(clientId);
             if (!client) continue;
             
             if (error) {
@@ -421,8 +421,8 @@ function onDogPicResponse(error, body) {
 registerCommand({
     name: 'TRIVIA',
     handler: function() {
-        var clientName = $client.name;
-        pendingRequests['trivia_' + clientName] = clientName;
+        var clientId = $client.id;
+        pendingRequests['trivia_' + clientId] = clientId;
         
         sendNotice($client, 'Fetching a trivia question...');
         httpGet('https://opentdb.com/api.php?amount=1&type=multiple', 'onTriviaResponse');
@@ -433,10 +433,10 @@ registerCommand({
 function onTriviaResponse(error, body) {
     for (var key in pendingRequests) {
         if (key.indexOf('trivia_') === 0) {
-            var clientName = pendingRequests[key];
+            var clientId = pendingRequests[key];
             delete pendingRequests[key];
             
-            var client = findClient(clientName);
+            var client = findClient(clientId);
             if (!client) continue;
             
             if (error) {
@@ -460,7 +460,7 @@ function onTriviaResponse(error, body) {
                         sendNotice(client, '(Answer hidden - use /TRIVIAANSWER to reveal)');
                         
                         // Store the answer
-                        pendingRequests['answer_' + clientName] = correct;
+                        pendingRequests['answer_' + clientId] = correct;
                     } else {
                         sendNotice(client, 'Could not parse trivia response');
                     }
@@ -503,7 +503,7 @@ function decodeHtmlEntities(text) {
 registerCommand({
     name: 'TRIVIAANSWER',
     handler: function() {
-        var answerKey = 'answer_' + $client.name;
+        var answerKey = 'answer_' + $client.id;
         if (pendingRequests[answerKey]) {
             sendNotice($client, 'The answer was: ' + pendingRequests[answerKey]);
             delete pendingRequests[answerKey];
@@ -526,8 +526,8 @@ registerCommand({
         }
         
         var city = $parv.join('+');
-        var clientName = $client.name;
-        pendingRequests['weather_' + clientName] = clientName;
+        var clientId = $client.id;
+        pendingRequests['weather_' + clientId] = clientId;
         
         sendNotice($client, 'Fetching weather for ' + $parv.join(' ') + '...');
         httpGet('https://wttr.in/' + city + '?format=j1', 'onWeatherResponse');
@@ -538,10 +538,10 @@ registerCommand({
 function onWeatherResponse(error, body) {
     for (var key in pendingRequests) {
         if (key.indexOf('weather_') === 0) {
-            var clientName = pendingRequests[key];
+            var clientId = pendingRequests[key];
             delete pendingRequests[key];
             
-            var client = findClient(clientName);
+            var client = findClient(clientId);
             if (!client) continue;
             
             if (error) {
@@ -577,8 +577,8 @@ function onWeatherResponse(error, body) {
 registerCommand({
     name: 'QUOTE',
     handler: function() {
-        var clientName = $client.name;
-        pendingRequests['quote_' + clientName] = clientName;
+        var clientId = $client.id;
+        pendingRequests['quote_' + clientId] = clientId;
         
         sendNotice($client, 'Fetching an inspirational quote...');
         httpGet('https://api.quotable.io/random', 'onQuoteResponse');
@@ -589,10 +589,10 @@ registerCommand({
 function onQuoteResponse(error, body) {
     for (var key in pendingRequests) {
         if (key.indexOf('quote_') === 0) {
-            var clientName = pendingRequests[key];
+            var clientId = pendingRequests[key];
             delete pendingRequests[key];
             
-            var client = findClient(clientName);
+            var client = findClient(clientId);
             if (!client) continue;
             
             if (error) {
@@ -633,8 +633,8 @@ registerCommand({
             return 1;
         }
         
-        var clientName = $client.name;
-        pendingRequests['geoip_' + clientName] = clientName;
+        var clientId = $client.id;
+        pendingRequests['geoip_' + clientId] = clientId;
         
         sendNotice($client, 'Looking up IP: ' + ip + '...');
         httpGet('http://ip-api.com/json/' + ip, 'onGeoIPResponse');
@@ -645,10 +645,10 @@ registerCommand({
 function onGeoIPResponse(error, body) {
     for (var key in pendingRequests) {
         if (key.indexOf('geoip_') === 0) {
-            var clientName = pendingRequests[key];
+            var clientId = pendingRequests[key];
             delete pendingRequests[key];
             
-            var client = findClient(clientName);
+            var client = findClient(clientId);
             if (!client) continue;
             
             if (error) {
@@ -802,14 +802,14 @@ registerCommand({
             return 1;
         }
         
-        var clientName = $client.name;
+        var clientId = $client.id;
         var remaining = seconds;
         
         sendNotice($client, '⏱️ Countdown started: ' + seconds + ' seconds');
         
         var timerId = setInterval(function() {
             remaining--;
-            var target = findClient(clientName);
+            var target = findClient(clientId);
             
             if (!target) {
                 clearInterval(timerId);
@@ -849,12 +849,12 @@ registerCommand({
         
         // Join all remaining params as the message
         var message = $parv.slice(1).join(' ');
-        var clientName = $client.name;
+        var clientId = $client.id;
         
         sendNotice($client, '⏰ Reminder set for ' + seconds + ' seconds from now');
         
         setTimeout(function() {
-            var target = findClient(clientName);
+            var target = findClient(clientId);
             if (target) {
                 sendNotice(target, '⏰ REMINDER: ' + message);
             }

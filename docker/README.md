@@ -28,6 +28,30 @@ Subsequent runs reuse whatever is on disk.  Delete
 `conf/.docker_initialized` (or remove the conf volume entirely) to
 trigger a fresh init.
 
+An existing conf volume keeps its old `obbyircd.conf`,
+`examples/member-roles.conf` and `scripts/example.js` after an image
+upgrade.  To bring one up to the current defaults by hand:
+
+1. If a reverse proxy sits in front of the WebSocket port, add a proxy
+   block with its address to `conf/obbyircd.conf` (see
+   [Reverse proxy](#reverse-proxy)):
+
+   ```
+   proxy websocket-proxy {
+       type x-forwarded;
+       match { ip { 172.30.0.10; } }
+   };
+   ```
+
+2. In `conf/examples/member-roles.conf`, add `vho` to the end of both
+   `can_set` and `can_unset` in the `op` role, so ops can grant and
+   remove voice, halfop and op.
+3. Copy `/etc/obbyircd/conf-defaults/scripts/example.js` from the
+   image over `conf/scripts/example.js`, so delayed command results
+   reach only the client that asked.
+
+Then restart the container.
+
 ## Connecting
 
 * **SSL/TLS IRC:** `ircs://<host>:6697`
@@ -37,6 +61,21 @@ trigger a fresh init.
 
 The default oper credentials in the rendered conf are
 `admin / admin123`.  Change them before exposing the server.
+
+## Reverse proxy
+
+When web clients reach the WebSocket port through a reverse proxy, every
+one of them shows up with the proxy's IP, so bans, flood limits and
+`maxperip` hit all web users at once.  Set `WS_TRUSTED_PROXIES` to your
+proxy's address and we take each client's IP from the last
+`X-Forwarded-For` entry the proxy sends.
+
+Set it to exactly your proxy's IP, or the narrowest range that holds it,
+never a broad private range.  Anyone connecting from a trusted address
+can put any IP in that header, to dodge a ban or get someone else
+banned, and the trusted addresses are exempt from connect-flood,
+handshake-data-flood and DNSBL checks on every listener.  Separate
+several addresses with spaces.
 
 ## Volumes
 
@@ -66,6 +105,7 @@ path to use a bind mount instead of a named volume.
 | `SSL_HOST_PORT`   | `6697`                 | Host-side port mapping. |
 | `WS_PORT`         | `8080`                 | Internal plain WebSocket port. |
 | `WS_HOST_PORT`    | `8080`                 | Host-side port mapping. |
+| `WS_TRUSTED_PROXIES` | *(unset)*              | Address of the reverse proxy in front of the WebSocket port. See [Reverse proxy](#reverse-proxy). |
 | `FILEHOST_URL`    | *(unset)*              | Set to enable the `filehost {}` block. |
 | `RPC_PASSWORD`    | *(unset)*              | Set to enable JSON-RPC over `RPC_PORT`. |
 | `RPC_PORT`        | `8600`                 | Internal only. |
