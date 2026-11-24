@@ -129,6 +129,14 @@ set {
     default-bantime 30d;
     modef-default-unsettime 60;
 
+    /* Clients ask for history and read markers in every channel on connect, so we let a logged-in user send about 50 commands before we pace them. */
+    anti-flood {
+        known-users {
+            lag-penalty 200;
+            lag-penalty-bytes 180;
+        };
+    };
+
     modes-on-join "+nH 1000:1d";
     history {
         channel {
